@@ -1,0 +1,10 @@
+[package]
+name = "manualaid-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+arboard = "3.6.1"
+chrono = "0.4.45"
+log.workspace = true
+
