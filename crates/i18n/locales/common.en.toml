@@ -1,0 +1,5 @@
+default = "Default"
+exists = "exists"
+not_exists = "does not exist"
+manual-aid = "ManualAid"
+manual-aid-running = "ManualAid running..."

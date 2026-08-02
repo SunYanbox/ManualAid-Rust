@@ -1,0 +1,5 @@
+default = "默认"
+exists = "存在"
+not_exists = "不存在"
+manual-aid = "ManualAid"
+manual-aid-running = "ManualAid正在运行..."
