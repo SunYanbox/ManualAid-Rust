@@ -9,6 +9,7 @@ chardetng = "1.0.0"
 chrono = "0.4.45"
 dirs = "6.0.0"
 log.workspace = true
+named-lock = "0.4.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tokio = { version = "1.53.1", features = ["process", "time", "io-util", "macros", "rt"] }
