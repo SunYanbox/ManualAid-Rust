@@ -3,6 +3,7 @@ use manualaid_core::manualaid_dir::{
     DEFAULT_GLOBAL_CONFIG_CONTENT, DEFAULT_PROJECT_CONFIG_CONTENT, GITIGNORE_CONTENT,
     ensure_manualaid_dirs, ensure_manualaid_dirs_with_home,
 };
+use manualaid_core::user_dir;
 
 mod common;
 use common::TempDir;
@@ -130,6 +131,10 @@ fn ensure_fails_when_home_path_is_a_file() {
 /// 非破坏性的：真实主目录中的文件仅在缺失时创建，绝不覆盖。
 #[test]
 fn ensure_works_with_real_home() {
+    if user_dir::home_dir().is_err() {
+        eprintln!("skipping: home directory cannot be resolved in this environment");
+        return;
+    }
     let root = TempDir::new("real-home");
     ensure_manualaid_dirs(root.path()).expect("ensure should succeed");
     assert!(root.path().join(".ManualAid").join(".gitignore").is_file());

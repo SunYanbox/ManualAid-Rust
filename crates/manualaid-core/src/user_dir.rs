@@ -34,11 +34,26 @@ pub struct UserDirectories {
 ///
 /// 使用 `dirs` crate，在 Unix 上查询 `$HOME`，在 Windows 上查询 `USERPROFILE`。
 pub fn home_dir() -> CoreResult<PathBuf> {
-    dirs::home_dir().ok_or_else(|| {
+    env_home().or_else(dirs::home_dir).ok_or_else(|| {
         CoreError::NotFound(
             "unable to determine home directory – neither $HOME nor USERPROFILE is set".into(),
         )
     })
+}
+
+/// The home directory from `USERPROFILE` on Windows and `HOME` elsewhere,
+/// matching the documented contract. Falls back to OS-level APIs via
+/// `dirs` when the variables are unset or empty.
+fn env_home() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        if let Some(home) = std::env::var_os("USERPROFILE").filter(|value| !value.is_empty()) {
+            return Some(PathBuf::from(home));
+        }
+    }
+    std::env::var_os("HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
 }
 
 /// # Description
