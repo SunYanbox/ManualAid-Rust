@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/i18n","crates/manualaid-core"]
+members = ["crates/i18n","crates/manualaid-core","crates/manualaid-cli"]
 
 [workspace.dependencies]
 log = "0.4.33"
