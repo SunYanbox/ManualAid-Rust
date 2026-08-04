@@ -5,4 +5,5 @@ pub mod manualaid_dir;
 pub mod privacy;
 pub mod shell;
 pub mod skill;
+pub mod timer;
 pub mod user_dir;
