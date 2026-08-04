@@ -1,0 +1,26 @@
+[cli.skill]
+source = "- %{path}"
+unique_name = "  - Unique name: %{unique_name}"
+name = "    - Name: %{name}"
+desc = "    - Description: %{desc}"
+desc_chars_total = "    - Total chars: %{chars}"
+
+[cli.error]
+current_dir = "Failed to get current working directory: %{error}"
+home = "Failed to resolve home directory: %{error}"
+input_read = "Failed to read input: %{error}"
+mask = "Masking failed: %{error}"
+prefix = "Error: %{message}"
+snapshot_read = "Failed to read snapshot: %{error}"
+snapshot_parse = "Failed to parse snapshot: %{error}"
+skill_scan = "SKILL scan failed: %{error}"
+output = "Failed to write output: %{error}"
+
+[cli.output]
+masked_text = "Masked text"
+snapshot_json = "Snapshot JSON"
+restored_text = "Restored text"
+skills = "Skills (%{count})"
+
+[cli.pager]
+more = "(press q to quit, any other key to continue)"

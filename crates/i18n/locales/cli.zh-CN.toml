@@ -1,0 +1,26 @@
+[cli.skill]
+source = "- %{path}"
+unique_name = "  - 唯一名称：%{unique_name}"
+name = "    - 名称：%{name}"
+desc = "    - 描述：%{desc}"
+desc_chars_total = "    - 总字符数：%{chars}"
+
+[cli.error]
+current_dir = "获取当前工作目录失败：%{error}"
+home = "解析主目录失败：%{error}"
+input_read = "读取输入失败：%{error}"
+mask = "掩码失败：%{error}"
+prefix = "错误：%{message}"
+snapshot_read = "读取快照失败：%{error}"
+snapshot_parse = "快照解析失败：%{error}"
+skill_scan = "SKILL 扫描失败：%{error}"
+output = "输出失败：%{error}"
+
+[cli.output]
+masked_text = "掩码文本"
+snapshot_json = "快照 JSON"
+restored_text = "还原文本"
+skills = "技能（%{count} 个）"
+
+[cli.pager]
+more = "（按 q 退出，按其他键继续）"
