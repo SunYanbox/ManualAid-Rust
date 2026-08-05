@@ -1,8 +1,10 @@
-//! # Description
 //! Loading and merging of the `[privacy_mask_extension]` tables from the
 //! global (`~/.ManualAid/config.toml`) and project
 //! (`<workspace>/.ManualAid/config.toml`) configuration files.
-//!
+//! 从全局（`~/.ManualAid/config.toml`）与项目
+//! （`<workspace>/.ManualAid/config.toml`）配置文件加载并合并
+//! `[privacy_mask_extension]` 表。
+//! # Example / 例子
 //! ```toml
 //! [privacy_mask_extension.regex]
 //! ExamApiKey = "^sk-[A-Za-z0-9]{7}$"
@@ -10,10 +12,6 @@
 //! [privacy_mask_extension.literal]
 //! UserName = "Alice"
 //! ```
-//! # 描述
-//! 从全局（`~/.ManualAid/config.toml`）与项目
-//! （`<workspace>/.ManualAid/config.toml`）配置文件加载并合并
-//! `[privacy_mask_extension]` 表。
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -24,19 +22,20 @@ use crate::error::{CoreError, CoreResult};
 use crate::user_dir;
 
 /// User-configured privacy mask extensions.
+/// 用户配置的隐私掩码扩展。
 ///
+/// # Description
 /// `regex` holds `类型 = 正则字符串` pairs compiled as regular expressions;
 /// `literal` holds exact-match pairs whose values are matched as literal
 /// substrings (non-regex). Project config overrides the global config per
 /// key, in memory only — config files are never written.
-/// 用户配置的隐私掩码扩展。
-///
+/// # 描述
 /// `regex` 存放 `类型 = 正则字符串` 键值对，按正则编译；`literal` 存放
 /// 精确匹配键值对，值按普通文本（非正则）在任意位置做子串匹配。项目
 /// 配置按 key 逐项覆盖全局配置，仅内存生效——绝不写回配置文件。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PrivacyMaskExtension {
-    /// `类型 = 正则字符串` pairs.
+    /// `type = regex_string` pairs.
     /// `类型 = 正则字符串` 键值对。
     pub regex: HashMap<String, String>,
     /// Exact-match pairs: values matched as literal substrings anywhere.
@@ -63,6 +62,7 @@ impl PrivacyMaskExtension {
     /// files are never written). Overridden global keys are logged at info
     /// level with their full path, e.g.
     /// `privacy_mask_extension.regex.ExamApiKey`.
+    ///
     /// 加载并合并全局与项目 `[privacy_mask_extension]` 表。项目键覆盖
     /// 全局键（仅内存生效；绝不写回配置文件）。被覆盖的全局键以 info
     /// 级别记录完整路径，例如 `privacy_mask_extension.regex.ExamApiKey`。
@@ -73,6 +73,7 @@ impl PrivacyMaskExtension {
 
     /// Like [`load`](Self::load) with an explicit home directory, used by
     /// tests to avoid touching the real user home.
+    ///
     /// 同 [`load`](Self::load)，但以显式指定的主目录代替真实用户主目录，
     /// 供测试避免触碰真实主目录。
     pub fn load_with_home(project_root: &Path, home: &Path) -> CoreResult<Self> {

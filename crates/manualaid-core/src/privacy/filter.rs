@@ -1,17 +1,16 @@
-//! # Description
 //! Reversible privacy masking: replace sensitive values with stable
 //! placeholders (`[PRV_<TYPE>_<N>]`) before sending text to an LLM, and
 //! restore the original values afterwards.
+//! 可逆隐私掩码：在把文本发送给 LLM 前，将敏感值替换为稳定占位符
+//! （`[PRV_<类型>_<编号>]`），之后再把占位符还原为原始值。
 //!
+//! # Description
 //! The pipeline combines three detection sources with a fixed priority
 //! (higher priority wins overlapping spans):
 //! 1. `regex` patterns from the `[privacy_mask_extension.regex]` table;
 //! 2. exact literal values from the `[privacy_mask_extension.literal]` table;
 //! 3. built-in PII detection (cloakrs: emails, phones, credit cards, ...).
 //! # 描述
-//! 可逆隐私掩码：在把文本发送给 LLM 前，将敏感值替换为稳定占位符
-//! （`[PRV_<类型>_<编号>]`），之后再把占位符还原为原始值。
-//!
 //! 管线合并三种检测来源，重叠区间按固定优先级处理（高优先级胜出）：
 //! 1. `[privacy_mask_extension.regex]` 表中的正则模式；
 //! 2. `[privacy_mask_extension.literal]` 表中的精确匹配值；
@@ -99,12 +98,13 @@ impl IntervalSet {
 }
 
 /// Reversible privacy masker.
+/// 可逆隐私掩码器。
 ///
+/// # Description
 /// A masker owns the compiled extension patterns plus the built-in cloakrs
 /// scanner, while the underlying [`PrivacyRegistry`] is the process-wide
 /// instance (stable IDs across calls).
-/// 可逆隐私掩码器。
-///
+/// # 描述
 /// masker 持有已编译的扩展模式与内置 cloakrs 扫描器；底层
 /// [`PrivacyRegistry`] 使用进程级实例（跨调用保持稳定编号）。
 pub struct PrivacyMasker {
@@ -115,6 +115,7 @@ pub struct PrivacyMasker {
 
 impl PrivacyMasker {
     /// Build a masker with built-in cloakrs PII detection only.
+    ///
     /// 构建仅含内置 cloakrs PII 检测的 masker。
     pub fn new() -> CoreResult<Self> {
         Ok(Self {
@@ -127,6 +128,7 @@ impl PrivacyMasker {
     /// Build a masker with built-in detection plus the given extension
     /// patterns. Invalid patterns (compile failure or empty-string match)
     /// are logged and ignored; they never fail this call.
+    ///
     /// 构建含内置检测与给定扩展模式的 masker。非法模式（编译失败或
     /// 可匹配空串）会被记录日志并忽略，不会导致本调用失败。
     pub fn from_extensions(extensions: &PrivacyMaskExtension) -> CoreResult<Self> {
@@ -140,6 +142,7 @@ impl PrivacyMasker {
     }
 
     /// Build a masker from the merged global + project configuration.
+    ///
     /// 从合并后的全局 + 项目配置构建 masker。
     pub fn from_config(project_root: &Path) -> CoreResult<Self> {
         let extensions = PrivacyMaskExtension::load(project_root)?;
@@ -151,6 +154,7 @@ impl PrivacyMasker {
     /// Returns `(masked_text, mapping)` where `mapping` maps each mask ID to
     /// its original plaintext; keep it and pass it to
     /// [`restore_masked_data`] for reversal.
+    ///
     /// 将敏感值替换为稳定占位符。
     ///
     /// 返回 `(掩码文本, 映射)`，其中 `映射` 将每个掩码 ID 映射到其原始
@@ -189,14 +193,15 @@ pub fn sanitize_prompt(text: &str) -> CoreResult<(String, HashMap<String, String
 
 /// Restore original values from text containing placeholders produced by
 /// [`sanitize_prompt`] / [`PrivacyMasker::sanitize`].
+/// 从包含 [`sanitize_prompt`] / [`PrivacyMasker::sanitize`] 生成的占位符
+/// 的文本中恢复原始值。
 ///
+/// # Description
 /// Single left-to-right pass that locates `[`/`]` pairs and looks them up in
 /// `mapping`; O(n), naturally distinguishing `[PRV_EMAIL_1]` from
 /// `[PRV_EMAIL_10]`. Brackets that do not form a known placeholder are kept
 /// as-is.
-/// 从包含 [`sanitize_prompt`] / [`PrivacyMasker::sanitize`] 生成的占位符
-/// 的文本中恢复原始值。
-///
+/// # 描述
 /// 单次从左到右扫描，定位 `[`/`]` 配对并在 `mapping` 中查找；O(n)，天然
 /// 区分 `[PRV_EMAIL_1]` 与 `[PRV_EMAIL_10]`。不构成已知占位符的方括号
 /// 原样保留。

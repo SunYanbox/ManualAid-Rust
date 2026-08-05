@@ -1,6 +1,6 @@
 //! The built-in translation wrapper library based on the rust_i18n crate for ManualAid.
 //! 用于 ManualAid 的基于 rust_i18n crate 的翻译封装内置库。
-//! 
+//!
 //! # Description
 //! `rust_i18n::i18n!()` must be called exactly once in the crate graph —
 //! here in the library crate — because `t!` expands to
@@ -21,7 +21,7 @@ pub use rust_i18n::t;
 
 /// Translate a key via the library's i18n backend.
 /// 通过库的 i18n 后端翻译一个键值。
-/// 
+///
 /// # Description
 /// This function exists primarily for the binary crate (`main.rs`), which is a
 /// separate crate and cannot directly use the `t!` macro: `t!` expands to
