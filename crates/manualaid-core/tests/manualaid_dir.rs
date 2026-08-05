@@ -1,8 +1,10 @@
 use manualaid_core::error::CoreError;
 use manualaid_core::manualaid_dir::{
     DEFAULT_GLOBAL_CONFIG_CONTENT, DEFAULT_PROJECT_CONFIG_CONTENT, GITIGNORE_CONTENT,
-    ensure_manualaid_dirs, ensure_manualaid_dirs_with_home,
+    clean_manualaid_dir, ensure_global_manualaid_dir, ensure_manualaid_dirs,
+    ensure_manualaid_dirs_with_home, ensure_project_manualaid_dir,
 };
+use manualaid_core::privacy::PrivacyMaskExtension;
 use manualaid_core::user_dir;
 
 mod common;
@@ -28,10 +30,10 @@ fn ensure_creates_home_dir_and_config() {
 }
 
 /// `ensure_manualaid_dirs` creates the project `.ManualAid` dir with a
-/// byte-exact `.gitignore` and a config file with the default `[skill]`
+/// byte-exact `.gitignore` and a config file with the default commented
 /// content.
 /// `ensure_manualaid_dirs` 创建项目下的 `.ManualAid` 目录、字节精确的
-/// `.gitignore` 与默认 `[skill]` 内容的配置文件。
+/// `.gitignore` 与带默认注释内容的配置文件。
 #[test]
 fn ensure_creates_project_dir_and_files() {
     let root = TempDir::new("project-files");
@@ -51,6 +53,22 @@ fn ensure_creates_project_dir_and_files() {
         std::fs::read_to_string(&config).expect("read config"),
         DEFAULT_PROJECT_CONFIG_CONTENT
     );
+}
+
+/// The default generated config files parse as privacy mask extensions with
+/// empty tables.
+/// 默认生成的配置文件可被隐私掩码扩展加载器解析，两个表均为空。
+#[test]
+fn ensure_default_config_parses_as_privacy_extension() {
+    let root = TempDir::new("default-config-privacy");
+    let home = TempDir::new("default-config-privacy-home");
+
+    ensure_manualaid_dirs_with_home(root.path(), home.path()).expect("ensure should succeed");
+
+    let ext = PrivacyMaskExtension::load_with_home(root.path(), home.path())
+        .expect("default config should parse");
+    assert!(ext.regex.is_empty());
+    assert!(ext.literal.is_empty());
 }
 
 /// Running `ensure_manualaid_dirs` twice succeeds both times.
@@ -139,4 +157,101 @@ fn ensure_works_with_real_home() {
     ensure_manualaid_dirs(root.path()).expect("ensure should succeed");
     assert!(root.path().join(".ManualAid").join(".gitignore").is_file());
     assert!(root.path().join(".ManualAid").join("config.toml").is_file());
+}
+
+/// `ensure_project_manualaid_dir` creates only the project `.ManualAid`
+/// files and never touches the home directory.
+/// `ensure_project_manualaid_dir` 只创建项目 `.ManualAid` 文件，不触碰主目录。
+#[test]
+fn ensure_project_creates_only_project_files() {
+    let root = TempDir::new("project-only");
+    let home = TempDir::new("project-only-home");
+
+    ensure_project_manualaid_dir(root.path()).expect("ensure project should succeed");
+
+    assert!(root.path().join(".ManualAid").join("config.toml").is_file());
+    assert!(root.path().join(".ManualAid").join(".gitignore").is_file());
+    assert!(!home.path().join(".ManualAid").exists());
+}
+
+/// `ensure_global_manualaid_dir` creates only the global `.ManualAid` config
+/// and never touches the project directory.
+/// `ensure_global_manualaid_dir` 只创建全局 `.ManualAid` 配置，不触碰项目目录。
+#[test]
+fn ensure_global_creates_only_global_file() {
+    let root = TempDir::new("global-only");
+    let home = TempDir::new("global-only-home");
+
+    ensure_global_manualaid_dir(home.path()).expect("ensure global should succeed");
+
+    let config = home.path().join(".ManualAid").join("config.toml");
+    assert!(config.is_file());
+    assert_eq!(
+        std::fs::read_to_string(&config).expect("read config"),
+        DEFAULT_GLOBAL_CONFIG_CONTENT
+    );
+    assert!(!root.path().join(".ManualAid").exists());
+}
+
+/// Both scope-specific `ensure_*` functions are idempotent.
+/// 两个按作用域拆分的 `ensure_*` 函数均幂等。
+#[test]
+fn ensure_scope_functions_are_idempotent() {
+    let root = TempDir::new("scope-idempotent");
+    let home = TempDir::new("scope-idempotent-home");
+
+    ensure_project_manualaid_dir(root.path()).expect("first project ensure");
+    ensure_project_manualaid_dir(root.path()).expect("second project ensure");
+    ensure_global_manualaid_dir(home.path()).expect("first global ensure");
+    ensure_global_manualaid_dir(home.path()).expect("second global ensure");
+
+    assert!(root.path().join(".ManualAid").join("config.toml").is_file());
+    assert!(home.path().join(".ManualAid").join("config.toml").is_file());
+}
+
+/// `clean_manualaid_dir` removes the whole `.ManualAid` directory, keeps the
+/// base directory, and reports the exact file count and byte sum.
+/// `clean_manualaid_dir` 删除整个 `.ManualAid` 目录、保留 base 目录，并返回
+/// 精确的文件数与字节总和。
+#[test]
+fn clean_removes_dir_and_reports_stats() {
+    let base = TempDir::new("clean-stats");
+    let manual = base.path().join(".ManualAid");
+    std::fs::create_dir_all(manual.join("logs")).expect("create logs");
+    std::fs::write(manual.join("config.toml"), "[skill]").expect("write config");
+    std::fs::write(manual.join("data.bin"), vec![0u8; 1024]).expect("write data");
+    std::fs::write(manual.join("logs").join("a.log"), "x").expect("write log");
+
+    let report = clean_manualaid_dir(base.path())
+        .expect("clean should succeed")
+        .expect("report should be present");
+
+    assert_eq!(report.files, 3);
+    assert_eq!(report.bytes, 1024 + 7 + 1);
+    assert!(!manual.exists());
+    assert!(base.path().exists());
+}
+
+/// `clean_manualaid_dir` returns `None` when `.ManualAid` does not exist.
+/// `.ManualAid` 不存在时 `clean_manualaid_dir` 返回 `None`。
+#[test]
+fn clean_missing_returns_none() {
+    let base = TempDir::new("clean-missing");
+    assert!(
+        clean_manualaid_dir(base.path())
+            .expect("clean should succeed")
+            .is_none()
+    );
+}
+
+/// `clean_manualaid_dir` errors when `.ManualAid` exists but is a file.
+/// `.ManualAid` 存在但不是目录时 `clean_manualaid_dir` 报错。
+#[test]
+fn clean_file_path_is_invalid() {
+    let base = TempDir::new("clean-file");
+    std::fs::write(base.path().join(".ManualAid"), "file").expect("write blocker");
+
+    let err = clean_manualaid_dir(base.path()).expect_err("clean should fail");
+    assert!(matches!(err, CoreError::InvalidPath(_)));
+    assert!(base.path().join(".ManualAid").exists());
 }

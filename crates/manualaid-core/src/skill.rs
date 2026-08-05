@@ -38,9 +38,11 @@ use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use serde::{Deserialize, Serialize};
 use toml::Table;
+use toml_edit::{DocumentMut, Item, Table as TomlEditTable, Value as TomlEditValue};
 
 use crate::error::{CoreError, CoreResult};
 use crate::file_io;
+use crate::manualaid_dir::DEFAULT_PROJECT_CONFIG_CONTENT;
 use crate::user_dir;
 
 /// Agent configuration directories scanned for `skills/` subdirectories.
@@ -613,14 +615,16 @@ fn read_enabled_map(config_path: &Path) -> CoreResult<HashMap<String, bool>> {
 
 /// Write a path-keyed map back into the `[skill]` table of a config file,
 /// creating parent directories and the file itself when missing. Other
-/// tables in an existing file are preserved.
+/// tables, comments and formatting in an existing file are preserved; a
+/// missing or blank file is seeded from the default project template.
 /// 将路径键映射写回配置文件的 `[skill]` 表，缺失时创建父目录与文件本身。
-/// 已有文件中的其他配置节会被保留。
+/// 已有文件中的其他配置节、注释与格式会被保留；文件缺失或空白时以
+/// 默认项目模板为基底创建。
 fn write_enabled_map(config_path: &Path, enabled: &HashMap<String, bool>) -> CoreResult<()> {
     file_io::with_file_lock(config_path, || {
-        let mut table = match std::fs::read_to_string(config_path) {
-            Ok(content) => toml::from_str(&content)?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Table::new(),
+        let content = match std::fs::read_to_string(config_path) {
+            Ok(content) => content,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
             Err(e) => {
                 return Err(CoreError::Io(format!(
                     "cannot read skill config `{}`: {e}",
@@ -638,14 +642,57 @@ fn write_enabled_map(config_path: &Path, enabled: &HashMap<String, bool>) -> Cor
             })?;
         }
 
-        let mut skill_table = Table::new();
-        for (key, value) in enabled {
-            skill_table.insert(key.clone(), toml::Value::Boolean(*value));
-        }
-        table.insert("skill".to_string(), toml::Value::Table(skill_table));
+        // Missing or blank files are seeded from the default project
+        // template so the generated config always carries its comments.
+        // 缺失或空白的配置文件以默认项目模板为基底，保证文件始终带说明注释。
+        let mut doc = if content.trim().is_empty() {
+            DEFAULT_PROJECT_CONFIG_CONTENT
+                .parse::<DocumentMut>()
+                .map_err(|e| CoreError::Config(e.to_string()))?
+        } else {
+            content
+                .parse::<DocumentMut>()
+                .map_err(|e| CoreError::Config(e.to_string()))?
+        };
 
-        let content = toml::to_string(&table)?;
-        std::fs::write(config_path, content).map_err(CoreError::from)?;
+        let skill_table = match doc.as_table_mut().entry("skill") {
+            toml_edit::Entry::Occupied(mut occupied) => {
+                if occupied.get().as_table().is_none() {
+                    occupied.insert(Item::Table(TomlEditTable::new()));
+                }
+                occupied
+                    .into_mut()
+                    .as_table_mut()
+                    .expect("skill entry is a table")
+            }
+            toml_edit::Entry::Vacant(vacant) => vacant
+                .insert(Item::Table(TomlEditTable::new()))
+                .as_table_mut()
+                .expect("just inserted a table"),
+        };
+
+        let stale: Vec<String> = skill_table
+            .iter()
+            .map(|(key, _)| key.to_string())
+            .filter(|key| !enabled.contains_key(key))
+            .collect();
+        for key in stale {
+            skill_table.remove(&key);
+        }
+
+        for (key, value) in enabled {
+            let item: Item = TomlEditValue::from(*value).into();
+            match skill_table.entry(key) {
+                toml_edit::Entry::Occupied(mut occupied) => {
+                    occupied.insert(item);
+                }
+                toml_edit::Entry::Vacant(vacant) => {
+                    vacant.insert(item);
+                }
+            }
+        }
+
+        std::fs::write(config_path, doc.to_string()).map_err(CoreError::from)?;
         Ok(())
     })
 }
@@ -992,6 +1039,58 @@ mod tests {
         let table: Table = toml::from_str(&content).unwrap();
         assert_eq!(table["other"]["foo"], toml::Value::Integer(1));
         assert_eq!(table["skill"]["/a/b"], toml::Value::Boolean(true));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_enabled_map_missing_file_seeds_default_template() {
+        let dir = temp_dir("seed-template");
+        let path = dir.join("config.toml");
+        let mut map = HashMap::new();
+        map.insert("/a/b".to_string(), true);
+        write_enabled_map(&path, &map).expect("write should succeed");
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# ManualAid 项目配置文件"));
+        assert!(content.contains("[privacy_mask_extension.regex]"));
+        assert!(content.contains("[privacy_mask_extension.literal]"));
+        let table: Table = toml::from_str(&content).unwrap();
+        assert_eq!(table["skill"]["/a/b"], toml::Value::Boolean(true));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_enabled_map_blank_file_seeds_default_template() {
+        let dir = temp_dir("seed-blank-template");
+        let path = dir.join("config.toml");
+        std::fs::write(&path, "  \n\t\n").unwrap();
+        let mut map = HashMap::new();
+        map.insert("/a/b".to_string(), false);
+        write_enabled_map(&path, &map).expect("write should succeed");
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# ManualAid 项目配置文件"));
+        assert_eq!(read_enabled_map(&path).expect("read should succeed"), map);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_enabled_map_preserves_comments_and_removes_stale_entries() {
+        let dir = temp_dir("preserve-comments");
+        let path = dir.join("config.toml");
+        std::fs::write(
+            &path,
+            "# 顶部注释\n[other]\nfoo = 1\n\n# 技能注释\n[skill]\n\"old\" = false\n",
+        )
+        .unwrap();
+        let mut map = HashMap::new();
+        map.insert("/a/b".to_string(), true);
+        write_enabled_map(&path, &map).expect("write should succeed");
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# 顶部注释"));
+        assert!(content.contains("# 技能注释"));
+        let table: Table = toml::from_str(&content).unwrap();
+        assert_eq!(table["other"]["foo"], toml::Value::Integer(1));
+        assert_eq!(table["skill"]["/a/b"], toml::Value::Boolean(true));
+        assert!(!table["skill"].as_table().unwrap().contains_key("old"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -8,6 +8,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use manualaid_core::error::CoreError;
+use manualaid_core::manualaid_dir::DEFAULT_PROJECT_CONFIG_CONTENT;
 use manualaid_core::skill::{
     all_skills, enabled_skills, get_skill, reload_skills, reload_skills_with_home, reset_skills,
     set_enabled,
@@ -600,17 +601,55 @@ fn set_enabled_creates_config_when_missing_and_merges() {
     reload_skills_with_home(root.path(), home.path()).expect("reload should succeed");
 
     set_enabled(&first, false).expect("disable should succeed");
-    assert!(root.path().join(".ManualAid").join("config.toml").is_file());
+    let config_path = root.path().join(".ManualAid").join("config.toml");
+    assert!(config_path.is_file());
+    let first_content =
+        std::fs::read_to_string(&config_path).expect("read config after first write");
+    assert!(first_content.contains("# ManualAid 项目配置文件"));
+    assert!(first_content.contains("[privacy_mask_extension.regex]"));
+    assert!(first_content.contains("[privacy_mask_extension.literal]"));
 
     set_enabled(&second, false).expect("disable should succeed");
-    let content = std::fs::read_to_string(root.path().join(".ManualAid").join("config.toml"))
-        .expect("read config");
+    let content = std::fs::read_to_string(&config_path).expect("read config");
     let table: toml::Table = toml::from_str(&content).expect("parse config");
     let skill = &table["skill"];
     let key_first = first.to_string_lossy().replace('\\', "/");
     let key_second = second.to_string_lossy().replace('\\', "/");
     assert_eq!(skill[&key_first], toml::Value::Boolean(false));
     assert_eq!(skill[&key_second], toml::Value::Boolean(false));
+    assert!(table.contains_key("privacy_mask_extension"));
+}
+
+/// `set_enabled` preserves the comments and privacy tables of the default
+/// project template while updating the `[skill]` table.
+/// `set_enabled` 更新 `[skill]` 表时保留默认项目模板中的注释与 privacy 表。
+#[test]
+fn set_enabled_preserves_template_comments() {
+    let _restore = lock_skills();
+    let root = TempDir::new("preserve-template-comments");
+    let home = TempDir::new("preserve-template-comments-home");
+    let skill = write_skill(&root.path().join(".claude"), "s", Some("s"), "desc", "body");
+    reload_skills_with_home(root.path(), home.path()).expect("reload should succeed");
+
+    let config_dir = root.path().join(".ManualAid");
+    std::fs::create_dir_all(&config_dir).expect("create config dir");
+    std::fs::write(
+        config_dir.join("config.toml"),
+        DEFAULT_PROJECT_CONFIG_CONTENT,
+    )
+    .expect("write config");
+
+    set_enabled(&skill, false).expect("disable should succeed");
+    let content = std::fs::read_to_string(config_dir.join("config.toml")).expect("read config");
+    assert!(content.contains("# ManualAid 项目配置文件"));
+    assert!(content.contains("# 隐私掩码扩展 —— 正则匹配"));
+    assert!(content.contains("# ExamApiKey = \"^sk-[A-Za-z0-9]{7}$\""));
+    assert!(content.contains("# UserName = \"Alice\""));
+
+    let table: toml::Table = toml::from_str(&content).expect("parse config");
+    assert!(table.contains_key("privacy_mask_extension"));
+    let key = skill.to_string_lossy().replace('\\', "/");
+    assert_eq!(table["skill"][&key], toml::Value::Boolean(false));
 }
 
 /// `set_enabled` preserves hand-written sections of the config file.
