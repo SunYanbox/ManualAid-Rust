@@ -1,7 +1,5 @@
-//! # Description
 //! The `restore` command: restore the original text from masked input plus
 //! a snapshot JSON file.
-//! # 描述
 //! `restore` 命令：根据掩码输入与快照 JSON 文件还原原文。
 
 use std::path::Path;

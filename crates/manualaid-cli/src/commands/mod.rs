@@ -1,8 +1,6 @@
-//! # Description
 //! Command handlers for the `manualaid-cli` executable: each subcommand's
 //! `run_*` function prints the formatted output through the pager and
 //! returns `Ok` or a localized error message.
-//! # 描述
 //! `manualaid-cli` 可执行程序的命令处理：每个子命令的 `run_*` 函数通过
 //! 分页器输出格式化结果，返回 `Ok` 或本地化错误信息。
 
@@ -43,9 +41,7 @@ pub fn run_main(cli: Cli) -> i32 {
     }
 }
 
-/// # Description
 /// Dispatch the parsed CLI to the matching command handler.
-/// # 描述
 /// 将解析后的 CLI 分发到对应的命令处理函数。
 pub fn run(cli: Cli, home: Option<&Path>) -> Result<(), String> {
     match cli.command {

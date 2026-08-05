@@ -1,7 +1,5 @@
-//! # Description
 //! The `mask` command: mask sensitive data in text or a file and print the
 //! masked text plus the pretty snapshot JSON.
-//! # 描述
 //! `mask` 命令：掩码文本或文件中的敏感数据，输出掩码文本与 pretty 快照 JSON。
 
 use std::path::Path;
