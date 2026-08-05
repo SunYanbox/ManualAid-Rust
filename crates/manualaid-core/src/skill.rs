@@ -1,7 +1,8 @@
-//! # Description
 //! Discovery, deduplication and enable/disable management for ManualAid
 //! skills.
+//! ManualAid 技能的发现、去重与启用/禁用管理。
 //!
+//! # Description
 //! For each agent directory in `AGENT_DIRS`, skills are searched in
 //! `<project_root>/<agent_dir>/skills` (project scope) and
 //! `<home>/<agent_dir>/skills` (global scope). A directory `D/skills/<name>`
@@ -18,8 +19,6 @@
 //! construct portably; these branches are not required to have high test
 //! coverage.
 //! # 描述
-//! ManualAid 技能的发现、去重与启用/禁用管理。
-//!
 //! 对 `AGENT_DIRS` 中每个 agent 目录，在 `<项目根>/<agent_dir>/skills`
 //! （项目范围）与 `<home>/<agent_dir>/skills`（全局范围）中搜索技能；目录
 //! `D/skills/<name>` 直接包含 `SKILL.md` 文件且其 YAML frontmatter 含非空
@@ -61,17 +60,16 @@ const AGENT_DIRS: &[&str] = &[
     ".opencode",
 ];
 
-/// # Description
 /// A discovered ManualAid skill.
+/// 已发现的 ManualAid 技能。
 ///
+/// # Description
 /// Skills are loaded by [`reload_skills`] from the project and global search
 /// directories described in the module documentation. `unique_name` is the
 /// deduplicated lookup key used by [`get_skill`]: it equals `name` unless a
 /// name collision forces a `.{scope}-{name}` renaming (`scope` is `project`
 /// or `global`).
 /// # 描述
-/// 已发现的 ManualAid 技能。
-///
 /// 技能由 [`reload_skills`] 从模块文档所述的项目与全局搜索目录加载。
 /// `unique_name` 是 [`get_skill`] 使用的去重后的查找键：除非名称冲突导致
 /// `.{scope}-{name}` 重命名（`scope` 为 `project` 或 `global`），否则与
@@ -137,14 +135,15 @@ fn write_store() -> RwLockWriteGuard<'static, SkillStore> {
     })
 }
 
-/// # Description
 /// Rescan all skill search directories (see the module documentation) and
-/// replace the in-memory skill store in one write. Missing directories are
-/// treated as empty and never raise an error. The normalized project root is
-/// remembered so [`set_enabled`] can persist changes; on error the previous
-/// store is left untouched.
-/// # 描述
+/// replace the in-memory skill store in one write.
 /// 重新扫描所有技能搜索目录（见模块文档），并一次性替换内存中的技能存储。
+///
+/// # Description
+/// Missing directories are treated as empty and never raise an error.
+/// The normalized project root is remembered so [`set_enabled`] can
+/// persist changes; on error the previous store is left untouched.
+/// # 描述
 /// 缺失的目录视为空且不报错。规范化的项目根会被保存，以便 [`set_enabled`]
 /// 持久化变更；出错时原有存储保持不变。
 pub fn reload_skills(project_root: &Path) -> CoreResult<()> {
@@ -152,11 +151,9 @@ pub fn reload_skills(project_root: &Path) -> CoreResult<()> {
     reload_skills_impl(project_root, &home)
 }
 
-/// # Description
 /// Like [`reload_skills`] but with an explicit home directory instead of the
 /// real user home, used by tests to exercise the global scope without
 /// touching the real home. Hidden from docs.
-/// # 描述
 /// 同 [`reload_skills`]，但以显式指定的主目录代替真实用户主目录，供测试
 /// 在不触碰真实主目录的情况下覆盖全局范围。文档中隐藏。
 #[doc(hidden)]
@@ -164,17 +161,13 @@ pub fn reload_skills_with_home(project_root: &Path, home: &Path) -> CoreResult<(
     reload_skills_impl(project_root, home)
 }
 
-/// # Description
 /// Return an immutable snapshot of all loaded skills.
-/// # 描述
 /// 返回所有已加载技能的不可变快照。
 pub fn all_skills() -> Vec<Skill> {
     read_store().skills.clone()
 }
 
-/// # Description
 /// Return an immutable snapshot of all enabled skills.
-/// # 描述
 /// 返回所有已启用技能的不可变快照。
 pub fn enabled_skills() -> Vec<Skill> {
     all_skills()
@@ -183,9 +176,7 @@ pub fn enabled_skills() -> Vec<Skill> {
         .collect()
 }
 
-/// # Description
 /// Return the loaded skill whose unique name matches, or `None`.
-/// # 描述
 /// 返回唯一名称匹配的已加载技能，未找到时返回 `None`。
 pub fn get_skill(unique_name: &str) -> Option<Skill> {
     read_store()
@@ -195,11 +186,13 @@ pub fn get_skill(unique_name: &str) -> Option<Skill> {
         .cloned()
 }
 
-/// # Description
 /// Persist the enabled state of the skill at `path` to
 /// `<project_root>/.ManualAid/config.toml` (created together with its parent
 /// directories when missing) and update the in-memory store.
+/// 将 `path` 处技能的启用状态持久化到 `<项目根>/.ManualAid/config.toml`
+/// （缺失时连同父目录一起创建），并更新内存存储。
 ///
+/// # Description
 /// Returns `CoreError::NotFound` when [`reload_skills`] has not been called
 /// or `path` does not match a loaded skill; in the latter case nothing is
 /// persisted. `path` must refer to the stored skill folder path (see
@@ -209,9 +202,6 @@ pub fn get_skill(unique_name: &str) -> Option<Skill> {
 /// so concurrent calls cannot lose updates and a concurrent [`reload_skills`]
 /// cannot interleave between the config write and the in-memory update.
 /// # 描述
-/// 将 `path` 处技能的启用状态持久化到 `<项目根>/.ManualAid/config.toml`
-/// （缺失时连同父目录一起创建），并更新内存存储。
-///
 /// 当 [`reload_skills`] 尚未调用、或 `path` 不匹配任何已加载技能时返回
 /// `CoreError::NotFound`，后者不会写入任何内容。`path` 必须指向存储的
 /// 技能目录路径（参见 [`Skill::path`]）。配置中的其他条目与用户手写
@@ -247,10 +237,8 @@ pub fn set_enabled(path: &Path, enabled: bool) -> CoreResult<()> {
     Ok(())
 }
 
-/// # Description
 /// Clear the in-memory skill store and the remembered project root.
 /// Hidden from docs because it exists for tests to restore state.
-/// # 描述
 /// 清空内存中的技能存储与已保存的项目根。文档中隐藏，因为它供测试恢复
 /// 状态用。
 #[doc(hidden)]

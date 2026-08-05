@@ -1,14 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// # Description
 /// Unified error type for the entire library.
+/// 整个库的统一错误类型。
+///
+/// # Description
 /// Most variants carry simple `String` payloads, except for `Execution` which
 /// carries a structured payload. This design ensures the type remains fully
 /// serializable (many underlying error types from std and ecosystem crates
 /// do not implement `Serialize` / `Deserialize`).
 /// # 描述
-/// 整个库的统一错误类型。
 /// 除 `Execution` 变体携带结构化负载外，大多数变体都携带简单的 `String` 负载。
 /// 这种设计确保了该类型完全可序列化
 /// （许多来自 std 和生态 crate 的底层错误类型未实现 `Serialize` / `Deserialize`）。
@@ -108,8 +109,6 @@ impl From<toml::ser::Error> for CoreError {
     }
 }
 
-/// # Description
 /// Alias for `Result<T, CoreError>` used throughout the library.
-/// # 描述
 /// 整个库使用的 `Result<T, CoreError>` 类型别名。
 pub type CoreResult<T> = Result<T, CoreError>;

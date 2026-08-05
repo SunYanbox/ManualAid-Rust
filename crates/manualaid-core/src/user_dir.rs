@@ -1,12 +1,21 @@
+//! Utilities for querying standard user directories.
+//! 用于查询标准用户目录的工具模块。
+//!
+//! # Description
+//! This module provides functions to retrieve platform-specific directories such as the user's home,
+//! config, cache, and data directories. It wraps the `dirs` crate and falls back to environment
+//! variables where appropriate. These paths are useful for storing application data in a
+//! cross-platform manner.
+//! # 描述
+//! 此模块提供用于查询平台特定目录的函数，包括用户的主目录、配置目录、缓存目录和数据目录。
+//! 它封装了 `dirs` crate，并在适当时回退到环境变量。这些路径有助于以跨平台方式存储应用程序数据。
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, CoreResult};
 
-/// # Description
 /// Information about the current user's standard directories.
-/// # 描述
 /// 当前用户标准目录的信息。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserDirectories {
@@ -24,14 +33,13 @@ pub struct UserDirectories {
     pub data: PathBuf,
 }
 
-/// # Description
 /// Returns the user's home directory.
+/// 返回用户的主目录。
 ///
+/// # Description
 /// Uses the `dirs` crate which queries `$HOME` on Unix and
 /// `USERPROFILE` on Windows.
 /// # 描述
-/// 返回用户的主目录。
-///
 /// 使用 `dirs` crate，在 Unix 上查询 `$HOME`，在 Windows 上查询 `USERPROFILE`。
 pub fn home_dir() -> CoreResult<PathBuf> {
     env_home().or_else(dirs::home_dir).ok_or_else(|| {
@@ -56,9 +64,10 @@ fn env_home() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// # Description
 /// Returns the user's config directory.
+/// 返回用户的配置目录。
 ///
+/// # Description
 /// Platform paths:
 /// - **Linux**: `$XDG_CONFIG_HOME` or `~/.config`
 /// - **macOS**: `~/Library/Application Support`
@@ -68,8 +77,6 @@ fn env_home() -> Option<PathBuf> {
 /// The agent's configuration is stored at `~/.ManualAid/config.toml`, where `~` denotes the user's home directory.
 /// This function is provided purely for the completeness of the crate's standard directory utilities.
 /// # 描述
-/// 返回用户的配置目录。
-///
 /// 平台路径：
 /// - **Linux**：`$XDG_CONFIG_HOME` 或 `~/.config`
 /// - **macOS**：`~/Library/Application Support`
@@ -87,16 +94,15 @@ pub fn config_dir() -> CoreResult<PathBuf> {
     })
 }
 
-/// # Description
 /// Returns the user's cache directory.
+/// 返回用户的缓存目录。
 ///
+/// # Description
 /// Platform paths:
 /// - **Linux**: `$XDG_CACHE_HOME` or `~/.cache`
 /// - **macOS**: `~/Library/Caches`
 /// - **Windows**: `{FOLDERID_LocalAppData}` (typically `C:\Users\<user>\AppData\Local`)
 /// # 描述
-/// 返回用户的缓存目录。
-///
 /// 平台路径：
 /// - **Linux**：`$XDG_CACHE_HOME` 或 `~/.cache`
 /// - **macOS**：`~/Library/Caches`
@@ -110,16 +116,15 @@ pub fn cache_dir() -> CoreResult<PathBuf> {
     })
 }
 
-/// # Description
 /// Returns the user's data directory.
+/// 返回用户的数据目录。
 ///
+/// # Description
 /// Platform paths:
 /// - **Linux**: `$XDG_DATA_HOME` or `~/.local/share`
 /// - **macOS**: `~/Library/Application Support`
 /// - **Windows**: `{FOLDERID_RoamingAppData}` (typically `C:\Users\<user>\AppData\Roaming`)
 /// # 描述
-/// 返回用户的数据目录。
-///
 /// 平台路径：
 /// - **Linux**：`$XDG_DATA_HOME` 或 `~/.local/share`
 /// - **macOS**：`~/Library/Application Support`
@@ -133,9 +138,7 @@ pub fn data_dir() -> CoreResult<PathBuf> {
     })
 }
 
-/// # Description
 /// Returns a [`UserDirectories`] struct with all standard paths.
-/// # 描述
 /// 返回包含所有标准路径的 [`UserDirectories`] 结构体。
 pub fn all_directories() -> CoreResult<UserDirectories> {
     Ok(UserDirectories {
