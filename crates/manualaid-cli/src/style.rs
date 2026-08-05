@@ -1,9 +1,7 @@
-//! # Description
 //! ANSI escape styling for console output: colors, bold, dim and related
 //! helpers, controlled by a process-wide switch that defaults to disabled
 //! and is enabled automatically when stdout is a terminal and `NO_COLOR`
 //! is unset.
-//! # 描述
 //! 控制台输出的 ANSI 转义样式：颜色、加粗、弱化等辅助函数，由进程级开关控制，
 //! 默认关闭；当 stdout 是终端且未设置 `NO_COLOR` 时自动启用。
 

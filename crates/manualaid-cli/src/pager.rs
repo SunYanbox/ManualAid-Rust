@@ -1,8 +1,6 @@
-//! # Description
 //! Minimal console pager for long CLI output: prints everything when stdout
 //! or stdin is not a terminal, or when the output fits on one screen;
 //! otherwise shows one screenful per key press (`q` quits early).
-//! # 描述
 //! 用于长 CLI 输出的最小控制台分页器：stdout 或 stdin 非终端、或输出
 //! 一屏放得下时全量输出；否则每按一次键显示一屏（按 `q` 提前退出）。
 
@@ -12,9 +10,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 
 use crate::style;
 
-/// # Description
 /// Print `output`, paging it when it is longer than the terminal height.
-/// # 描述
 /// 输出 `output`，当内容超过终端高度时分页显示。
 pub fn print_paged(output: &str) -> io::Result<()> {
     if !io::stdout().is_terminal() || !io::stdin().is_terminal() {

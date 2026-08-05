@@ -1,6 +1,7 @@
-//! # Description
 //! Bounded, depth-first rendering of a directory tree for CLI output.
+//! 用于 CLI 输出的带预算的深度优先目录树渲染。
 //!
+//! # Description
 //! [`format_dir_tree`] prints the root line followed by box-drawing tree
 //! lines. Directories are listed before files, both sorted by name
 //! case-insensitively. When `per_level_limit` is `Some(n)`, each level shows
@@ -9,22 +10,18 @@
 //! localized `… N more` lines. A limit of `None` disables every budget.
 //! `depth` limits recursion: `Some(0)` prints only the root, `Some(d)` stops
 //! at depth `d`, and `None` means unlimited.
-//!
 //! # Test notes
 //! The error branches of `read_dir` / `file_type` on subdirectories depend
 //! on OS state that tests cannot construct portably (permission-denied
 //! paths); unreadable subdirectories are shown without children, and these
 //! branches are not required to have high test coverage.
 //! # 描述
-//! 用于 CLI 输出的带预算的深度优先目录树渲染。
-//!
 //! [`format_dir_tree`] 输出根行与箱线风格的树行。目录排在文件之前，各自按
 //! 名称（大小写不敏感）排序。当 `per_level_limit` 为 `Some(n)` 时，每层最多
 //! 显示 `n` 个文件与 `3 * n` 个目录，全树最多显示 `64 * n` 个非根目录；
 //! 超出的条目用本地化的 `… N more` 行汇总。`None` 表示不设任何预算。
 //! `depth` 限制递归：`Some(0)` 只打印根，`Some(d)` 在深度 `d` 停止，
 //! `None` 表示不限制。
-//!
 //! # 测试说明
 //! 子目录 `read_dir` / `file_type` 的错误分支依赖测试无法跨平台构造的 OS
 //! 状态（权限拒绝路径）；不可读子目录只显示本身不展开，这些分支不要求高
@@ -54,9 +51,7 @@ pub const DIRS_PER_LEVEL_FACTOR: usize = 3;
 /// 全树目录预算的倍数（`64 * limit`）。
 pub const TOTAL_DIRS_FACTOR: usize = 64;
 
-/// # Description
 /// View configuration for [`format_dir_tree`]. `None` means unlimited.
-/// # 描述
 /// [`format_dir_tree`] 的查看配置。`None` 表示不限制。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DirViewConfig {
@@ -93,12 +88,10 @@ struct TreeState {
     dirs_shown: usize,
 }
 
-/// # Description
 /// Render `root` as a bounded depth-first tree. The first line is
 /// `- <root path>`; later lines use `├──` / `└──` / `│` connectors, and
 /// directories end with `/`. The root itself is always shown and never
 /// counts toward the directory budget.
-/// # 描述
 /// 将 `root` 渲染为带预算的深度优先树。首行为 `- <根路径>`；后续行使用
 /// `├──` / `└──` / `│` 连接符，目录以 `/` 结尾。根目录恒显示且不计入
 /// 目录预算。

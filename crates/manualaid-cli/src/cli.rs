@@ -1,7 +1,5 @@
-//! # Description
 //! The clap-defined command line interface: the global `--lang` flag and
 //! the `mask`/`restore`/`skill`/`init`/`dir` subcommands.
-//! # 描述
 //! clap 定义的命令行接口：全局 `--lang` 旗标，以及
 //! `mask`/`restore`/`skill`/`init`/`dir` 子命令。
 
