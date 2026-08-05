@@ -159,6 +159,30 @@ pub fn run_dir_clean_with_home(
     yes: bool,
     home: &Path,
 ) -> Result<(), String> {
+    run_dir_clean_with_stdin(
+        project,
+        global,
+        yes,
+        home,
+        io::stdin().is_terminal(),
+        &mut io::stdin().lock(),
+    )
+}
+
+/// Like [`run_dir_clean_with_home`](run_dir_clean_with_home) with an
+/// injectable stdin, so tests can deterministically exercise both the
+/// terminal and non-terminal confirmation paths without depending on the
+/// host environment.
+/// 同 [`run_dir_clean_with_home`](run_dir_clean_with_home)，但 stdin 可注入，
+/// 供测试在不依赖宿主环境的情况下稳定覆盖终端/非终端确认分支。
+pub fn run_dir_clean_with_stdin(
+    project: bool,
+    global: bool,
+    yes: bool,
+    home: &Path,
+    stdin_is_terminal: bool,
+    stdin: &mut impl io::BufRead,
+) -> Result<(), String> {
     let project_root = current_dir()?;
     let mut bases = Vec::new();
     if !global || project {
@@ -168,9 +192,9 @@ pub fn run_dir_clean_with_home(
         bases.push(home.to_path_buf());
     }
     let targets: Vec<PathBuf> = bases.iter().map(|base| base.join(".ManualAid")).collect();
-    confirm_or_abort(&targets, yes, io::stdin().is_terminal(), || {
+    confirm_or_abort(&targets, yes, stdin_is_terminal, || {
         let mut answer = String::new();
-        io::stdin().read_line(&mut answer)?;
+        stdin.read_line(&mut answer)?;
         Ok(answer)
     })?;
     let (result, elapsed) = timer::time(|| clean_manualaid_dirs(&bases));

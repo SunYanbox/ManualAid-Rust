@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use clap::Parser;
 
 use manualaid_cli::cli::Cli;
-use manualaid_cli::commands::{run, run_main};
+use manualaid_cli::commands::{run, run_dir_clean_with_stdin, run_main};
 
 mod common;
 
@@ -154,8 +154,11 @@ fn run_dir_clean_without_yes_is_rejected_when_non_terminal() {
     i18n::set_locale("en");
     let dir = common::TempDir::new("run-dir-clean-reject");
     fs::create_dir_all(dir.path().join(".ManualAid")).unwrap();
-    let cli = parse(&["manualaid-cli", "dir", "--clean", "--global"]);
-    let err = run(cli, Some(dir.path())).unwrap_err();
+    // Inject a non-terminal stdin so the test never blocks on a real
+    // terminal prompt, regardless of how the test runner is started.
+    let mut stdin = std::io::BufReader::new(std::io::empty());
+    let err =
+        run_dir_clean_with_stdin(false, true, false, dir.path(), false, &mut stdin).unwrap_err();
     assert!(err.contains("Refusing to clean"));
     assert!(dir.path().join(".ManualAid").exists());
 }
