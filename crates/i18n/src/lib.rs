@@ -1,14 +1,13 @@
-//! # Description
 //! The built-in translation wrapper library based on the rust_i18n crate for ManualAid.
+//! 用于 ManualAid 的基于 rust_i18n crate 的翻译封装内置库。
 //!
+//! # Description
 //! `rust_i18n::i18n!()` must be called exactly once in the crate graph —
 //! here in the library crate — because `t!` expands to
 //! `crate::_rust_i18n_t!(...)` which requires `i18n!()` to have run in the
 //! same crate.  Calling it in both lib and bin causes macro-resolution
 //! conflicts.  The binary crate uses `i18n::t_str()` instead.
 //! # 描述
-//! 用于 ManualAid 的基于 rust_i18n crate 的翻译封装内置库。
-//!
 //! `rust_i18n::i18n!()` 必须在 crate 图中且仅调用一次 —
 //! 这里放在库 crate 中 — 因为 `t!` 会展开为
 //! `crate::_rust_i18n_t!(...)`，这要求 `i18n!()` 必须在同一个 crate 中
@@ -20,9 +19,10 @@ use crate::init::_rust_i18n_try_translate;
 pub use rust_i18n::set_locale;
 pub use rust_i18n::t;
 
-/// # Description
 /// Translate a key via the library's i18n backend.
+/// 通过库的 i18n 后端翻译一个键值。
 ///
+/// # Description
 /// This function exists primarily for the binary crate (`main.rs`), which is a
 /// separate crate and cannot directly use the `t!` macro: `t!` expands to
 /// `crate::_rust_i18n_t!(…)`, which requires the calling crate to have invoked
@@ -37,10 +37,8 @@ pub use rust_i18n::t;
 /// Calling `_rust_i18n_try_translate` directly is equivalent and avoids that
 /// hazard.
 ///
-/// Return key if key have no translation
+/// If no translation is found, the key itself is returned.
 /// # 描述
-/// 通过库的 i18n 后端翻译一个键值。
-///
 /// 此函数主要为二进制 crate（`main.rs`）而存在，因为二进制 crate 是一个
 /// 独立的 crate，无法直接使用 `t!` 宏：`t!` 会展开为
 /// `crate::_rust_i18n_t!(…)`，这要求调用 crate 必须已经调用了

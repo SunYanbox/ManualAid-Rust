@@ -1,6 +1,7 @@
-//! # Description
 //! Locked file I/O for `.ManualAid/*` files.
+//! `.ManualAid/*` 文件的加锁文件 I/O。
 //!
+//! # Description
 //! All access to `.ManualAid/*` files must go through [`with_file_lock`],
 //! which holds a process-internal mutex and a cross-process named lock.
 //! # Test notes
@@ -9,8 +10,6 @@
 //! branches of `NamedLock::create` / `lock` depend on system state; these
 //! branches are not covered by tests.
 //! # 描述
-//! `.ManualAid/*` 文件的加锁文件 I/O。
-//!
 //! 所有对 `.ManualAid/*` 文件的访问都必须经过 [`with_file_lock`]，它持有
 //! 进程内互斥锁与跨进程命名锁。
 //! # 测试说明
@@ -41,15 +40,14 @@ pub(crate) fn warn_poisoned_lock(lock: &str) {
     });
 }
 
-/// # Description
 /// Run `f` with the file-level locks for `path` held.
+/// 持有 `path` 对应的文件级锁执行 `f`。
 ///
+/// # Description
 /// Acquires the process-internal mutex first, then the cross-process named
 /// lock derived from `path`; both are released on return. All filesystem
 /// access to `.ManualAid/*` files must go through this function.
 /// # 描述
-/// 持有 `path` 对应的文件级锁执行 `f`。
-///
 /// 先获取进程内互斥锁，再获取由 `path` 派生的跨进程命名锁；返回时两者
 /// 自动释放。所有对 `.ManualAid/*` 文件系统的访问都必须经过本函数。
 pub(crate) fn with_file_lock<T>(path: &Path, f: impl FnOnce() -> CoreResult<T>) -> CoreResult<T> {

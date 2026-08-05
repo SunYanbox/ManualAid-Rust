@@ -1,7 +1,5 @@
-//! # Description
-//! The `dir` command: initialize, view or clean the project and/or global
+//! //! The `dir` command: initialize, view or clean the project and/or global
 //! `.ManualAid` folders, asking for confirmation before cleaning.
-//! # 描述
 //! `dir` 命令：初始化、查看或清理项目/全局 `.ManualAid` 文件夹，清理前
 //! 请求确认。
 

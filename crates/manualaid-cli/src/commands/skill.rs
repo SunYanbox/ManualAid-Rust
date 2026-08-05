@@ -1,7 +1,5 @@
-//! # Description
 //! The `skill` command: scan, filter and print skills, honoring the
 //! `--global`/`--project` flags.
-//! # 描述
 //! `skill` 命令：扫描、过滤并输出技能，遵循 `--global`/`--project` 旗标。
 
 use std::path::Path;

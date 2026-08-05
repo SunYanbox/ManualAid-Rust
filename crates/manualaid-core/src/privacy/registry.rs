@@ -1,14 +1,13 @@
-//! # Description
 //! Session-scoped, in-memory registry of private-data ↔ mask mappings.
+//! 会话范围内的内存注册表，管理隐私数据 ↔ 脱敏标识符的映射。
 //!
+//! # Description
 //! Ensures the same plaintext value always maps to the same stable mask ID
 //! (e.g. `[PRV_EMAIL_1]`) within a process lifetime. In-memory structures
 //! store **only SHA-512 hashes** of plaintext values, never the plaintext
 //! itself. Snapshots can be exported and loaded back later (e.g. for a
 //! database or file layer) without ever containing plaintext.
 //! # 描述
-//! 会话范围内的内存注册表，管理隐私数据 ↔ 脱敏标识符的映射。
-//!
 //! 保证同一明文在同一进程内始终映射到同一稳定掩码标识符（如
 //! `[PRV_EMAIL_1]`）。内存中**只存储明文的 SHA-512 哈希**，绝不存储
 //! 明文本身。快照可导出并重新加载（例如接入数据库或文件层），且
@@ -75,12 +74,13 @@ pub struct PrivacyRegistrySnapshot {
 }
 
 /// Session-scoped, in-memory registry of private-data ↔ mask mappings.
+/// 会话范围内的内存注册表，管理隐私数据 ↔ 脱敏标识符的映射关系。
 ///
+/// # Description
 /// All lookups are O(1) and use only hashed plaintext values internally.
 /// Use [`global_privacy_registry`](crate::privacy::global_privacy_registry)
 /// for the process-wide instance, or create a fresh one for tests.
-/// 会话范围内的内存注册表，管理隐私数据 ↔ 脱敏标识符的映射关系。
-///
+/// # 描述
 /// 所有查找操作均为 O(1)，内部仅使用明文值的哈希。进程级实例见
 /// [`global_privacy_registry`](crate::privacy::global_privacy_registry)，
 /// 测试时可自行创建新实例。
@@ -102,6 +102,7 @@ impl PrivacyRegistry {
     /// If the plaintext is already registered, returns its existing mask ID;
     /// otherwise generates and registers a new one (e.g. `[PRV_EMAIL_3]`).
     /// `entity_type` is used as the mask ID prefix (e.g. `"EMAIL"`).
+    ///
     /// 获取或创建给定明文的稳定脱敏标识符。
     ///
     /// 如果该明文已经注册，返回其现有的脱敏标识符；否则生成并注册一个
@@ -134,6 +135,7 @@ impl PrivacyRegistry {
     /// `mapping` is a slice of `(placeholder, original_value)` tuples.
     /// Returns `(stable_text, stable_mapping)` where `stable_mapping` is a
     /// `HashMap<stable_placeholder, original_value>`.
+    ///
     /// 规范化（文本，映射）对，使所有占位符使用此注册表中的稳定标识符。
     ///
     /// `mapping` 是 `(占位符, 原始值)` 元组的切片。返回
@@ -219,6 +221,7 @@ impl PrivacyRegistry {
     /// Export the current state as a serializable snapshot. Entries are
     /// sorted by `mask_id` for deterministic output; counters are exported
     /// as-is so a snapshot round-trips exactly.
+    ///
     /// 将当前状态导出为可序列化快照。条目按 `mask_id` 排序以保证输出
     /// 确定；计数器原样导出，保证快照精确往返。
     pub fn export_snapshot(&self) -> CoreResult<PrivacyRegistrySnapshot> {
@@ -249,6 +252,7 @@ impl PrivacyRegistry {
     /// legacy `[<TYPE>_<N>]`) with `N >= 1`; each counter must be at least
     /// the maximum number seen among that type's entries (larger counters
     /// are allowed to preserve history).
+    ///
     /// 从快照重建注册表（整体替换语义——加载的状态完全替换当前状态）。
     ///
     /// 校验：每个 `hash_hex` 必须是 128 位十六进制字符串；`mask_id` 必须

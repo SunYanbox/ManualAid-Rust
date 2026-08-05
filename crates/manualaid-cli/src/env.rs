@@ -1,8 +1,6 @@
-//! # Description
 //! Process environment helpers used by the command handlers: the default
 //! startup message, the current working directory and the user home
 //! directory, returning localized error messages on failure.
-//! # 描述
 //! 命令处理使用的进程环境辅助：默认启动消息、当前工作目录与用户主目录，
 //! 失败时均返回本地化错误信息。
 

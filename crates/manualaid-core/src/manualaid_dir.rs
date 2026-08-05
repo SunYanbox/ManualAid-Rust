@@ -1,6 +1,7 @@
-//! # Description
 //! Idempotent creation of ManualAid's standard directories and files.
+//! ManualAid 标准目录与文件的幂等创建。
 //!
+//! # Description
 //! Missing targets are created with their default content; existing files
 //! are never overwritten. The project `.ManualAid` directory is git-ignored,
 //! so project-local files (such as `config.toml`) are never tracked.
@@ -9,8 +10,6 @@
 //! cannot construct portably (permission-denied paths); it is not required
 //! to have high test coverage.
 //! # 描述
-//! ManualAid 标准目录与文件的幂等创建。
-//!
 //! 缺失的目标会被创建为默认内容；已存在的文件永不覆盖。项目的
 //! `.ManualAid` 目录被 git 忽略，因此项目本地文件（如 `config.toml`）
 //! 不会被跟踪。
@@ -27,6 +26,7 @@ use crate::user_dir;
 /// A file that the `ensure_*` functions create when missing. Its parent
 /// directory is `<base>/.ManualAid`, where `base` is the user home or the
 /// project root.
+///
 /// 缺失时由 `ensure_*` 函数创建的文件。其父目录为 `<base>/.ManualAid`，
 /// `base` 为用户主目录或项目根。
 struct FileTarget {
@@ -39,8 +39,8 @@ struct FileTarget {
     content: &'static str,
 }
 
-/// Content of the generated home `.ManualAid/config.toml`: commented
-/// `[privacy_mask_extension]` tables loaded by [`crate::privacy`].
+/// Content of the generated home `.ManualAid/config.toml`:
+/// contains **commented‑out** `[privacy_mask_extension]` tables loaded by [`crate::privacy`].
 /// 生成的 `~/.ManualAid/config.toml` 的内容；含 [`crate::privacy`] 读取的
 /// 带注释的 `[privacy_mask_extension]` 表。
 pub const DEFAULT_GLOBAL_CONFIG_CONTENT: &str = concat!(
@@ -110,11 +110,9 @@ const PROJECT_FILE_TARGETS: &[FileTarget] = &[
     },
 ];
 
-/// # Description
 /// Idempotently create ManualAid's standard directories and files: the
 /// missing targets listed in the module documentation are created with their
 /// default content. Existing files are never overwritten.
-/// # 描述
 /// 幂等地创建 ManualAid 的标准目录与文件：缺失时按模块文档列出的目标
 /// 创建默认内容；已存在的文件永不覆盖。
 pub fn ensure_manualaid_dirs(project_root: &Path) -> CoreResult<()> {
@@ -122,10 +120,8 @@ pub fn ensure_manualaid_dirs(project_root: &Path) -> CoreResult<()> {
     ensure_manualaid_dirs_with_home(project_root, &home)
 }
 
-/// # Description
 /// Like [`ensure_manualaid_dirs`] with an explicit home directory, used by
 /// tests to avoid touching the real user home. Hidden from docs.
-/// # 描述
 /// 同 [`ensure_manualaid_dirs`]，但以显式指定的主目录代替真实用户主目录，
 /// 供测试避免触碰真实主目录。文档中隐藏。
 #[doc(hidden)]
@@ -134,10 +130,8 @@ pub fn ensure_manualaid_dirs_with_home(project_root: &Path, home: &Path) -> Core
     ensure_global_manualaid_dir(home)
 }
 
-/// # Description
 /// Idempotently create only the project `.ManualAid` directory: the project
 /// `config.toml` and `.gitignore`. The global directory is untouched.
-/// # 描述
 /// 幂等地只创建项目 `.ManualAid` 目录：项目 `config.toml` 与 `.gitignore`。
 /// 不触碰全局目录。
 pub fn ensure_project_manualaid_dir(project_root: &Path) -> CoreResult<()> {
@@ -145,10 +139,8 @@ pub fn ensure_project_manualaid_dir(project_root: &Path) -> CoreResult<()> {
     ensure_manualaid_dir_files(&root, PROJECT_FILE_TARGETS)
 }
 
-/// # Description
 /// Idempotently create only the global `.ManualAid` directory: the global
 /// `config.toml`. The project directory is untouched.
-/// # 描述
 /// 幂等地只创建全局 `.ManualAid` 目录：全局 `config.toml`。不触碰项目目录。
 pub fn ensure_global_manualaid_dir(home: &Path) -> CoreResult<()> {
     ensure_manualaid_dir_files(home, GLOBAL_FILE_TARGETS)
@@ -174,9 +166,7 @@ fn ensure_manualaid_dir_files(base: &Path, targets: &[FileTarget]) -> CoreResult
     Ok(())
 }
 
-/// # Description
 /// Statistics collected before a `.ManualAid` directory is removed.
-/// # 描述
 /// 删除 `.ManualAid` 目录前统计得到的数值。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CleanReport {
@@ -188,17 +178,18 @@ pub struct CleanReport {
     pub bytes: u64,
 }
 
-/// # Description
 /// Remove `<base>/.ManualAid` entirely when it exists, returning the
 /// collected [`CleanReport`], or `None` when the directory does not exist.
+/// 当 `<base>/.ManualAid` 存在时整体删除，返回统计的 [`CleanReport`]；
+/// 目录不存在时返回 `None`。
+///
+/// # Description
 /// A `.ManualAid` path that exists but is not a directory is an
 /// `InvalidPath` error. Only the exact `base.join(".ManualAid")` path is
 /// touched; `base` itself is never removed.
 /// # 描述
-/// 当 `<base>/.ManualAid` 存在时整体删除，返回统计的 [`CleanReport`]；
-/// 目录不存在时返回 `None`。`.ManualAid` 路径存在但不是目录时报
-/// `InvalidPath`。只操作精确的 `base.join(".ManualAid")` 路径，绝不删除
-/// `base` 本身。
+/// `.ManualAid` 路径存在但不是目录时报`InvalidPath`。只操作精确的
+/// `base.join(".ManualAid")` 路径，绝不删除`base` 本身。
 pub fn clean_manualaid_dir(base: &Path) -> CoreResult<Option<CleanReport>> {
     let target = base.join(".ManualAid");
     if !target.exists() {

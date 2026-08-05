@@ -1,12 +1,14 @@
-//! # Description
 //! Execute commands through a configurable shell, with optional timeout
-//! termination. The shell is selected by an explicit path set via
+//! termination.
+//! 通过可配置的 Shell 执行命令，支持超时自动中止。
+//!
+//! # Description
+//! The shell is selected by an explicit path set via
 //! [`set_shell_path`], falling back to the platform default (`%COMSPEC%` on
 //! Windows, `$SHELL` on Unix) when unset. All functions require a running
 //! Tokio runtime. A timeout aborts the process but still returns every byte
 //! of stdout and stderr collected so far.
 //! # 描述
-//! 通过可配置的 Shell 执行命令，支持超时自动中止。
 //! Shell 由 [`set_shell_path`] 显式设置，未设置时回退到平台默认
 //! （Windows 的 `%COMSPEC%`、Unix 的 `$SHELL`）。所有函数必须在 Tokio
 //! 运行时内调用。超时中止进程，但仍返回已收集的全部 stdout 和 stderr。
@@ -98,9 +100,12 @@ pub(crate) fn decode_command_output(bytes: &[u8]) -> String {
 /// 当前配置的 Shell 路径；`None` 表示使用平台默认值。用互斥锁保护以支持运行时更新。
 static SHELL_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 
-/// # Description
 /// Run a command with the currently configured shell (or the platform
-/// default when unset). On Windows the shell is invoked with `/C`, on other
+/// default when unset).
+/// 使用当前配置的 Shell（未配置时使用平台默认）运行命令。
+///
+/// # Description
+/// On Windows the shell is invoked with `/C`, on other
 /// platforms with `-c`. A timeout aborts the process with `kill()` and still
 /// returns every byte of stdout and stderr collected so far; the timeout is
 /// reported through `CommandResult::timed_out` rather than an error. Note
@@ -110,11 +115,10 @@ static SHELL_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 /// of their output may be lost. Spawn failures and pipe errors are returned
 /// as `CoreError`; a non-zero exit code is a normal result.
 /// # 描述
-/// 使用当前配置的 Shell（未配置时使用平台默认）运行命令。Windows 上用 `/C`
-/// 调用 Shell，其他平台用 `-c`。超时会用 `kill()` 中止进程，并仍返回已收集
-/// 的全部 stdout 和 stderr；超时通过 `CommandResult::timed_out` 报告而非错误。
-/// 注意 `kill()` 只终止直接子进程——孙进程（例如 `cmd` 启动的 `ping`）可能
-/// 短暂存活，kill 后最多再排空 500 ms。spawn 失败和管道错误返回 `CoreError`；
+/// Windows 上用 `/C`调用 Shell，其他平台用 `-c`。超时会用 `kill()` 中止进程，
+/// 并仍返回已收集的全部 stdout 和 stderr；超时通过 `CommandResult::timed_out`
+/// 报告而非错误。注意 `kill()` 只终止直接子进程——孙进程（例如 `cmd` 启动的 `ping`）
+/// 可能短暂存活，kill 后最多再排空 500 ms。spawn 失败和管道错误返回 `CoreError`；
 /// 非零退出码是正常结果。
 pub async fn run_shell(command: &str, timeout: Option<Duration>) -> CoreResult<CommandResult> {
     let shell = resolve_shell_path();
@@ -127,12 +131,14 @@ pub async fn run_shell(command: &str, timeout: Option<Duration>) -> CoreResult<C
     collect(&mut child, timeout).await
 }
 
+/// Run an arbitrary program with the given arguments.
+/// 以给定参数运行任意程序。
+///
 /// # Description
-/// Run an arbitrary program with the given arguments. Timeout semantics are
-/// identical to [`run_shell`]. On Windows, batch files (`.bat`/`.cmd`) cannot
-/// be spawned directly; run them through a shell instead.
+/// Timeout semantics are identical to [`run_shell`]. On Windows,
+/// batch files (`.bat`/`.cmd`) cannot be spawned directly; run them through a shell instead.
 /// # 描述
-/// 以给定参数运行任意程序。超时语义与 [`run_shell`] 相同。
+/// 超时语义与 [`run_shell`] 相同。
 /// 在 Windows 上，批处理文件（`.bat`/`.cmd`）无法直接 spawn，应通过 Shell 运行。
 pub async fn run_program(
     program: impl AsRef<Path>,
@@ -145,15 +151,16 @@ pub async fn run_program(
     collect(&mut child, timeout).await
 }
 
+/// Set the shell path used by [`run_shell`].
+/// 设置 [`run_shell`] 使用的 Shell 路径。
+///
 /// # Description
-/// Set the shell path used by [`run_shell`]. The value is stored as-is
-/// without existence checks — a wrong path surfaces as
+/// The value is stored as-is without existence checks — a wrong path surfaces as
 /// `CoreError::NotFound` when a command is spawned. An empty path is rejected
 /// with `CoreError::InvalidPath`.
 /// # 描述
-/// 设置 [`run_shell`] 使用的 Shell 路径。原样存储，不校验是否存在——错误的
-/// 路径会在 spawn 命令时以 `CoreError::NotFound` 暴露。空路径以
-/// `CoreError::InvalidPath` 拒绝。
+/// 原样存储，不校验是否存在——错误的路径会在 spawn 命令时以
+/// `CoreError::NotFound` 暴露。空路径以 `CoreError::InvalidPath` 拒绝。
 pub fn set_shell_path(path: impl Into<PathBuf>) -> CoreResult<()> {
     let path = path.into();
     if path.as_os_str().is_empty() {
@@ -165,10 +172,8 @@ pub fn set_shell_path(path: impl Into<PathBuf>) -> CoreResult<()> {
     Ok(())
 }
 
-/// # Description
 /// Return the currently configured shell path, or `None` when the platform
 /// default is in use.
-/// # 描述
 /// 返回当前配置的 Shell 路径；未配置（使用平台默认）时为 `None`。
 pub fn shell_path() -> Option<PathBuf> {
     SHELL_PATH
@@ -177,10 +182,8 @@ pub fn shell_path() -> Option<PathBuf> {
         .clone()
 }
 
-/// # Description
 /// Clear the configured shell path so the platform default is used again.
 /// Hidden from docs because it exists for tests to restore state.
-/// # 描述
 /// 清空配置的 Shell 路径，恢复使用平台默认。文档中隐藏，因为它供测试恢复状态用。
 #[doc(hidden)]
 pub fn reset_shell_path() {

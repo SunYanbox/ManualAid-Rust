@@ -1,7 +1,5 @@
-//! # Description
 //! The `init` command: initialize the project and/or global `.ManualAid`
 //! folders.
-//! # 描述
 //! `init` 命令：初始化项目/全局 `.ManualAid` 文件夹。
 
 use std::path::Path;
