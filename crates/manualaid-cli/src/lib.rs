@@ -6,11 +6,19 @@
 //! `manualaid-cli` 可执行程序背后的库：隐私快照的掩码/还原辅助、SKILL
 //! 发现与格式化，以及用于长控制台输出的小型分页器。
 
+pub mod cli;
+pub mod commands;
+pub mod dir_tree;
+mod env;
 pub mod pager;
 pub mod style;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use manualaid_core::error::{CoreError, CoreResult};
 use manualaid_core::privacy::{PrivacyMasker, restore_masked_data};
@@ -69,9 +77,21 @@ pub fn read_input(input: &str) -> CoreResult<String> {
 /// 注意：快照将掩码 ID 映射到明文，属于敏感数据，请妥善保管；仅含
 /// 哈希的数据无法用于还原。
 pub fn mask(masker: &PrivacyMasker, input: &str) -> CoreResult<(String, BTreeMap<String, String>)> {
+    mask_with_chars(masker, input).map(|(masked, mapping, _chars)| (masked, mapping))
+}
+
+/// # Description
+/// Like [`mask`], additionally returning the character count of the resolved
+/// input text, so callers can report it without re-reading the input.
+/// # 描述
+/// 同 [`mask`]，额外返回解析后输入文本的字符数，调用方无需重复读取输入。
+pub fn mask_with_chars(
+    masker: &PrivacyMasker,
+    input: &str,
+) -> CoreResult<(String, BTreeMap<String, String>, usize)> {
     let text = read_input(input)?;
     let (masked, mapping) = masker.sanitize(&text)?;
-    Ok((masked, mapping.into_iter().collect()))
+    Ok((masked, mapping.into_iter().collect(), text.chars().count()))
 }
 
 /// # Description
@@ -81,11 +101,22 @@ pub fn mask(masker: &PrivacyMasker, input: &str) -> CoreResult<(String, BTreeMap
 /// 使用 `snapshot_path` 处的快照 JSON，从已掩码的 `input`（文本或文件
 /// 路径）还原原文。
 pub fn restore(input: &str, snapshot_path: &Path) -> CoreResult<String> {
+    restore_with_chars(input, snapshot_path).map(|(restored, _chars)| restored)
+}
+
+/// # Description
+/// Like [`restore`], additionally returning the character count of the
+/// resolved masked input text, so callers can report it without re-reading
+/// the input.
+/// # 描述
+/// 同 [`restore`]，额外返回解析后掩码输入文本的字符数，调用方无需重复读取
+/// 输入。
+pub fn restore_with_chars(input: &str, snapshot_path: &Path) -> CoreResult<(String, usize)> {
     let text = read_input(input)?;
     let snapshot = std::fs::read_to_string(snapshot_path)?;
     let mapping: HashMap<String, String> = serde_json::from_str(&snapshot)
         .map_err(|e| CoreError::Parse(format!("invalid snapshot JSON: {e}")))?;
-    Ok(restore_masked_data(&text, &mapping))
+    Ok((restore_masked_data(&text, &mapping), text.chars().count()))
 }
 
 /// # Description
@@ -105,6 +136,59 @@ pub fn t_fmt(key: &str, args: &[(&str, &str)]) -> String {
         template = template.replace(&format!("%{{{name}}}"), value);
     }
     template
+}
+
+/// # Description
+/// Format a [`Duration`] as milliseconds with exactly six decimal places,
+/// computed from the integer nanosecond count so the value is exact to the
+/// nanosecond (1 ns = 0.000001 ms).
+/// # 描述
+/// 将 [`Duration`] 格式化为毫秒并固定保留 6 位小数，由整数纳秒数直接换算，
+/// 保证精确到纳秒（1 ns = 0.000001 ms）。
+pub fn format_duration(duration: Duration) -> String {
+    let nanos = duration.as_nanos();
+    let millis = nanos / 1_000_000;
+    let fraction = nanos % 1_000_000;
+    format!("{millis}.{fraction:06} ms")
+}
+
+/// # Description
+/// Format a byte count with an automatically chosen 1024-based unit
+/// (KB/MB/GB) and exactly three decimal places.
+/// # 描述
+/// 将字节数按 1024 进制自动选择单位（KB/MB/GB）并固定保留 3 位小数。
+pub fn format_bytes(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = 1024.0 * 1024.0;
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+    let value = bytes as f64;
+    if value >= GB {
+        format!("{:.3} GB", value / GB)
+    } else if value >= MB {
+        format!("{:.3} MB", value / MB)
+    } else {
+        format!("{:.3} KB", value / KB)
+    }
+}
+
+/// # Description
+/// Format a "Timings" section from already-localized lines. Returns an empty
+/// string for an empty slice; otherwise a headed section with `  - ` prefixed
+/// lines, following the styling of the other CLI output sections.
+/// # 描述
+/// 由已本地化的行格式化“耗时”区块。空切片返回空串；否则输出带标题的区块，
+/// 每行以 `  - ` 开头，样式与其他 CLI 输出区块一致。
+pub fn format_timings(lines: &[String]) -> String {
+    if lines.is_empty() {
+        return String::new();
+    }
+    let heading = style::header(&t_fmt("cli.output.timings", &[]));
+    let body = lines
+        .iter()
+        .map(|line| format!("  - {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("\n{heading}\n{body}\n")
 }
 
 /// # Description

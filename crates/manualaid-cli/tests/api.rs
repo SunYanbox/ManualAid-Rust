@@ -5,12 +5,17 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
+use std::time::Duration;
 
+use manualaid_cli::dir_tree::{
+    DEFAULT_VIEW_DEPTH, DEFAULT_VIEW_LIMIT, DirViewConfig, format_dir_tree,
+};
 use manualaid_cli::{
-    DESCRIPTION_MAX_CHARS, SkillScope, filter_skills, format_default_output, format_error_output,
-    format_mask_output, format_restore_output, format_skill, format_skill_list,
-    format_skill_output, load_skills, mask, pager, read_input, restore, skill_source_path, style,
-    t_fmt, truncate_description,
+    DESCRIPTION_MAX_CHARS, SkillScope, filter_skills, format_bytes, format_default_output,
+    format_duration, format_error_output, format_mask_output, format_restore_output, format_skill,
+    format_skill_list, format_skill_output, format_timings, load_skills, mask, mask_with_chars,
+    pager, read_input, restore, restore_with_chars, skill_source_path, style, t_fmt,
+    truncate_description,
 };
 use manualaid_core::error::CoreError;
 use manualaid_core::privacy::{PrivacyMaskExtension, PrivacyMasker, restore_masked_data};
@@ -320,7 +325,7 @@ fn format_skill_output_plain_and_styled() {
     let a = skill_with_path("a", "/home/u/.codex/skills/a");
     style::set_enabled(false);
     assert_eq!(format_skill_output(&[]), "");
-    let out = format_skill_output(&[a.clone()]);
+    let out = format_skill_output(std::slice::from_ref(&a));
     assert!(out.starts_with("- /home/u/.codex\n"));
     assert!(out.ends_with("Total chars: 4\n"));
     style::set_enabled(true);
@@ -443,4 +448,226 @@ fn snapshot_json_serializes_btree_deterministically() {
 #[test]
 fn pager_prints_all_when_not_terminal() {
     pager::print_paged("line one\nline two\n").expect("print should succeed");
+}
+
+#[test]
+fn format_duration_is_milliseconds_with_nanosecond_precision() {
+    assert_eq!(format_duration(Duration::ZERO), "0.000000 ms");
+    assert_eq!(format_duration(Duration::from_nanos(5)), "0.000005 ms");
+    assert_eq!(
+        format_duration(Duration::from_nanos(1_234_567)),
+        "1.234567 ms"
+    );
+    assert_eq!(format_duration(Duration::from_secs(2)), "2000.000000 ms");
+}
+
+#[test]
+fn format_bytes_auto_selects_unit_with_three_decimals() {
+    assert_eq!(format_bytes(0), "0.000 KB");
+    assert_eq!(format_bytes(512), "0.500 KB");
+    assert_eq!(format_bytes(1536), "1.500 KB");
+    assert_eq!(format_bytes(1_572_864), "1.500 MB");
+    assert_eq!(format_bytes(1_073_741_824), "1.000 GB");
+}
+
+#[test]
+fn format_timings_renders_heading_and_lines() {
+    let _guard = locale_guard();
+    i18n::set_locale("en");
+    assert_eq!(format_timings(&[]), "");
+    let out = format_timings(&[
+        "Mask: 1.234567 ms (25 chars)".to_string(),
+        "Init: 0.000123 ms".to_string(),
+    ]);
+    assert!(
+        out.starts_with("\nTimings\n  - Mask: 1.234567 ms (25 chars)\n  - Init: 0.000123 ms\n")
+    );
+    assert!(out.ends_with('\n'));
+}
+
+#[test]
+fn mask_with_chars_returns_input_char_count() {
+    let masker = PrivacyMasker::new().unwrap();
+    let (masked, snapshot, chars) = mask_with_chars(&masker, "mail me at bob@example.com").unwrap();
+    assert_eq!(chars, 26);
+    assert!(masked.contains("[PRV_EMAIL_"));
+    assert!(!masked.contains("bob@example.com"));
+    assert!(snapshot.values().any(|value| value == "bob@example.com"));
+}
+
+#[test]
+fn restore_with_chars_returns_input_char_count() {
+    let tmp = common::TempDir::new("restore-chars");
+    let snapshot = tmp.path().join("snapshot.json");
+    fs::write(&snapshot, r#"{"[PRV_EMAIL_1]":"jane@example.com"}"#).unwrap();
+    let (restored, chars) = restore_with_chars("contact [PRV_EMAIL_1]", &snapshot).unwrap();
+    assert_eq!(restored, "contact jane@example.com");
+    assert_eq!(chars, 21);
+}
+
+#[test]
+fn dir_view_config_defaults() {
+    let config = DirViewConfig::default();
+    assert_eq!(config.depth, Some(DEFAULT_VIEW_DEPTH));
+    assert_eq!(config.per_level_limit, Some(DEFAULT_VIEW_LIMIT));
+}
+
+fn view_config(depth: Option<usize>, limit: Option<usize>) -> DirViewConfig {
+    DirViewConfig {
+        depth,
+        per_level_limit: limit,
+    }
+}
+
+#[test]
+fn format_dir_tree_missing_root_is_not_found() {
+    let tmp = common::TempDir::new("tree-missing");
+    let err = format_dir_tree(&tmp.path().join(".ManualAid"), &DirViewConfig::default())
+        .expect_err("tree should fail");
+    assert!(matches!(err, CoreError::NotFound(_)));
+}
+
+#[test]
+fn format_dir_tree_file_root_is_invalid_path() {
+    let tmp = common::TempDir::new("tree-file");
+    let path = tmp.path().join("blocker");
+    fs::write(&path, "file").unwrap();
+    let err = format_dir_tree(&path, &DirViewConfig::default()).expect_err("tree should fail");
+    assert!(matches!(err, CoreError::InvalidPath(_)));
+}
+
+#[test]
+fn format_dir_tree_empty_dir_prints_only_the_root() {
+    let tmp = common::TempDir::new("tree-empty");
+    let root = tmp.path().join(".ManualAid");
+    fs::create_dir_all(&root).unwrap();
+    let out = format_dir_tree(&root, &view_config(None, None)).unwrap();
+    assert_eq!(out, format!("- {}", root.display()));
+}
+
+#[test]
+fn format_dir_tree_sorts_dirs_first() {
+    let tmp = common::TempDir::new("tree-sort");
+    let root = tmp.path().join(".ManualAid");
+    fs::create_dir_all(root.join("bb")).unwrap();
+    fs::create_dir_all(root.join("aa")).unwrap();
+    fs::write(root.join("zz.txt"), "").unwrap();
+    fs::write(root.join("aa.txt"), "").unwrap();
+    let out = format_dir_tree(&root, &view_config(Some(1), None)).unwrap();
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0], format!("- {}", root.display()));
+    assert!(lines[1].ends_with("aa/"));
+    assert!(lines[2].ends_with("bb/"));
+    assert!(lines[3].ends_with("aa.txt"));
+    assert!(lines[4].ends_with("zz.txt"));
+}
+
+#[test]
+fn format_dir_tree_limits_files_per_level() {
+    let _guard = locale_guard();
+    i18n::set_locale("en");
+    let tmp = common::TempDir::new("tree-file-limit");
+    let root = tmp.path().join(".ManualAid");
+    fs::create_dir_all(&root).unwrap();
+    for i in 0..10 {
+        fs::write(root.join(format!("f{i}.txt")), "").unwrap();
+    }
+    let out = format_dir_tree(&root, &view_config(Some(1), Some(7))).unwrap();
+    assert!(out.contains("f6.txt"));
+    assert!(!out.contains("f7.txt"));
+    assert!(out.contains("… 3 more files"));
+}
+
+#[test]
+fn format_dir_tree_limits_dirs_per_level() {
+    let _guard = locale_guard();
+    i18n::set_locale("en");
+    let tmp = common::TempDir::new("tree-dir-limit");
+    let root = tmp.path().join(".ManualAid");
+    fs::create_dir_all(&root).unwrap();
+    for i in 0..8 {
+        fs::create_dir_all(root.join(format!("d{i}"))).unwrap();
+    }
+    let out = format_dir_tree(&root, &view_config(Some(1), Some(2))).unwrap();
+    assert!(out.contains("d5/"));
+    assert!(!out.contains("d6/"));
+    assert!(out.contains("… 2 more dirs"));
+}
+
+#[test]
+fn format_dir_tree_unlimited_limit_shows_everything() {
+    let _guard = locale_guard();
+    i18n::set_locale("en");
+    let tmp = common::TempDir::new("tree-no-limit");
+    let root = tmp.path().join(".ManualAid");
+    fs::create_dir_all(&root).unwrap();
+    for i in 0..12 {
+        fs::write(root.join(format!("f{i}.txt")), "").unwrap();
+    }
+    let out = format_dir_tree(&root, &view_config(Some(1), None)).unwrap();
+    assert!(out.contains("f11.txt"));
+    assert!(!out.contains("more"));
+}
+
+#[test]
+fn format_dir_tree_depth_controls_recursion() {
+    let tmp = common::TempDir::new("tree-depth");
+    let root = tmp.path().join(".ManualAid");
+    fs::create_dir_all(root.join("a").join("b")).unwrap();
+    fs::write(root.join("a").join("b").join("c.txt"), "").unwrap();
+
+    let out = format_dir_tree(&root, &view_config(Some(0), None)).unwrap();
+    assert_eq!(out, format!("- {}", root.display()));
+
+    let out = format_dir_tree(&root, &view_config(Some(1), None)).unwrap();
+    assert!(out.contains("a/"));
+    assert!(!out.contains("b/"));
+
+    let out = format_dir_tree(&root, &view_config(Some(2), None)).unwrap();
+    assert!(out.contains("b/"));
+    assert!(!out.contains("c.txt"));
+
+    let out = format_dir_tree(&root, &view_config(None, None)).unwrap();
+    assert!(out.contains("c.txt"));
+}
+
+#[test]
+fn format_dir_tree_global_dir_budget_is_depth_first() {
+    let _guard = locale_guard();
+    i18n::set_locale("en");
+    let tmp = common::TempDir::new("tree-global-budget");
+    let root = tmp.path().join(".ManualAid");
+    fs::create_dir_all(&root).unwrap();
+    for i in 0..3 {
+        for j in 0..3 {
+            for k in 0..3 {
+                for l in 0..3 {
+                    fs::create_dir_all(root.join(format!("d{i}/d{j}/d{k}/d{l}"))).unwrap();
+                }
+            }
+        }
+    }
+    // limit 1: per-level dir cap 3, whole-tree cap 64; the tree has
+    // 3 + 9 + 27 + 81 = 120 non-root dirs.
+    let out = format_dir_tree(&root, &view_config(None, Some(1))).unwrap();
+    let shown = out
+        .lines()
+        .filter(|line| line.contains("└── ") || line.contains("├── "))
+        .filter(|line| line.ends_with('/'))
+        .count();
+    assert_eq!(shown, 64);
+    assert!(out.contains("… 3 more dirs"));
+    assert!(out.contains("… 2 more dirs"));
+}
+
+#[test]
+fn format_dir_tree_keeps_connector_continuation_for_children() {
+    let tmp = common::TempDir::new("tree-connectors");
+    let root = tmp.path().join(".ManualAid");
+    fs::create_dir_all(root.join("a")).unwrap();
+    fs::write(root.join("a").join("x.txt"), "").unwrap();
+    fs::write(root.join("a").join("y.txt"), "").unwrap();
+    fs::write(root.join("z.txt"), "").unwrap();
+    let out = format_dir_tree(&root, &view_config(Some(2), None)).unwrap();
+    assert!(out.contains("├── a/\n│   ├── x.txt\n│   └── y.txt"));
 }

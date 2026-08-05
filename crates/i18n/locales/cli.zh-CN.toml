@@ -15,12 +15,32 @@ snapshot_read = "读取快照失败：%{error}"
 snapshot_parse = "快照解析失败：%{error}"
 skill_scan = "SKILL 扫描失败：%{error}"
 output = "输出失败：%{error}"
+init = "初始化失败：%{error}"
+dir_view = "目录查看失败：%{error}"
+dir_clean = "目录清理失败：%{error}"
+clean_confirm = "缺少确认，拒绝清理：请添加 --yes 或在交互终端中运行"
 
 [cli.output]
 masked_text = "掩码文本"
 snapshot_json = "快照 JSON"
 restored_text = "还原文本"
 skills = "技能（%{count} 个）"
+timings = "耗时"
+timing_skill_scan = "SKILL 扫描：%{elapsed}"
+timing_mask = "掩码：%{elapsed}（%{chars} 字符）"
+timing_restore = "还原：%{elapsed}（%{chars} 字符）"
+timing_init = "初始化：%{elapsed}"
+timing_dir_view = "目录查看：%{elapsed}"
+timing_dir_clean = "目录清理：%{elapsed}"
+
+[cli.dir]
+initialized = "- 已初始化 %{path}"
+missing = "- %{path} %{status}"
+removed = "- 已删除 %{path}：%{files} 个文件，%{size}"
+more_files = "… 另有 %{count} 个文件"
+more_dirs = "… 另有 %{count} 个目录"
+confirm = "删除 %{paths}？[y/N] "
+aborted = "已中止。"
 
 [cli.pager]
 more = "（按 q 退出，按其他键继续）"

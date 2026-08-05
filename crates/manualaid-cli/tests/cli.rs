@@ -171,3 +171,154 @@ fn skill_flags_filter_global_and_project_scopes() {
     assert!(stdout(&both_flags).contains("projskill"));
     assert!(stdout(&both_flags).contains("globskill"));
 }
+
+#[test]
+fn init_creates_project_and_global_folders() {
+    let tmp = common::TempDir::new("init-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&project).unwrap();
+
+    let output = run_in(&project, &home, &["init"]);
+    assert!(output.status.success());
+    assert!(project.join(".ManualAid").join("config.toml").is_file());
+    assert!(project.join(".ManualAid").join(".gitignore").is_file());
+    assert!(home.join(".ManualAid").join("config.toml").is_file());
+    assert!(!home.join(".ManualAid").join(".gitignore").exists());
+}
+
+#[test]
+fn init_output_includes_localized_timings() {
+    let tmp = common::TempDir::new("init-timing-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&project).unwrap();
+
+    let output = run_in(&project, &home, &["init"]);
+    assert!(output.status.success());
+    let text = stdout(&output);
+    assert!(text.contains("Timings"));
+    assert!(text.contains("Init:"));
+    assert!(text.contains("ms"));
+
+    let output = run_in(&project, &home, &["init", "--lang", "zh-CN"]);
+    assert!(output.status.success());
+    let text = stdout(&output);
+    assert!(text.contains("耗时"));
+    assert!(text.contains("初始化："));
+}
+
+#[test]
+fn dir_view_shows_tree_and_honors_limit_and_depth() {
+    let tmp = common::TempDir::new("view-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&project).unwrap();
+    fs::create_dir_all(project.join(".ManualAid")).unwrap();
+    fs::write(project.join(".ManualAid").join("config.toml"), "[skill]\n").unwrap();
+    fs::write(project.join(".ManualAid").join(".gitignore"), "*\n").unwrap();
+    for i in 0..10 {
+        fs::write(project.join(".ManualAid").join(format!("f{i}.txt")), "x").unwrap();
+    }
+
+    let output = run_in(&project, &home, &["dir", "--view", "--project"]);
+    assert!(output.status.success());
+    let text = stdout(&output);
+    assert!(text.contains(&format!("- {}", project.join(".ManualAid").display())));
+    assert!(text.contains("config.toml"));
+    assert!(text.contains(".gitignore"));
+    assert!(text.contains("… 5 more files"));
+
+    let output = run_in(
+        &project,
+        &home,
+        &["dir", "--view", "--project", "--limit", "0"],
+    );
+    assert!(output.status.success());
+    let text = stdout(&output);
+    assert!(text.contains("f9.txt"));
+    assert!(!text.contains("more files"));
+
+    let output = run_in(
+        &project,
+        &home,
+        &["dir", "--view", "--project", "--depth", "0"],
+    );
+    assert!(output.status.success());
+    let text = stdout(&output);
+    assert!(!text.contains("config.toml"));
+    assert!(!text.contains("├── "));
+}
+
+#[test]
+fn dir_view_missing_reports_not_exists() {
+    let tmp = common::TempDir::new("view-missing-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&project).unwrap();
+
+    let output = run_in(&project, &home, &["dir", "--view", "--project"]);
+    assert!(output.status.success());
+    assert!(stdout(&output).contains("does not exist"));
+}
+
+#[test]
+fn dir_clean_removes_and_reports_stats() {
+    let tmp = common::TempDir::new("clean-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&project).unwrap();
+    fs::create_dir_all(project.join(".ManualAid").join("logs")).unwrap();
+    fs::write(project.join(".ManualAid").join("config.toml"), "[skill]\n").unwrap();
+    fs::write(project.join(".ManualAid").join("data.bin"), vec![0u8; 2048]).unwrap();
+    fs::write(project.join(".ManualAid").join("logs").join("a.log"), "x").unwrap();
+
+    let output = run_in(&project, &home, &["dir", "--clean", "--project", "--yes"]);
+    assert!(output.status.success());
+    let text = stdout(&output);
+    assert!(text.contains("Removed"));
+    assert!(text.contains("3 files"));
+    assert!(text.contains("2.009 KB"));
+    assert!(!project.join(".ManualAid").exists());
+}
+
+#[test]
+fn dir_clean_without_yes_is_rejected_when_non_terminal() {
+    let tmp = common::TempDir::new("clean-reject-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&project).unwrap();
+    fs::create_dir_all(project.join(".ManualAid")).unwrap();
+    fs::write(project.join(".ManualAid").join("config.toml"), "[skill]\n").unwrap();
+
+    let output = run_in(&project, &home, &["dir", "--clean", "--project"]);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("Refusing to clean"));
+    assert!(project.join(".ManualAid").exists());
+}
+
+#[test]
+fn mask_output_includes_timings_with_char_count() {
+    if !home_dir_resolvable() {
+        eprintln!("skipping: home directory cannot be resolved in this environment");
+        return;
+    }
+    let output = run(&["mask", "mail me at bob@example.com"]);
+    assert!(output.status.success());
+    let text = stdout(&output);
+    assert!(text.contains("Timings"));
+    assert!(text.contains("(26 chars)"));
+}
+
+#[test]
+fn skill_output_includes_timings() {
+    if !home_dir_resolvable() {
+        eprintln!("skipping: home directory cannot be resolved in this environment");
+        return;
+    }
+    let output = run(&["skill"]);
+    assert!(output.status.success());
+    let text = stdout(&output);
+    assert!(text.contains("Timings"));
+    assert!(text.contains("Skill scan:"));
+}

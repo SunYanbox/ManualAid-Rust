@@ -15,12 +15,32 @@ snapshot_read = "Failed to read snapshot: %{error}"
 snapshot_parse = "Failed to parse snapshot: %{error}"
 skill_scan = "SKILL scan failed: %{error}"
 output = "Failed to write output: %{error}"
+init = "Init failed: %{error}"
+dir_view = "Directory view failed: %{error}"
+dir_clean = "Directory clean failed: %{error}"
+clean_confirm = "Refusing to clean without confirmation: pass --yes or run in an interactive terminal"
 
 [cli.output]
 masked_text = "Masked text"
 snapshot_json = "Snapshot JSON"
 restored_text = "Restored text"
 skills = "Skills (%{count})"
+timings = "Timings"
+timing_skill_scan = "Skill scan: %{elapsed}"
+timing_mask = "Mask: %{elapsed} (%{chars} chars)"
+timing_restore = "Restore: %{elapsed} (%{chars} chars)"
+timing_init = "Init: %{elapsed}"
+timing_dir_view = "Directory view: %{elapsed}"
+timing_dir_clean = "Directory clean: %{elapsed}"
+
+[cli.dir]
+initialized = "- Initialized %{path}"
+missing = "- %{path} %{status}"
+removed = "- Removed %{path}: %{files} files, %{size}"
+more_files = "… %{count} more files"
+more_dirs = "… %{count} more dirs"
+confirm = "Remove %{paths}? [y/N] "
+aborted = "Aborted."
 
 [cli.pager]
 more = "(press q to quit, any other key to continue)"
