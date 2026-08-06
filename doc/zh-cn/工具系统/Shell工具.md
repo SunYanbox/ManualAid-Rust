@@ -20,4 +20,12 @@
 3. **系统原生优质 Shell**：检测各平台推荐的默认 Shell（如 Linux 的 Bash，macOS 的 Zsh）。
 4. **系统遗留/兼容 Shell**：回退到 `sh` 或 Windows 的 `cmd`。
 
-此处可以使用[which-terminal](https://github.com/ahaoboy/which-terminal) crate快速拿到当前终端信息。
+此处可以使用[which-terminal](https://github.com/ahaoboy/which-terminal) crate（获取结果受环境变量影响显著）快速拿到当前终端信息。如果获取失败，则只声明平台类型。
+
+在 Windows 上可以通过以下命令检测：
+
+```powershell
+winget list --id Microsoft.Coreutils --exact
+```
+
+该命令在 cmd 与 PowerShell 中均可直接使用。通过它可检测用户是否已安装 Microsoft.Coreutils 扩展，该扩展支持 cat、ls、grep 等类 Unix 命令；如果检测到该扩展，则告知 LLM 当前命令行可以使用类 Unix 命令。该扩展并不完全兼容所有参数格式，具体兼容性取决于对应终端（cmd、PowerShell）。
