@@ -1,0 +1,56 @@
+[tool.shell]
+desc = "执行 shell 命令并捕获其输出（stdout、stderr、退出码）。非白名单命令需要用户批准。"
+
+[tool.shell.param.command]
+desc = "要执行的 shell 命令"
+
+[tool.shell.param.description]
+desc = "用主动语态清晰、简洁地描述该命令的作用"
+
+[tool.shell.param.timeout]
+desc = "最大执行时间（毫秒，默认 120000，最大 600000）"
+
+[tool.read]
+desc = "从本地文件系统读取文件内容。file_path 必须是绝对路径。默认最多返回 2000 行。"
+
+[tool.read.param.file_path]
+desc = "要读取的文件的绝对路径"
+
+[tool.read.param.offset]
+desc = "开始读取的行号（从 1 开始）。仅当文件太大无法一次读完时提供。"
+
+[tool.read.param.limit]
+desc = "要读取的最大行数。仅当文件太大无法一次读完时提供（默认上限 2000）。"
+
+[tool.edit]
+desc = "在文件中执行精确字符串替换。old_string 必须与文件内容完全匹配，且除非 replace_all 为 true，否则必须唯一。"
+
+[tool.edit.param.file_path]
+desc = "要修改的文件的绝对路径"
+
+[tool.edit.param.old_string]
+desc = "要查找的精确文本。必须与文件内容完全匹配（包括缩进）。replace_all 为 false 时必须在文件中唯一，否则编辑失败。匹配前请去掉 Read 输出的行号前缀（行号 + 制表符）。"
+
+[tool.edit.param.new_string]
+desc = "替换文本（必须与 old_string 不同）"
+
+[tool.edit.param.replace_all]
+desc = "替换 old_string 的所有出现位置而非仅第一处（默认：false）"
+
+[tool.write]
+desc = "创建新文件或覆盖已有文件。父目录不存在时自动创建。"
+
+[tool.write.param.file_path]
+desc = "文件写入位置的**绝对路径**"
+
+[tool.write.param.content]
+desc = "要写入文件的完整内容"
+
+[tool.skill]
+desc = "从可用技能列表中加载并执行技能。切勿猜测或编造技能名称。"
+
+[tool.skill.param.skill]
+desc = "可用技能的确切名称（不带前导斜杠）"
+
+[tool.skill.param.args]
+desc = "传给技能的可选参数"
