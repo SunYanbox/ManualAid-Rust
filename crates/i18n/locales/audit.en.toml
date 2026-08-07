@@ -1,0 +1,8 @@
+[audit.command]
+whitelist = "Command `%{command}` is not on the whitelist — user approval required"
+dangerous = "Command `%{command}` matches a dangerous pattern — denied by policy"
+
+[audit.path]
+write_manual = "Writing inside the workspace — user confirmation required"
+exempt = "Path is outside the workspace but on the exempt list — user approval required"
+outside = "Path `%{path}` is outside the workspace — user approval required"
