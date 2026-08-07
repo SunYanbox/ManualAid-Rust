@@ -1,0 +1,8 @@
+[audit.command]
+whitelist = "命令 `%{command}` 不在白名单中——需要用户批准"
+dangerous = "命令 `%{command}` 命中危险模式——已被策略拒绝"
+
+[audit.path]
+write_manual = "写入工作区内部——需要用户确认"
+exempt = "路径位于工作区外但在豁免列表中——需要用户批准"
+outside = "路径 `%{path}` 位于工作区外——需要用户批准"
