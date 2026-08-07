@@ -1,9 +1,15 @@
+pub mod async_fs;
+pub mod audit;
 pub mod clipboard;
 pub mod error;
+pub mod executor;
 mod file_io;
 pub mod manualaid_dir;
+pub mod parser;
 pub mod privacy;
 pub mod shell;
 pub mod skill;
 pub mod timer;
+pub mod tools;
 pub mod user_dir;
+pub mod workspace;
