@@ -1,0 +1,56 @@
+[tool.shell]
+desc = "Execute a shell command and capture its output (stdout, stderr, exit code). Non-whitelisted commands require user approval."
+
+[tool.shell.param.command]
+desc = "The shell command to execute"
+
+[tool.shell.param.description]
+desc = "Clear, concise description of what the command does in active voice"
+
+[tool.shell.param.timeout]
+desc = "Maximum execution time in milliseconds (default: 120000, max: 600000)"
+
+[tool.read]
+desc = "Read the content of a file from the local filesystem. file_path must be an absolute path. Returns up to 2000 lines by default."
+
+[tool.read.param.file_path]
+desc = "The absolute path to the file to read"
+
+[tool.read.param.offset]
+desc = "The line number to start reading from. 1-based. Only provide if the file is too large to read at once."
+
+[tool.read.param.limit]
+desc = "The maximum number of lines to read. Only provide if the file is too large to read at once (default max is 2000)."
+
+[tool.edit]
+desc = "Perform an exact string replacement in a file. old_string must match the file content exactly and be unique unless replace_all is true."
+
+[tool.edit.param.file_path]
+desc = "Absolute path to the file to modify"
+
+[tool.edit.param.old_string]
+desc = "The exact text to search for. Must match the file content exactly, including indentation. When replace_all is false, it must be unique in the file — the edit fails otherwise. Strip the Read line prefix (line number + tab) before matching."
+
+[tool.edit.param.new_string]
+desc = "The replacement text (must be different from old_string)"
+
+[tool.edit.param.replace_all]
+desc = "Replace ALL occurrences of old_string instead of just the first (default: false)"
+
+[tool.write]
+desc = "Create a new file or overwrite an existing one. Parent directories are created automatically if they do not exist."
+
+[tool.write.param.file_path]
+desc = "**Absolute path** where the file should be written"
+
+[tool.write.param.content]
+desc = "The full content to write to the file"
+
+[tool.skill]
+desc = "Load and execute a skill from the available-skills list. Never guess or invent a skill name."
+
+[tool.skill.param.skill]
+desc = "The exact name of an available skill (no leading slash)"
+
+[tool.skill.param.args]
+desc = "Optional arguments to pass to the skill"

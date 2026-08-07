@@ -182,6 +182,17 @@ pub fn shell_path() -> Option<PathBuf> {
         .clone()
 }
 
+/// The name of the currently effective shell (configured via
+/// [`set_shell_path`] or the platform default), used by the CLI loop header.
+/// 当前生效 Shell 的名称（由 [`set_shell_path`] 配置或平台默认），
+/// 供 CLI loop 头部显示。
+pub fn detected_shell() -> String {
+    resolve_shell_path()
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| resolve_shell_path().to_string_lossy().into_owned())
+}
+
 /// Clear the configured shell path so the platform default is used again.
 /// Hidden from docs because it exists for tests to restore state.
 /// 清空配置的 Shell 路径，恢复使用平台默认。文档中隐藏，因为它供测试恢复状态用。

@@ -10,13 +10,16 @@ chrono = "0.4.45"
 cloakrs-core = "0.3.0"
 cloakrs-locales = "0.3.0"
 dirs = "6.0.0"
+i18n = { version = "0.1.0", path = "../i18n" }
+indexmap = { version = "2.14.0", features = ["serde"] }
 log.workspace = true
 named-lock = "0.4.1"
+quick-xml = "0.41.0"
 regex = "1.13.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
-tokio = { version = "1.53.1", features = ["process", "time", "io-util", "macros", "rt"] }
+tokio = { version = "1.53.1", features = ["process", "time", "io-util", "macros", "rt", "fs", "sync"] }
 toml = "1.1.4"
-toml_edit = "0.22"
+toml_edit.workspace = true
 which-terminal = "0.1.0"

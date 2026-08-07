@@ -29,3 +29,17 @@ winget list --id Microsoft.Coreutils --exact
 ```
 
 该命令在 cmd 与 PowerShell 中均可直接使用。通过它可检测用户是否已安装 Microsoft.Coreutils 扩展，该扩展支持 cat、ls、grep 等类 Unix 命令；如果检测到该扩展，则告知 LLM 当前命令行可以使用类 Unix 命令。该扩展并不完全兼容所有参数格式，具体兼容性取决于对应终端（cmd、PowerShell）。
+
+## 3. Shell 工具参数与审核语义
+
+Shell 工具对应 `ToolKind::Shell`，参数如下：
+
+| 参数 | 类型 | 必填 | semantic | 说明 |
+|------|------|------|----------|------|
+| `command` | string | 是 | `Command` | 要执行的命令；需匹配白名单，非白名单进入审核列表 |
+| `description` | string | 否 | `None` | 命令用途说明，用于审核展示 |
+| `timeout` | integer | 否 | `None` | 最大执行毫秒数（默认 120000，最大 600000） |
+
+工作目录不通过参数指定：Shell 工具始终在进程当前工作目录（cwd）下执行，用户通过 `cd path` 指定工作区后再启动 loop。
+
+旧版 Bash 工具中的 `run_in_background`、`dangerously_disable_sandbox` 等参数随 brush 引擎一并废弃，不迁移。
