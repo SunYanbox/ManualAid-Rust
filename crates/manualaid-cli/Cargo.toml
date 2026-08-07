@@ -4,8 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = "0.4.45"
 clap = { version = "4.6.5", features = ["derive"] }
 crossterm = "0.29.0"
 i18n = { version = "0.1.0", path = "../i18n" }
+indexmap = "2.14.0"
 manualaid-core = { version = "0.1.0", path = "../manualaid-core" }
+manualaid-ws = { version = "0.1.0", path = "../manualaid-ws" }
 serde_json = "1.0.151"
+similar = "3.1.2"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time"] }
