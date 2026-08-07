@@ -15,13 +15,13 @@ fn parse(args: &[&str]) -> Cli {
 fn parses_no_args() {
     let cli = parse(&["manualaid-cli"]);
     assert!(cli.command.is_none());
-    assert_eq!(cli.lang, "en");
+    assert!(cli.lang.is_none());
 }
 
 #[test]
 fn parses_lang_flag() {
     let cli = parse(&["manualaid-cli", "--lang", "zh-CN"]);
-    assert_eq!(cli.lang, "zh-CN");
+    assert_eq!(cli.lang.as_deref(), Some("zh-CN"));
 }
 
 #[test]

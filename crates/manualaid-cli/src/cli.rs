@@ -16,10 +16,10 @@ use clap::{Parser, Subcommand};
     about = "ManualAid command line interface"
 )]
 pub struct Cli {
-    /// Interface language code: en or zh-CN
-    /// 界面语言代码：en 或 zh-CN
-    #[arg(short, long, global = true, default_value = "en")]
-    pub lang: String,
+    /// Interface language code: en or zh-CN (defaults to en)
+    /// 界面语言代码：en 或 zh-CN（默认 en）
+    #[arg(short, long, global = true)]
+    pub lang: Option<String>,
     #[command(subcommand)]
     pub command: Option<Command>,
 }

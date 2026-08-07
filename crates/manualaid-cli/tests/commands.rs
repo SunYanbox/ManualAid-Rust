@@ -10,6 +10,8 @@ use manualaid_cli::cli::Cli;
 use manualaid_cli::commands::{run, run_dir_clean_with_stdin, run_main};
 
 mod common;
+#[path = "commands/loop.rs"]
+mod r#loop;
 
 /// Serializes tests that depend on the process-wide i18n locale.
 /// 串行化依赖进程级 i18n locale 的测试。

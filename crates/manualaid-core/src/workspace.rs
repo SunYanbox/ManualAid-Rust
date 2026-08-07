@@ -1,0 +1,211 @@
+//! Workspace path helpers: normalization, containment checks and exemption
+//! merging, used by the audit layer without requiring paths to exist.
+//! 工作区路径辅助：归一化、包含关系检查与豁免合并，供审计层使用，
+//! 不要求路径真实存在于磁盘。
+//!
+//! # Description
+//! `normalize_path` resolves relative paths against the current working
+//! directory and strips `.` / `..` lexically, so paths that do not exist yet
+//! (e.g. a file about to be written) can still be compared. Containment
+//! checks canonicalize both sides when possible (resolving symlinks) and
+//! fall back to lexical comparison when the target does not exist.
+//! # 描述
+//! `normalize_path` 把相对路径基于当前工作目录解析，并在词法层面去除
+//! `.` / `..` 组件，因此尚不存在的路径（例如待写入的文件）也能参与比较。
+//! 包含关系检查在可能时先对两侧做 canonicalize（解析符号链接），目标
+//! 不存在时回退到词法比较。
+
+use std::path::{Component, Path, PathBuf};
+
+/// Normalize a path without requiring it to exist on disk.
+/// 在不要求路径存在于磁盘上的情况下规范化路径。
+///
+/// # Description
+/// Relative paths are resolved against the current working directory.
+/// `.` and `..` components are removed lexically; `..` above the root is
+/// capped at the root. Returns the normalized absolute path.
+/// # 描述
+/// 相对路径基于当前工作目录解析。`.` 与 `..` 组件在词法层面被去除；
+/// 超出根目录的 `..` 会被限制在根目录。返回规范化后的绝对路径。
+pub fn normalize_path(path: &Path) -> PathBuf {
+    let joined = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_default().join(path)
+    };
+    lexical_normalize(&joined)
+}
+
+/// Check whether `path` is inside the workspace rooted at `workspace_root`.
+/// 检查 `path` 是否在以 `workspace_root` 为根的工作区内部。
+///
+/// # Description
+/// Both sides are canonicalized first when they exist, so symlinks and
+/// `.` / `..` components do not affect the result; when the target does not
+/// exist yet (e.g. a file about to be written) the comparison falls back to
+/// lexical containment on normalized absolute paths.
+/// # 描述
+/// 两侧存在时先做 canonicalize，使符号链接与 `.` / `..` 组件不影响结果；
+/// 目标尚不存在（例如待写入的文件）时，回退为对规范化绝对路径的词法
+/// 包含比较。
+pub fn is_within_workspace(path: &Path, workspace_root: &Path) -> bool {
+    let path = comparable(path);
+    let root = comparable(workspace_root);
+    path.starts_with(&root)
+}
+
+/// Check whether `path` is a descendant of any entry in `exempt_paths`.
+/// 检查 `path` 是否为 `exempt_paths` 中任一条目的后代路径。
+///
+/// # Description
+/// Existing paths are canonicalized before comparison (resolving symlinks
+/// and `..`); entries and targets that do not exist yet fall back to
+/// lexically normalized absolute paths.
+/// # 描述
+/// 比较前对已存在的路径做 canonicalize（解析符号链接与 `..`）；尚不存在
+/// 的条目与目标路径回退到词法归一化的绝对路径。
+pub fn is_exempt_path(path: &Path, exempt_paths: &[PathBuf]) -> bool {
+    let canonical = comparable(path);
+    exempt_paths
+        .iter()
+        .any(|exempt| canonical.starts_with(comparable(exempt)))
+}
+
+/// Merge workspace-level and global exemption lists, deduplicated and
+/// sorted for deterministic output.
+/// 合并工作区级与全局豁免列表，去重并排序，保证输出确定。
+pub fn merge_exempt_paths(workspace_exempt: &[PathBuf], global_exempt: &[PathBuf]) -> Vec<PathBuf> {
+    let mut merged: Vec<PathBuf> = workspace_exempt
+        .iter()
+        .chain(global_exempt.iter())
+        .cloned()
+        .collect();
+    merged.sort();
+    merged.dedup();
+    merged
+}
+
+/// Remove `.` and `..` components lexically from `path`.
+/// 在词法层面去除 `path` 中的 `.` 与 `..` 组件。
+fn lexical_normalize(path: &Path) -> PathBuf {
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                // pop() returns false when already at the root, effectively
+                // capping `..` above the root.
+                // pop() 在已是根目录时返回 false，相当于把超出根目录的 `..` 截断。
+                let _ = result.pop();
+            }
+            other => result.push(other.as_os_str()),
+        }
+    }
+    result
+}
+
+/// Resolve a path for containment comparison: canonicalize when it exists
+/// (resolving symlinks) and fall back to lexical normalization when it does
+/// not (e.g. a file about to be written).
+/// 解析用于包含比较的路径：存在时做 canonicalize（解析符号链接），不存在
+/// 时（例如待写入的文件）回退到词法归一化。
+fn comparable(path: &Path) -> PathBuf {
+    match path.canonicalize() {
+        Ok(canonical) => strip_verbatim(canonical),
+        Err(_) => normalize_path(path),
+    }
+}
+
+/// Remove the `\\?\` verbatim prefix that `canonicalize` adds on Windows
+/// for extended-length paths, so lexically normalized fallback paths and
+/// canonicalized paths share the same component form.
+/// 去掉 Windows 上 `canonicalize` 为长路径添加的 `\\?\` 前缀，使词法
+/// 归一化回退路径与 canonicalize 路径具有相同的组件形式。
+#[cfg(windows)]
+fn strip_verbatim(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy();
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) => PathBuf::from(rest),
+        None => path,
+    }
+}
+
+#[cfg(not(windows))]
+fn strip_verbatim(path: PathBuf) -> PathBuf {
+    path
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_makes_relative_paths_absolute() {
+        let normalized = normalize_path(Path::new("a/b"));
+        assert!(normalized.is_absolute());
+        assert!(normalized.ends_with("a/b"));
+    }
+
+    #[test]
+    fn normalize_strips_dot_and_parent_components() {
+        let base = std::env::current_dir().unwrap();
+        let input = base.join("a/./b/../c");
+        let normalized = normalize_path(&input);
+        assert_eq!(normalized, base.join("a/c"));
+    }
+
+    #[test]
+    fn normalize_caps_parent_above_root() {
+        #[cfg(windows)]
+        let root = Path::new("C:\\");
+        #[cfg(not(windows))]
+        let root = Path::new("/");
+        let normalized = normalize_path(&root.join("..").join("x"));
+        assert_eq!(normalized, root.join("x"));
+    }
+
+    #[test]
+    fn within_workspace_matches_nested_paths() {
+        let root = std::env::temp_dir();
+        assert!(is_within_workspace(&root.join("a.txt"), &root));
+        assert!(is_within_workspace(&root.join("sub"), &root));
+        assert!(!is_within_workspace(
+            &root.parent().unwrap().join("other"),
+            &root
+        ));
+    }
+
+    #[test]
+    fn within_workspace_handles_nonexistent_target() {
+        let root = std::env::temp_dir();
+        let target = root.join("manualaid-ws-nonexistent").join("new.txt");
+        assert!(is_within_workspace(&target, &root));
+    }
+
+    #[test]
+    fn exempt_path_matches_descendants_only() {
+        let root = std::env::temp_dir();
+        let exempt = root.join("manualaid-exempt");
+        std::fs::create_dir_all(&exempt).expect("create exempt dir");
+        assert!(is_exempt_path(
+            &exempt.join("x.txt"),
+            std::slice::from_ref(&exempt)
+        ));
+        assert!(!is_exempt_path(&root.join("other.txt"), &[exempt]));
+    }
+
+    #[test]
+    fn merge_exempt_paths_deduplicates_and_sorts() {
+        let a = PathBuf::from("/b");
+        let b = PathBuf::from("/a");
+        let merged = merge_exempt_paths(&[a.clone(), b.clone()], &[b, PathBuf::from("/c")]);
+        assert_eq!(
+            merged,
+            vec![
+                PathBuf::from("/a"),
+                PathBuf::from("/b"),
+                PathBuf::from("/c")
+            ]
+        );
+    }
+}

@@ -12,10 +12,12 @@ use crate::{format_default_output, format_error_output, style};
 
 mod dir;
 mod init;
+pub mod loop_cli;
 mod mask;
 mod restore;
 mod skill;
 
+pub use loop_cli::run_loop;
 pub use dir::{
     run_dir_clean, run_dir_clean_with_home, run_dir_clean_with_stdin, run_dir_view,
     run_dir_view_with_home,
@@ -30,7 +32,7 @@ use dir::{DirAction, run_dir};
 /// Run the CLI with the current process settings and return the exit code.
 /// 使用当前进程设置运行 CLI 并返回退出码。
 pub fn run_main(cli: Cli) -> i32 {
-    i18n::set_locale(&cli.lang);
+    i18n::set_locale(cli.lang.as_deref().unwrap_or("en"));
     style::auto_init();
     match run(cli, None) {
         Ok(()) => 0,
@@ -47,7 +49,7 @@ pub fn run(cli: Cli, home: Option<&Path>) -> Result<(), String> {
     match cli.command {
         None => {
             print!("{}", format_default_output(&default_message()));
-            Ok(())
+            run_loop(home, cli.lang)
         }
         Some(Command::Mask { input }) => run_mask(&input, home),
         Some(Command::Restore { input, snapshot }) => run_restore(&input, &snapshot),
