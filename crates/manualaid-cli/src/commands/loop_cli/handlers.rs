@@ -54,8 +54,16 @@ pub(super) async fn paste_and_submit(
     submit_text(executor, registry, session, options, &text).await;
 }
 
-/// Read multi-line text from stdin (until EOF) and submit it as one round.
-/// 从标准输入读取多行文本（直到 EOF）并作为一轮提交。
+/// The line that ends a manually typed round; EOF still works as a
+/// fallback terminator for piped input.
+/// 结束手动输入一轮的行标记；EOF 仍可作为管道输入的兜底结束方式。
+const INPUT_END_MARKER: &str = "/end";
+
+/// Read multi-line text from stdin until a lone `/end` line (or EOF) and
+/// submit it as one round. EOF keeps working for piped input, while the
+/// marker lets an interactive session continue after the round.
+/// 从标准输入读取多行文本，直到单独的 `/end` 行（或 EOF）并作为一轮
+/// 提交。EOF 仍支持管道输入，标记行则让交互会话在一轮后可以继续。
 pub(super) async fn input_and_submit(
     executor: &Executor,
     registry: &FormatRegistry,
@@ -66,6 +74,7 @@ pub(super) async fn input_and_submit(
     let mut text = String::new();
     for line in std::io::stdin().lock().lines() {
         match line {
+            Ok(line) if line.trim() == INPUT_END_MARKER => break,
             Ok(line) => {
                 text.push_str(&line);
                 text.push('\n');

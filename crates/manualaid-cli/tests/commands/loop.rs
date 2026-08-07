@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use manualaid_cli::commands::loop_cli::{
-    Approval, cycle_format, cycle_lang, execute_round_with_approval, format_round_summary,
-    parse_round_index, render_config_menu, render_menu, LoopOptions,
+    Approval, LoopOptions, cycle_format, cycle_lang, execute_round_with_approval,
+    format_round_summary, parse_round_index, render_config_menu, render_menu,
 };
 use manualaid_core::audit::{Auditor, SessionMode};
 use manualaid_core::executor::Executor;
@@ -66,7 +66,10 @@ async fn denied_round_returns_failure_with_reason() {
     .await
     .unwrap();
     assert!(!results[0].success);
-    assert!(results[0].output.contains("denied"));
+    // The audit reason embeds the original path, so this assertion holds in
+    // every locale without pinning the process-wide i18n setting.
+    // 审计原因包含原始路径，断言在所有语言下都成立，无需固定进程级 locale。
+    assert!(results[0].output.contains("C:/outside/x.txt"));
 }
 
 #[tokio::test]

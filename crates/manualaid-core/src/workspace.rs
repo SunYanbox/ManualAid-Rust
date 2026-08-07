@@ -49,9 +49,7 @@ pub fn normalize_path(path: &Path) -> PathBuf {
 /// 目标尚不存在（例如待写入的文件）时，回退为对规范化绝对路径的词法
 /// 包含比较。
 pub fn is_within_workspace(path: &Path, workspace_root: &Path) -> bool {
-    let path = comparable(path);
-    let root = comparable(workspace_root);
-    path.starts_with(&root)
+    starts_with_ci(&comparable(path), &comparable(workspace_root))
 }
 
 /// Check whether `path` is a descendant of any entry in `exempt_paths`.
@@ -68,7 +66,7 @@ pub fn is_exempt_path(path: &Path, exempt_paths: &[PathBuf]) -> bool {
     let canonical = comparable(path);
     exempt_paths
         .iter()
-        .any(|exempt| canonical.starts_with(comparable(exempt)))
+        .any(|exempt| starts_with_ci(&canonical, &comparable(exempt)))
 }
 
 /// Merge workspace-level and global exemption lists, deduplicated and
@@ -81,8 +79,55 @@ pub fn merge_exempt_paths(workspace_exempt: &[PathBuf], global_exempt: &[PathBuf
         .cloned()
         .collect();
     merged.sort();
-    merged.dedup();
-    merged
+    let mut deduped: Vec<PathBuf> = Vec::with_capacity(merged.len());
+    for path in merged {
+        if !deduped
+            .iter()
+            .any(|existing| paths_equal_ci(existing, &path))
+        {
+            deduped.push(path);
+        }
+    }
+    deduped
+}
+
+/// Component-wise `starts_with` that ignores ASCII case on Windows, where
+/// `Path::starts_with` is case-sensitive even though the filesystem is not
+/// (a tool call may spell `E:\Project...` differently from the canonical
+/// workspace root).
+/// 逐组件比较的 `starts_with`；Windows 上忽略 ASCII 大小写（文件系统不区分
+/// 大小写，但 `Path::starts_with` 仍然区分，工具调用对工作区根目录的写法
+/// 可能大小写不同）。
+fn starts_with_ci(path: &Path, prefix: &Path) -> bool {
+    let path: Vec<_> = path.components().collect();
+    let prefix: Vec<_> = prefix.components().collect();
+    path.len() >= prefix.len()
+        && path[..prefix.len()]
+            .iter()
+            .zip(&prefix)
+            .all(|(a, b)| component_eq(a, b))
+}
+
+/// Whether two paths consist of the same components; case-insensitive on
+/// Windows, exact elsewhere.
+/// 判断两条路径是否由相同组件构成；Windows 上忽略大小写，其余平台精确比较。
+fn paths_equal_ci(a: &Path, b: &Path) -> bool {
+    let a: Vec<_> = a.components().collect();
+    let b: Vec<_> = b.components().collect();
+    a.len() == b.len() && a.iter().zip(&b).all(|(x, y)| component_eq(x, y))
+}
+
+/// Compare two path components, ignoring ASCII case on Windows.
+/// 比较两个路径组件；Windows 上忽略 ASCII 大小写。
+fn component_eq(a: &Component<'_>, b: &Component<'_>) -> bool {
+    #[cfg(windows)]
+    {
+        a.as_os_str().eq_ignore_ascii_case(b.as_os_str())
+    }
+    #[cfg(not(windows))]
+    {
+        a == b
+    }
 }
 
 /// Remove `.` and `..` components lexically from `path`.
@@ -207,5 +252,37 @@ mod tests {
                 PathBuf::from("/c")
             ]
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn within_workspace_ignores_ascii_case_on_windows() {
+        let root = std::env::temp_dir();
+        let target = root.join("manualaid-ws-case").join("new.txt");
+        let variant = PathBuf::from(target.to_string_lossy().to_lowercase());
+        assert!(is_within_workspace(&variant, &root));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn exempt_path_matches_ignoring_ascii_case_on_windows() {
+        let root = std::env::temp_dir();
+        let exempt = root.join("manualaid-exempt-ci");
+        std::fs::create_dir_all(&exempt).expect("create exempt dir");
+        let variant = PathBuf::from(exempt.to_string_lossy().to_lowercase());
+        assert!(is_exempt_path(
+            &variant.join("x.txt"),
+            std::slice::from_ref(&exempt)
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn merge_exempt_paths_dedups_ignoring_ascii_case_on_windows() {
+        let merged = merge_exempt_paths(
+            &[PathBuf::from(r"C:\Foo\Bar")],
+            &[PathBuf::from(r"c:\foo\bar")],
+        );
+        assert_eq!(merged.len(), 1);
     }
 }

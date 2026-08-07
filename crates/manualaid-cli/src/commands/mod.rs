@@ -17,12 +17,12 @@ mod mask;
 mod restore;
 mod skill;
 
-pub use loop_cli::run_loop;
 pub use dir::{
     run_dir_clean, run_dir_clean_with_home, run_dir_clean_with_stdin, run_dir_view,
     run_dir_view_with_home,
 };
 pub use init::{run_init, run_init_with_home};
+pub use loop_cli::run_loop;
 pub use mask::{run_mask, run_mask_with_home};
 pub use restore::run_restore;
 pub use skill::{run_skill, run_skill_with_home};

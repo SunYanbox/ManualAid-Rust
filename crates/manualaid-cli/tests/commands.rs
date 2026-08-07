@@ -21,16 +21,30 @@ fn parse(args: &[&str]) -> Cli {
     Cli::try_parse_from(args).expect("args should parse")
 }
 
+/// Spawn the real binary with empty stdin, so the no-args interactive loop
+/// can never block the test harness on a TTY.
+/// 用空 stdin 启动真实二进制，避免无参数交互式 loop 在 TTY 上阻塞测试。
+fn run_binary_with_empty_stdin() -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_manualaid-cli"))
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("spawn manualaid-cli binary")
+}
+
 #[test]
 fn run_no_args_prints_default_message() {
-    let cli = parse(&["manualaid-cli"]);
-    assert!(run(cli, None).is_ok());
+    let output = run_binary_with_empty_stdin();
+    assert!(output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("ManualAid"),
+        "stdout should contain the default startup message"
+    );
 }
 
 #[test]
 fn run_main_returns_success_for_no_args() {
-    let cli = parse(&["manualaid-cli"]);
-    assert_eq!(run_main(cli), 0);
+    let output = run_binary_with_empty_stdin();
+    assert!(output.status.success());
 }
 
 #[test]
