@@ -4,7 +4,7 @@
 //! CLI loop 的全局 + 项目配置加载、合并与保存。项目值覆盖全局值；保存
 //! 只写项目文件，保留无关的配置表。
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use manualaid_core::error::{CoreError, CoreResult};
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,9 @@ pub struct GlobalSection {
     /// Tool-call format label (`auto`, `xml` or `json-codeblock`).
     /// 工具调用格式标签（`auto`、`xml` 或 `json-codeblock`）。
     pub tool_call_format: Option<String>,
+    /// Maximum characters for result text copied to clipboard.
+    /// 复制到剪贴板的结果文本最大字符数。
+    pub max_result_chars: Option<usize>,
 }
 
 /// The `[tools]` table of a config file.
@@ -100,6 +103,9 @@ pub struct Config {
     /// Whitelisted shell commands.
     /// 白名单 shell 命令。
     pub allow_commands: Vec<String>,
+    /// Maximum characters for result text copied to clipboard.
+    /// 复制到剪贴板的结果文本最大字符数。
+    pub max_result_chars: usize,
 }
 
 impl Default for Config {
@@ -113,6 +119,7 @@ impl Default for Config {
             write: true,
             skill: true,
             allow_commands: Vec::new(),
+            max_result_chars: 50_000,
         }
     }
 }
@@ -214,6 +221,11 @@ fn merge(global: ConfigFile, project: ConfigFile) -> Config {
             .allow_commands
             .or(global.permissions.allow_commands)
             .unwrap_or_default(),
+        max_result_chars: project
+            .global
+            .max_result_chars
+            .or(global.global.max_result_chars)
+            .unwrap_or(defaults.max_result_chars),
     }
 }
 
@@ -234,12 +246,11 @@ fn read_config_file(path: &Path) -> CoreResult<ConfigFile> {
         .map_err(|e| CoreError::Config(format!("invalid config `{}`: {e}", path.display())))
 }
 
-/// Persist the runtime config into the project config file, preserving
-/// existing tables such as `[skill]` and `[privacy_mask_extension]`.
-/// The global config file is never touched.
-/// 将运行时配置持久化到项目配置文件，保留 `[skill]`、
-/// `[privacy_mask_extension]` 等已有配置表。全局配置文件不会被触碰。
-pub fn save_project(project_root: &Path, config: &Config) -> CoreResult<()> {
+/// Read the project config file as an editable document, creating the
+/// `.ManualAid` directory when missing; a missing file yields an empty doc.
+/// 将项目配置文件读为可编辑文档；`.ManualAid` 目录缺失时创建，文件缺失
+/// 时返回空文档。
+fn project_doc(project_root: &Path) -> CoreResult<(PathBuf, toml_edit::DocumentMut)> {
     let path = project_root.join(".ManualAid").join("config.toml");
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
@@ -261,9 +272,19 @@ pub fn save_project(project_root: &Path, config: &Config) -> CoreResult<()> {
         }
     };
 
-    let mut doc = content
+    let doc = content
         .parse::<toml_edit::DocumentMut>()
         .map_err(|e| CoreError::Config(e.to_string()))?;
+    Ok((path, doc))
+}
+
+/// Persist the runtime config into the project config file, preserving
+/// existing tables such as `[skill]` and `[privacy_mask_extension]`.
+/// The global config file is never touched.
+/// 将运行时配置持久化到项目配置文件，保留 `[skill]`、
+/// `[privacy_mask_extension]` 等已有配置表。全局配置文件不会被触碰。
+pub fn save_project(project_root: &Path, config: &Config) -> CoreResult<()> {
+    let (path, mut doc) = project_doc(project_root)?;
 
     set_table_string(&mut doc, "global", "lang", &config.lang);
     set_table_string(
@@ -271,6 +292,12 @@ pub fn save_project(project_root: &Path, config: &Config) -> CoreResult<()> {
         "global",
         "tool_call_format",
         &config.tool_call_format,
+    );
+    set_table_int(
+        &mut doc,
+        "global",
+        "max_result_chars",
+        config.max_result_chars,
     );
     set_table_bool(&mut doc, "tools", "shell", config.shell);
     set_table_bool(&mut doc, "tools", "read", config.read);
@@ -288,10 +315,28 @@ pub fn save_project(project_root: &Path, config: &Config) -> CoreResult<()> {
     Ok(())
 }
 
+/// Persist only `max_result_chars` into the project config file so the
+/// effective limit is always visible and editable there; all other tables
+/// are preserved. Creates the file when it does not exist.
+/// 只把 `max_result_chars` 持久化到项目配置文件，使生效的限额始终在该
+/// 文件中可见可改；其他配置表全部保留。文件不存在时创建。
+pub fn save_max_result_chars(project_root: &Path, value: usize) -> CoreResult<()> {
+    let (path, mut doc) = project_doc(project_root)?;
+    set_table_int(&mut doc, "global", "max_result_chars", value);
+    std::fs::write(&path, doc.to_string()).map_err(CoreError::from)?;
+    Ok(())
+}
+
 /// Insert or update a string value in `[table]` of a TOML document.
 /// 在 TOML 文档的 `[table]` 中插入或更新字符串值。
 fn set_table_string(doc: &mut toml_edit::DocumentMut, table: &str, key: &str, value: &str) {
     table_mut(doc, table).insert(key, toml_edit::value(value));
+}
+
+/// Insert or update an integer value in `[table]` of a TOML document.
+/// 在 TOML 文档的 `[table]` 中插入或更新整数值。
+fn set_table_int(doc: &mut toml_edit::DocumentMut, table: &str, key: &str, value: usize) {
+    table_mut(doc, table).insert(key, toml_edit::value(value as i64));
 }
 
 /// Insert or update a boolean value in `[table]` of a TOML document.
@@ -336,6 +381,7 @@ mod tests {
             global: GlobalSection {
                 lang: Some("en".into()),
                 tool_call_format: Some("xml".into()),
+                max_result_chars: Some(200_000),
             },
             tools: ToolsSection {
                 shell: Some(true),
@@ -348,6 +394,7 @@ mod tests {
         let project = ConfigFile {
             global: GlobalSection {
                 lang: Some("zh-CN".into()),
+                max_result_chars: Some(100_000),
                 ..Default::default()
             },
             tools: ToolsSection {
@@ -359,6 +406,7 @@ mod tests {
         let config = merge(global, project);
         assert_eq!(config.lang, "zh-CN");
         assert_eq!(config.tool_call_format, "xml");
+        assert_eq!(config.max_result_chars, 100_000);
         assert!(!config.shell);
         assert_eq!(config.allow_commands, vec!["git status"]);
     }
@@ -369,12 +417,14 @@ mod tests {
             global: GlobalSection {
                 lang: Some("fr".into()),
                 tool_call_format: Some("bogus".into()),
+                ..Default::default()
             },
             ..Default::default()
         };
         let config = merge(global, ConfigFile::default());
         assert_eq!(config.lang, "en");
         assert_eq!(config.tool_call_format, "auto");
+        assert_eq!(config.max_result_chars, 50_000);
     }
 
     #[test]
@@ -404,6 +454,36 @@ mod tests {
         assert!(content.contains("privacy_mask_extension"));
         assert!(content.contains("lang = \"en\""));
         assert!(content.contains("allow_commands"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn save_max_result_chars_writes_only_that_key() {
+        let root =
+            std::env::temp_dir().join(format!("manualaid-ws-test-{}-only", std::process::id()));
+        let dir = root.join(".ManualAid");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.toml"),
+            "[skill]\n\"/a/b\" = true\n\n[global]\nlang = \"zh-CN\"\n",
+        )
+        .unwrap();
+        save_max_result_chars(&root, 30_000).unwrap();
+        let content = std::fs::read_to_string(dir.join("config.toml")).unwrap();
+        assert!(content.contains("max_result_chars = 30000"));
+        assert!(content.contains("lang = \"zh-CN\""));
+        assert!(content.contains("[skill]"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn save_max_result_chars_creates_file_when_missing() {
+        let root =
+            std::env::temp_dir().join(format!("manualaid-ws-test-{}-new", std::process::id()));
+        save_max_result_chars(&root, 50_000).unwrap();
+        let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("[global]"));
+        assert!(content.contains("max_result_chars = 50000"));
         let _ = std::fs::remove_dir_all(&root);
     }
 }

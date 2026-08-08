@@ -24,6 +24,7 @@ clipboard_write = "Failed to write clipboard: %{error}"
 invalid_index = "Invalid round index (1 = latest, %{count} available)"
 no_calls = "The input contains no recognized tool calls"
 parse = "Failed to parse tool calls: %{error}"
+config_write = "Failed to write config file: %{error}"
 
 [cli.output]
 empty_output = "Tool `%{tool_name}` produced no output — completed without errors"
@@ -111,6 +112,7 @@ summary_enabled_tools = "Enabled tools: %{tools}"
 summary_rounds = "Rounds: %{count}"
 summary_title = "Session summary"
 summary_tool_calls = "Tool calls: %{count}"
+max_result_chars_changed = "Default config changed via %{path}: max_result_chars = %{value} (default: %{default})"
 
 [cli.skill_config]
 item = "- [%{state}] %{index}. %{name} (%{unique_name})"

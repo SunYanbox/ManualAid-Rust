@@ -24,6 +24,7 @@ clipboard_write = "写入剪贴板失败：%{error}"
 invalid_index = "无效的批次号（1 = 最新，共 %{count} 批）"
 no_calls = "输入中未识别到任何工具调用"
 parse = "解析工具调用失败：%{error}"
+config_write = "写入配置文件失败：%{error}"
 
 [cli.output]
 empty_output = "工具 `%{tool_name}` 执行成功且无输出"
@@ -111,6 +112,7 @@ summary_enabled_tools = "已启用工具：%{tools}"
 summary_rounds = "批次：%{count}"
 summary_title = "会话摘要"
 summary_tool_calls = "工具调用：%{count}"
+max_result_chars_changed = "已通过配置文件 %{path} 更改默认配置：max_result_chars = %{value}（默认：%{default}）"
 
 [cli.skill_config]
 item = "- [%{state}] %{index}. %{name}（%{unique_name}）"

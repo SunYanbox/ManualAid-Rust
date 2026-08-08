@@ -28,12 +28,12 @@ pub(super) fn handle_inline_command(
             let list = manualaid_ws::prompt::render_tools_list(config, registry);
             let _ = crate::pager::print_paged(&list);
         }
-        ["/c"] => copy_round_result(session),
+        ["/c"] => copy_round_result(session, config.max_result_chars),
         ["/c", index] => {
             if let Some(index) = parse_round_index(index, session.len()) {
                 let results = &session.latest(index).expect("validated index").results;
                 match manualaid_core::clipboard::write_clipboard(
-                    manualaid_ws::prompt::format_results(results),
+                    manualaid_ws::prompt::format_results(results, config.max_result_chars),
                 ) {
                     Ok(()) => println!(
                         "{}",

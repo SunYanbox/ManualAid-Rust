@@ -39,6 +39,7 @@ pub(super) async fn paste_and_submit(
     registry: &FormatRegistry,
     session: &mut SessionLog,
     options: &mut LoopOptions,
+    max_result_chars: usize,
 ) {
     let text = match manualaid_core::clipboard::read_clipboard() {
         Ok(text) if text.trim().is_empty() => {
@@ -51,7 +52,15 @@ pub(super) async fn paste_and_submit(
             return;
         }
     };
-    submit_text(executor, registry, session, options, &text).await;
+    submit_text(
+        executor,
+        registry,
+        session,
+        options,
+        &text,
+        max_result_chars,
+    )
+    .await;
 }
 
 /// The line that ends a manually typed round; EOF still works as a
@@ -69,6 +78,7 @@ pub(super) async fn input_and_submit(
     registry: &FormatRegistry,
     session: &mut SessionLog,
     options: &mut LoopOptions,
+    max_result_chars: usize,
 ) {
     println!("{}", i18n::t_str("cli.message.input_prompt"));
     let mut text = String::new();
@@ -85,7 +95,15 @@ pub(super) async fn input_and_submit(
     if text.trim().is_empty() {
         return;
     }
-    submit_text(executor, registry, session, options, &text).await;
+    submit_text(
+        executor,
+        registry,
+        session,
+        options,
+        &text,
+        max_result_chars,
+    )
+    .await;
 }
 
 /// Parse and execute input, print the summary and copy results when asked.
@@ -96,6 +114,7 @@ pub(super) async fn submit_text(
     session: &mut SessionLog,
     options: &mut LoopOptions,
     text: &str,
+    max_result_chars: usize,
 ) {
     let round_start = std::time::Instant::now();
     match execute_round_with_approval(executor, registry, text, ask_approval).await {
@@ -106,7 +125,7 @@ pub(super) async fn submit_text(
             let copy = options.auto_copy || ask_copy();
             if copy
                 && let Err(e) = manualaid_core::clipboard::write_clipboard(
-                    manualaid_ws::prompt::format_results(&results),
+                    manualaid_ws::prompt::format_results(&results, max_result_chars),
                 )
             {
                 eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
@@ -141,7 +160,7 @@ pub(super) fn ask_copy() -> bool {
 
 /// Copy the `index`-th latest round (default: latest) to the clipboard.
 /// 把从最新算起的第 `index` 轮（默认最新）复制到剪贴板。
-pub(super) fn copy_round_result(session: &SessionLog) {
+pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
     if session.is_empty() {
         println!("{}", i18n::t_str("cli.message.no_rounds"));
         return;
@@ -161,6 +180,7 @@ pub(super) fn copy_round_result(session: &SessionLog) {
             let results = &session.latest(index).expect("validated index").results;
             match manualaid_core::clipboard::write_clipboard(manualaid_ws::prompt::format_results(
                 results,
+                max_result_chars,
             )) {
                 Ok(()) => println!(
                     "{}",

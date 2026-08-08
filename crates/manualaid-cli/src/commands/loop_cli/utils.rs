@@ -2,6 +2,7 @@
 //! loop 的小工具函数：格式化、输入与循环切换辅助。
 
 use std::io::BufRead;
+use std::path::Path;
 
 use manualaid_core::parser::{FormatRegistry, RegistryMode};
 use manualaid_core::tools::ToolResult;
@@ -58,6 +59,35 @@ pub(super) fn apply_cli_lang(cli_lang: Option<String>, config: &mut Config) {
     if let Some(lang) = cli_lang.filter(|lang| Config::is_valid_lang(lang)) {
         config.lang = lang;
     }
+}
+
+/// Persist `max_result_chars` to the project config file so the effective
+/// limit is always visible and editable there, and return a message to print
+/// when the write failed or when the loaded value differs from the default.
+/// A failed write never aborts the loop.
+/// 把 `max_result_chars` 持久化到项目配置文件，使生效的限额始终在该文件
+/// 中可见可改；写入失败或加载值不同于默认值时返回一条待打印的消息。
+/// 写入失败不会中止 loop。
+pub fn sync_max_result_chars(root: &Path, value: usize) -> Option<String> {
+    let default = Config::default().max_result_chars;
+    if let Err(e) = manualaid_ws::config::save_max_result_chars(root, value) {
+        return Some(t_fmt(
+            "cli.error.config_write",
+            &[("error", &e.to_string())],
+        ));
+    }
+    if value != default {
+        let path = root.join(".ManualAid").join("config.toml");
+        return Some(t_fmt(
+            "cli.message.max_result_chars_changed",
+            &[
+                ("path", &path.display().to_string()),
+                ("value", &value.to_string()),
+                ("default", &default.to_string()),
+            ],
+        ));
+    }
+    None
 }
 
 /// Apply the configured format label to the registry.

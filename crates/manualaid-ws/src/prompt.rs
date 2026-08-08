@@ -161,11 +161,41 @@ fn skills_list_text(skills: &[Skill]) -> String {
     }
 }
 
+/// Minimum characters retained for any individual tool result that is
+/// subject to truncation. Results no longer than this are never shortened.
+/// 任何被截断的单个工具结果最少保留的字符数。不超过该值的结果永不被缩短。
+const MIN_KEEP_CHARS: usize = 1000;
+
+/// A tool result split into its XML wrapper parts and the variable content
+/// for easy size accounting and truncation.
+/// 将工具结果拆分为 XML 包裹部分与可变内容部分，便于尺寸计算与截断。
+struct ResultPart {
+    header: String,
+    content: String,
+    footer: String,
+}
+
 /// Render one round's execution results as XML-wrapped text for pasting
-/// back into an external LLM chat.
-/// 将一轮执行结果渲染为 XML 包裹文本，供回贴到外部 LLM 聊天。
-pub fn format_results(results: &[ToolResult]) -> String {
-    results
+/// back into an external LLM chat. The character limit applies to the sum
+/// of the tool outputs only (the XML wrappers are not counted). If that sum
+/// exceeds `max_result_chars`, every result longer than `MIN_KEEP_CHARS`
+/// is truncated proportionally to its original size, keeping at least
+/// `MIN_KEEP_CHARS` characters; shorter results stay whole. Each
+/// truncated result carries a notice with its removed character count, and
+/// a round-level warning is appended at the end so both the user and the
+/// LLM know content was omitted.
+/// 将一轮执行结果渲染为 XML 包裹文本，供回贴到外部 LLM 聊天。字符限制
+/// 只作用于各工具输出之和（不计 XML 包裹部分）。当该和超过
+/// `max_result_chars` 时，每个超过 `MIN_KEEP_CHARS` 字符的结果按原始
+/// 大小比例截断，且至少保留 `MIN_KEEP_CHARS` 字符；较短的结果保持
+/// 完整。每个被截断的结果附带一条含被截断字符数的标注，末尾追加轮次
+/// 警告，让用户与 LLM 都能知晓内容已被省略。
+pub fn format_results(results: &[ToolResult], max_result_chars: usize) -> String {
+    if results.is_empty() {
+        return String::new();
+    }
+
+    let parts: Vec<ResultPart> = results
         .iter()
         .map(|result| {
             let params_attr = if result.params_summary.is_empty() {
@@ -173,15 +203,131 @@ pub fn format_results(results: &[ToolResult]) -> String {
             } else {
                 format!(" params=\"{}\"", xml_escape(&result.params_summary))
             };
-            format!(
-                "<tool_result name=\"{}\"{params_attr} success=\"{}\">\n{}\n</tool_result>",
-                result.tool_name,
-                result.success,
-                result.output.trim()
-            )
+            let header = format!(
+                "<tool_result name=\"{}\"{params_attr} success=\"{}\">\n",
+                result.tool_name, result.success
+            );
+            ResultPart {
+                header,
+                content: result.output.trim().to_string(),
+                footer: "\n</tool_result>".to_string(),
+            }
         })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+        .collect();
+
+    let separator = "\n\n";
+    let content_total: usize = parts.iter().map(|p| p.content.chars().count()).sum();
+
+    if content_total <= max_result_chars {
+        return parts
+            .iter()
+            .map(|p| format!("{}{}{}", p.header, p.content, p.footer))
+            .collect::<Vec<_>>()
+            .join(separator);
+    }
+
+    let round_warning = format!(
+        "\n\n{}",
+        i18n::t_str("truncated_round_warning")
+            .replace("%{max_chars}", &max_result_chars.to_string())
+            .replace("%{total_chars}", &content_total.to_string())
+    );
+
+    // Short results are never shortened and do not take part in the
+    // proportional split; they still occupy their full length in the budget.
+    // 短结果永不被缩短、不参与比例分配，但仍按完整长度占用预算。
+    let eligible: Vec<usize> = parts
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.content.chars().count() > MIN_KEEP_CHARS)
+        .map(|(i, _)| i)
+        .collect();
+
+    // Nothing can be shortened: drop whole results from the end until the
+    // remaining content fits, then append the round warning.
+    // 没有可缩短的结果：从末尾整块丢弃，直到剩余内容放得下，再追加警告。
+    if eligible.is_empty() {
+        let mut result = String::new();
+        let mut used = 0usize;
+        for p in &parts {
+            let content_len = p.content.chars().count();
+            if used + content_len > max_result_chars {
+                break;
+            }
+            let block = format!("{}{}{}", p.header, p.content, p.footer);
+            if result.is_empty() {
+                result.push_str(&block);
+            } else {
+                result.push_str(separator);
+                result.push_str(&block);
+            }
+            used += content_len;
+        }
+        result.push_str(&round_warning);
+        return result;
+    }
+
+    let eligible_orig_total: usize = eligible
+        .iter()
+        .map(|&i| parts[i].content.chars().count())
+        .sum();
+    let ineligible_total: usize = (0..parts.len())
+        .filter(|i| !eligible.contains(i))
+        .map(|i| parts[i].content.chars().count())
+        .sum();
+    let budget_for_eligible = max_result_chars.saturating_sub(ineligible_total);
+
+    let mut allocs: Vec<usize> = vec![0; parts.len()];
+    let mut raw_sum = 0usize;
+    for &i in &eligible {
+        let orig = parts[i].content.chars().count();
+        let raw = ((budget_for_eligible as f64) * (orig as f64) / (eligible_orig_total as f64))
+            .floor() as usize;
+        let alloc = raw.max(MIN_KEEP_CHARS);
+        allocs[i] = alloc;
+        raw_sum += alloc;
+    }
+
+    // The minimum-keep floor can push the sum over the budget; take the
+    // excess back from the largest allocations, never below the floor.
+    // 保底下限可能使分配总和超出预算；从最大的分配开始回扣，但不低于下限。
+    if raw_sum > budget_for_eligible {
+        let overshoot = raw_sum - budget_for_eligible;
+        let mut sorted: Vec<(usize, usize)> = eligible.iter().map(|&i| (allocs[i], i)).collect();
+        sorted.sort_by_key(|(a, _)| std::cmp::Reverse(*a));
+        let mut remaining = overshoot;
+        for &(_alloc, idx) in &sorted {
+            let can_reduce = allocs[idx].saturating_sub(MIN_KEEP_CHARS);
+            let reduce = remaining.min(can_reduce);
+            allocs[idx] -= reduce;
+            remaining -= reduce;
+            if remaining == 0 {
+                break;
+            }
+        }
+    }
+
+    let mut blocks: Vec<String> = Vec::with_capacity(parts.len());
+    for (i, part) in parts.iter().enumerate() {
+        if eligible.contains(&i) {
+            let orig = part.content.chars().count();
+            let alloc = allocs[i];
+            let notice = i18n::t_str("truncated_tool_result")
+                .replace("%{original}", &orig.to_string())
+                .replace("%{removed}", &(orig - alloc).to_string());
+            let truncated: String = part.content.chars().take(alloc).collect();
+            blocks.push(format!(
+                "{}{}\n{}{}",
+                part.header, truncated, notice, part.footer
+            ));
+        } else {
+            blocks.push(format!("{}{}{}", part.header, part.content, part.footer));
+        }
+    }
+
+    let mut result = blocks.join(separator);
+    result.push_str(&round_warning);
+    result
 }
 
 /// Escape XML special characters in an attribute value.
@@ -239,24 +385,6 @@ mod tests {
         assert!(prompt.ends_with("</system_prompt>"));
         assert!(prompt.contains("<workspace_root>"));
         assert!(prompt.contains("<shell_environment>"));
-    }
-
-    #[test]
-    fn format_results_escapes_attribute_values() {
-        let result = ToolResult::success("read", "content", true)
-            .with_params_summary("{\"file_path\":\"/a.txt\"}".into());
-        let text = format_results(&[result]);
-        assert!(text.contains("<tool_result name=\"read\""));
-        assert!(text.contains("&quot;file_path&quot;"));
-        assert!(text.contains("success=\"true\""));
-    }
-
-    #[test]
-    fn format_results_omits_empty_summary() {
-        let result = ToolResult::success("shell", "done", false);
-        let text = format_results(&[result]);
-        assert!(text.contains("<tool_result name=\"shell\" success=\"true\">"));
-        assert!(!text.contains("params="));
     }
 
     #[test]

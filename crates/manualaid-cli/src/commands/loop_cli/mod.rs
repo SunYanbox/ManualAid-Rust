@@ -35,7 +35,9 @@ use handlers::{
     print_session_summary,
 };
 use inline::handle_inline_command;
-use utils::{apply_cli_lang, apply_format_mode, clear_screen, read_line, t_fmt};
+use utils::{
+    apply_cli_lang, apply_format_mode, clear_screen, read_line, sync_max_result_chars, t_fmt,
+};
 
 /// How the user answered one approval-queue item.
 /// 用户对单个审批队列项的答复。
@@ -125,6 +127,14 @@ async fn loop_main(home: Option<&Path>, lang: Option<String>) -> Result<(), Stri
         )
     );
 
+    // Keep the effective character limit visible and editable in the project
+    // config, and tell the user when a config file changed the default.
+    // 把生效的字符限额写入项目配置，使其始终可见可改；配置文件中改过
+    // 默认值时，在启动时告知用户。
+    if let Some(message) = sync_max_result_chars(&current_dir, config.max_result_chars) {
+        println!("{message}");
+    }
+
     let mut should_exit = false;
     while !should_exit {
         if options.clear_screen {
@@ -145,9 +155,27 @@ async fn loop_main(home: Option<&Path>, lang: Option<String>) -> Result<(), Stri
         }
         match trimmed {
             "1" => copy_system_prompt(&config, &current_dir, &registry),
-            "2" => paste_and_submit(&executor, &registry, &mut session, &mut options).await,
-            "3" => input_and_submit(&executor, &registry, &mut session, &mut options).await,
-            "4" => copy_round_result(&session),
+            "2" => {
+                paste_and_submit(
+                    &executor,
+                    &registry,
+                    &mut session,
+                    &mut options,
+                    config.max_result_chars,
+                )
+                .await
+            }
+            "3" => {
+                input_and_submit(
+                    &executor,
+                    &registry,
+                    &mut session,
+                    &mut options,
+                    config.max_result_chars,
+                )
+                .await
+            }
+            "4" => copy_round_result(&session, config.max_result_chars),
             "5" => config_menu(&mut config, &registry, &current_dir, &mut options),
             "6" => print_session_summary(&config, &session),
             "0" => should_exit = true,
@@ -173,6 +201,38 @@ mod tests {
     use manualaid_core::tools::ToolResult;
     use manualaid_ws::config::Config;
     use serde_json::Value;
+
+    #[test]
+    fn sync_max_result_chars_writes_default_without_hint() {
+        i18n::set_locale("en");
+        let root = std::env::temp_dir().join(format!("manualaid-cli-sync-{}", std::process::id()));
+        let message = sync_max_result_chars(&root, Config::default().max_result_chars);
+        assert!(message.is_none());
+        let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("max_result_chars = 50000"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn sync_max_result_chars_hints_when_changed_from_default() {
+        i18n::set_locale("en");
+        let root =
+            std::env::temp_dir().join(format!("manualaid-cli-sync-{}-v", std::process::id()));
+        let message = sync_max_result_chars(&root, 123_456).unwrap();
+        assert!(message.contains("max_result_chars = 123456"));
+        assert!(
+            message.contains(
+                &root
+                    .join(".ManualAid")
+                    .join("config.toml")
+                    .display()
+                    .to_string()
+            )
+        );
+        let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("max_result_chars = 123456"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn parse_round_index_defaults_to_latest() {
