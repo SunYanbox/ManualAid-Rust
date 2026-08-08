@@ -27,7 +27,7 @@ pub(super) fn read_line() -> Option<String> {
         // never read (and never blocks) in tests.
         // 单元测试用线程本地的脚本输入队列驱动交互循环；队列为空视为
         // EOF，测试中绝不读取（也不会阻塞）真实 stdin。
-        return TEST_INPUT.with(|input| input.borrow_mut().pop_front());
+        TEST_INPUT.with(|input| input.borrow_mut().pop_front())
     }
     #[cfg(not(test))]
     {
@@ -44,7 +44,7 @@ pub(super) fn read_line() -> Option<String> {
 #[cfg(test)]
 thread_local! {
     static TEST_INPUT: std::cell::RefCell<std::collections::VecDeque<String>> =
-        std::cell::RefCell::new(std::collections::VecDeque::new());
+        const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
 }
 
 /// Queue scripted input lines for the current test thread.
@@ -166,7 +166,7 @@ pub(super) fn apply_format_mode(registry: &FormatRegistry, config: &Config) -> R
 /// Render the main menu text.
 /// 渲染主菜单文本。
 pub fn render_menu() -> String {
-    [
+    let keys = [
         "cli.loop.menu_title",
         "cli.loop.menu_generate",
         "cli.loop.menu_paste",
@@ -175,12 +175,10 @@ pub fn render_menu() -> String {
         "cli.loop.menu_config",
         "cli.loop.menu_summary",
         "cli.loop.menu_exit",
-    ]
-    .iter()
-    .map(|key| i18n::t_str(key))
-    .collect::<Vec<_>>()
-    .join("\n")
-        + "\n"
+    ];
+    let mut lines: Vec<String> = keys.iter().map(|key| i18n::t_str(key)).collect();
+    lines[0] = crate::style::header(&lines[0]);
+    lines.join("\n") + "\n"
 }
 
 /// Cycle the interface language between `en` and `zh-CN`.
@@ -223,25 +221,44 @@ pub fn format_round_summary(results: &[ToolResult]) -> String {
     let mut out = String::new();
     for result in results {
         let state = if result.success {
-            i18n::t_str("cli.message.success")
+            crate::style::success(&i18n::t_str("cli.message.success"))
         } else {
-            i18n::t_str("cli.message.failure")
+            crate::style::error(&i18n::t_str("cli.message.failure"))
         };
-        out.push_str(&format!(
-            "[{}] {state}\n{}\n",
-            result.tool_name,
-            result.output.trim()
-        ));
+        let tool = crate::style::accent(&format!("[{}]", result.tool_name));
+        out.push_str(&format!("{tool} {state}\n"));
+        // Iterate the raw output so no leading or trailing whitespace of a
+        // `read` slice is dropped from the console summary.
+        // 按原文逐行输出，避免 `read` 切片的首尾空白在控制台摘要中丢失。
+        for line in result.output.lines() {
+            out.push_str("  ");
+            out.push_str(line);
+            out.push('\n');
+        }
         for (param, decision) in &result.audit_decisions {
             if let Some(reason) = decision.reason() {
-                out.push_str(&format!(
+                out.push_str(&crate::style::yellow(&format!(
                     "  {}: {param} ({reason})\n",
                     i18n::t_str("cli.message.approval_needed")
-                ));
+                )));
             }
         }
+        out.push('\n');
     }
     out
+}
+
+/// Print `lines` as a muted block with one blank line above and below, so
+/// short status messages stand apart from the surrounding output without
+/// drawing attention.
+/// 把 `lines` 以弱化样式打印为上下各带一个空行的区块，让短状态消息与
+/// 周边输出分开，同时不喧宾夺主。
+pub(super) fn print_muted_block(lines: &[String]) {
+    println!();
+    for line in lines {
+        println!("{}", crate::style::muted(line));
+    }
+    println!();
 }
 
 #[cfg(test)]
@@ -269,5 +286,19 @@ mod tests {
         let messages = sync_global_config(&root, &Config::default());
         assert_eq!(messages.len(), 1);
         assert!(messages[0].contains("cannot create config directory"));
+    }
+
+    #[test]
+    fn format_round_summary_keeps_slice_whitespace() {
+        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
+        i18n::set_locale("en");
+        let summary = format_round_summary(&[ToolResult::success(
+            "read",
+            "    indented  \n  second\n",
+            true,
+        )]);
+        assert!(summary.contains("      indented  "));
+        assert!(summary.contains("    second"));
     }
 }

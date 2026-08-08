@@ -12,24 +12,22 @@ use manualaid_ws::session::SessionLog;
 
 use super::LoopOptions;
 use super::approval::{ask_approval, execute_round_with_approval};
-use super::utils::{format_round_summary, parse_round_index, read_line, t_fmt};
+use super::utils::{format_round_summary, parse_round_index, print_muted_block, read_line, t_fmt};
 
 /// Generate the system prompt and copy it to the clipboard.
 /// 生成系统提示词并复制到剪贴板。
 pub(super) fn copy_system_prompt(config: &Config, root: &Path, registry: &FormatRegistry) {
     let start = std::time::Instant::now();
     let text = manualaid_ws::prompt::build_system_prompt(config, root, registry, &all_skills());
+    let mut block = vec![t_fmt(
+        "cli.loop.timing_prompt",
+        &[("elapsed", &crate::format_duration(start.elapsed()))],
+    )];
     match manualaid_core::clipboard::write_clipboard(&text) {
-        Ok(()) => println!("{}", i18n::t_str("cli.message.prompt_copied")),
+        Ok(()) => block.insert(0, i18n::t_str("cli.message.prompt_copied")),
         Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
     }
-    println!(
-        "{}",
-        t_fmt(
-            "cli.loop.timing_prompt",
-            &[("elapsed", &crate::format_duration(start.elapsed()))]
-        )
-    );
+    print_muted_block(&block);
 }
 
 /// Read the clipboard and submit its text as one round.
@@ -116,10 +114,14 @@ pub(super) async fn submit_text(
     let round_start = std::time::Instant::now();
     match execute_round_with_approval(executor, registry, text, ask_approval).await {
         Ok((calls, results)) => {
-            let _ = crate::pager::print_paged(&format_round_summary(&results));
+            let _ = crate::pager::print_paged_collapsed(&format_round_summary(&results));
             session.push(calls, results.clone());
             let round_index = session.len();
             let copy = options.auto_copy || ask_copy();
+            let mut block = vec![t_fmt(
+                "cli.loop.timing_round",
+                &[("elapsed", &crate::format_duration(round_start.elapsed()))],
+            )];
             if copy
                 && let Err(e) = manualaid_core::clipboard::write_clipboard(
                     manualaid_ws::prompt::format_results(&results, max_result_chars),
@@ -127,21 +129,15 @@ pub(super) async fn submit_text(
             {
                 eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
             } else if copy {
-                println!(
-                    "{}",
+                block.insert(
+                    0,
                     t_fmt(
                         "cli.message.result_copied",
-                        &[("index", &round_index.to_string())]
-                    )
+                        &[("index", &round_index.to_string())],
+                    ),
                 );
             }
-            println!(
-                "{}",
-                t_fmt(
-                    "cli.loop.timing_round",
-                    &[("elapsed", &crate::format_duration(round_start.elapsed()))]
-                )
-            );
+            print_muted_block(&block);
         }
         Err(e) => eprintln!("{e}"),
     }
@@ -179,13 +175,10 @@ pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
                 results,
                 max_result_chars,
             )) {
-                Ok(()) => println!(
-                    "{}",
-                    t_fmt(
-                        "cli.message.result_copied",
-                        &[("index", &index.to_string())]
-                    )
-                ),
+                Ok(()) => print_muted_block(&[t_fmt(
+                    "cli.message.result_copied",
+                    &[("index", &index.to_string())],
+                )]),
                 Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
             }
         }
@@ -266,6 +259,10 @@ mod tests {
     }
 
     #[tokio::test]
+    // The lock must span the await so no concurrent test flips the
+    // process-wide locale while this test prints localized text.
+    // 锁须跨 await 持有，避免并发测试在本测试输出本地化文本时切换全局 locale。
+    #[allow(clippy::await_holding_lock)]
     async fn print_session_summary_lists_stats() {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
@@ -281,6 +278,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn copy_round_result_rejects_out_of_range_index() {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
@@ -363,6 +361,10 @@ mod tests {
     }
 
     #[tokio::test]
+    // The lock must span the await so no concurrent test touches the
+    // clipboard while this round reads or writes it.
+    // 锁须跨 await 持有，避免并发测试在本轮读写剪贴板时访问剪贴板。
+    #[allow(clippy::await_holding_lock)]
     async fn submit_text_with_auto_copy_asks_and_skips_copy_on_no() {
         let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
         let root = crate::test_support::temp_dir("submit-autocopy");
@@ -390,10 +392,11 @@ mod tests {
     // 剪贴板测试不会相互覆盖内容。
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn paste_and_submit_pastes_clipboard_text_as_a_round() {
         let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
         let root = crate::test_support::temp_dir("paste-round");
-        manualaid_core::clipboard::write_clipboard(&read_call(&root))
+        manualaid_core::clipboard::write_clipboard(read_call(&root))
             .expect("set clipboard for pasting");
         let mut session = SessionLog::new();
         let mut options = LoopOptions::default();
@@ -410,6 +413,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn paste_and_submit_with_empty_clipboard_is_noop() {
         let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
         let root = crate::test_support::temp_dir("paste-empty");
@@ -437,6 +441,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn copy_round_result_copies_selected_round() {
         let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
         let root = crate::test_support::temp_dir("copy-valid");

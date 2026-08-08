@@ -5,12 +5,16 @@ use indexmap::IndexMap;
 use manualaid_core::audit::AuditQueueItem;
 use serde_json::Value;
 
+use super::diff::{colored_diff, colorize_diff};
 use super::utils::t_fmt;
 
 /// The approval preview shown before each queue item.
 /// 每个审批队列项展示前的预览文本。
 pub fn approval_preview(item: &AuditQueueItem, params: &IndexMap<String, Value>) -> String {
-    let header = t_fmt(
+    // The approval line is metadata; the command and the AI-supplied purpose
+    // below are what the user actually judges the operation on.
+    // 审批行只是元信息，真正用于判断操作的是下方的命令与 AI 提供的目的。
+    let header = crate::style::muted(&t_fmt(
         "cli.approval.item",
         &[
             ("tool", &item.tool_name),
@@ -20,14 +24,14 @@ pub fn approval_preview(item: &AuditQueueItem, params: &IndexMap<String, Value>)
                 item.decision.reason().unwrap_or("approval required"),
             ),
         ],
-    );
+    ));
     let mut detail = match item.tool_name.as_str() {
         "edit" => edit_diff_preview(params),
         "write" => write_preview(params),
         "shell" => params
             .get("command")
             .and_then(Value::as_str)
-            .map(|command| format!("$ {command}"))
+            .map(|command| crate::style::accent(&format!("$ {command}")))
             .unwrap_or_default(),
         _ => params
             .get(&item.param_name)
@@ -44,10 +48,10 @@ pub fn approval_preview(item: &AuditQueueItem, params: &IndexMap<String, Value>)
         if !detail.is_empty() {
             detail.push('\n');
         }
-        detail.push_str(&t_fmt(
+        detail.push_str(&crate::style::yellow(&t_fmt(
             "cli.approval.description",
             &[("description", description)],
-        ));
+        )));
     }
     if detail.trim().is_empty() {
         header
@@ -84,16 +88,17 @@ pub(super) fn edit_diff_preview(params: &IndexMap<String, Value>) -> String {
             if modified == original {
                 return fallback();
             }
-            unified_diff(file_path, &original, &modified)
+            colored_diff(file_path, &original, &modified)
         }
         Err(_) => fallback(),
     }
 }
 
 /// Build a colored preview for a `write` approval: target info plus either
-/// a capped diff against existing content or a capped content preview.
-/// 为 `write` 审批构建预览：目标信息加上对已有内容的截断 diff，或
-/// 不存在时的截断内容预览。
+/// a full diff against existing content or the full content preview. Long
+/// previews are paged by the caller, so nothing is truncated here.
+/// 为 `write` 审批构建预览：目标信息加上对已有内容的完整 diff，或不存在时
+/// 的完整内容预览。长预览由调用方分页，这里不做截断。
 pub(super) fn write_preview(params: &IndexMap<String, Value>) -> String {
     let Some(file_path) = params.get("file_path").and_then(Value::as_str) else {
         return String::new();
@@ -107,65 +112,20 @@ pub(super) fn write_preview(params: &IndexMap<String, Value>) -> String {
     let mut out = format!("write {file_path} ({total} lines, {} bytes)", content.len());
     match std::fs::read_to_string(file_path) {
         Ok(original) => {
-            let diff = unified_diff(file_path, &original, &content);
+            let diff = colored_diff(file_path, &original, &content);
             if diff.is_empty() {
                 out.push_str("\ncontent unchanged");
             } else {
-                const MAX_DIFF_LINES: usize = 40;
-                let lines: Vec<&str> = diff.lines().take(MAX_DIFF_LINES).collect();
                 out.push('\n');
-                out.push_str(&colorize_diff(&lines.join("\n")));
-                if diff.lines().count() > MAX_DIFF_LINES {
-                    out.push_str(&format!(
-                        "\n... ({} more diff lines)",
-                        diff.lines().count() - MAX_DIFF_LINES
-                    ));
-                }
+                out.push_str(&diff);
             }
         }
         Err(_) => {
             if !content.is_empty() {
-                const MAX_PREVIEW_LINES: usize = 40;
-                let lines: Vec<&str> = content.lines().take(MAX_PREVIEW_LINES).collect();
                 out.push('\n');
-                out.push_str(&lines.join("\n"));
-                if total > MAX_PREVIEW_LINES {
-                    out.push_str(&format!("\n... ({} more lines)", total - MAX_PREVIEW_LINES));
-                }
+                out.push_str(&content);
             }
         }
-    }
-    out
-}
-
-/// Produce a unified diff between two texts with `a/`/`b/` headers.
-/// 生成两个文本之间带 `a/`/`b/` 头的 unified diff。
-pub(super) fn unified_diff(path: &str, original: &str, modified: &str) -> String {
-    similar::TextDiff::from_lines(original, modified)
-        .unified_diff()
-        .header(format!("a/{path}").as_str(), format!("b/{path}").as_str())
-        .to_string()
-}
-
-/// Color a unified diff line-by-line, only when ANSI styling is enabled.
-/// 逐行给 unified diff 着色；仅当 ANSI 样式启用时生效。
-pub(super) fn colorize_diff(diff: &str) -> String {
-    let mut out = String::new();
-    for line in diff.lines() {
-        let styled =
-            if line.starts_with("@@") || line.starts_with("--- ") || line.starts_with("+++ ") {
-                crate::style::cyan(line)
-            } else if line.starts_with('-') {
-                crate::style::red(line)
-            } else if line.starts_with('+') {
-                crate::style::green(line)
-            } else if line.starts_with(' ') {
-                crate::style::gray(line)
-            } else {
-                line.to_string()
-            };
-        out.push_str(&styled);
-        out.push('\n');
     }
     out
 }
@@ -296,7 +256,7 @@ mod tests {
     }
 
     #[test]
-    fn write_preview_truncates_long_content() {
+    fn write_preview_shows_full_content_for_new_files() {
         let content = (1..=50)
             .map(|n| format!("line {n}"))
             .collect::<Vec<_>>()
@@ -305,11 +265,13 @@ mod tests {
             ("file_path", "Z:/missing/long.txt"),
             ("content", &content),
         ]));
-        assert!(preview.contains("(10 more lines)"));
+        assert!(preview.contains("line 1"));
+        assert!(preview.contains("line 50"));
+        assert!(!preview.contains("more lines"));
     }
 
     #[test]
-    fn write_preview_truncates_long_diff() {
+    fn write_preview_shows_full_diff_without_truncation() {
         let root = crate::test_support::temp_dir("write-long-diff");
         let file = root.join("doc.txt");
         let original = (1..=50)
@@ -325,7 +287,9 @@ mod tests {
             ("file_path", file.to_str().unwrap()),
             ("content", &content),
         ]));
-        assert!(preview.contains("more diff lines"));
+        assert!(preview.contains("old 1"));
+        assert!(preview.contains("new 50"));
+        assert!(!preview.contains("more diff lines"));
     }
 
     #[test]
@@ -341,28 +305,6 @@ mod tests {
         numeric.insert("content".to_string(), Value::Number(42.into()));
         let preview = write_preview(&numeric);
         assert!(preview.contains("42"));
-    }
-
-    #[test]
-    fn unified_diff_uses_a_and_b_headers() {
-        let diff = unified_diff("doc.txt", "a\nb\n", "a\nc\n");
-        assert!(diff.contains("a/doc.txt"));
-        assert!(diff.contains("b/doc.txt"));
-        assert!(diff.contains("-b"));
-        assert!(diff.contains("+c"));
-    }
-
-    #[test]
-    fn colorize_diff_styles_each_line_kind() {
-        crate::style::set_enabled(true);
-        let colored = colorize_diff("@@ -1 +1 @@\n--- a/x\n+++ b/x\n-old\n+new\n context\nplain");
-        assert!(colored.contains("\x1b["));
-        assert!(
-            !colored
-                .lines()
-                .any(|line| line.ends_with("plain") && line.contains("\x1b["))
-        );
-        crate::style::set_enabled(false);
     }
 
     #[test]

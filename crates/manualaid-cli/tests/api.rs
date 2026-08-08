@@ -451,6 +451,15 @@ fn pager_prints_all_when_not_terminal() {
 }
 
 #[test]
+fn collapsed_pager_prints_all_when_not_terminal() {
+    let long = (1..=100)
+        .map(|n| format!("line {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    pager::print_paged_collapsed(&long).expect("print should succeed");
+}
+
+#[test]
 fn format_duration_is_milliseconds_with_nanosecond_precision() {
     assert_eq!(format_duration(Duration::ZERO), "0.000000 ms");
     assert_eq!(format_duration(Duration::from_nanos(5)), "0.000005 ms");

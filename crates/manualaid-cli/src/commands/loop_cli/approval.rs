@@ -2,6 +2,7 @@
 //! 单轮审批流程：解析、审计、询问并执行。
 
 use std::io::Write;
+use std::time::Duration;
 
 use manualaid_core::audit::{AuditDecision, AuditQueueItem};
 use manualaid_core::executor::Executor;
@@ -9,22 +10,28 @@ use manualaid_core::parser::{FormatRegistry, ParsedToolCall};
 use manualaid_core::tools::{ToolResult, params_summary_of};
 
 use super::Approval;
-use super::preview::approval_preview;
+use super::preview::{approval_preview, edit_diff_preview, write_preview};
 use super::utils::{read_line, t_fmt};
+
+/// Delay between the preview output and the approval prompt, so paged
+/// output never streams into the answer that the caller consumes.
+/// 预览输出与审批提问之间的停顿，避免分页输出流入调用方读取的答复。
+const APPROVAL_PAUSE: Duration = Duration::from_millis(500);
 
 /// Parse and execute one round of tool calls with user approval.
 ///
 /// Every call is pre-checked first: calls guaranteed to fail produce a
 /// failure result directly. Remaining calls are audited and the ones
 /// needing approval are presented one by one; `decide` returns the user's
-/// answer for each item. Approved calls execute, denied calls become
-/// failure results. Returns the parsed calls and results of the round.
+/// answer for each item. Each preview is paged, followed by a short pause
+/// before the approval question. Approved calls execute, denied calls
+/// become failure results. Returns the parsed calls and results of the round.
 /// 解析并执行一轮带用户审批的工具调用。
 ///
 /// 每个调用都会先经过预检：必然失败的调用直接产生失败结果。其余调用
-/// 进入审计，需要批准的项目逐条展示；`decide` 返回用户对每一项的答复。
-/// 已批准的调用正常执行，被拒绝的调用生成失败结果。返回本轮解析出的
-/// 调用与结果。
+/// 进入审计，需要批准的项目逐条分页展示，随后短暂停顿再询问；`decide`
+/// 返回用户对每一项的答复。已批准的调用正常执行，被拒绝的调用生成失败
+/// 结果。返回本轮解析出的调用与结果。
 pub async fn execute_round_with_approval(
     executor: &Executor,
     registry: &FormatRegistry,
@@ -83,7 +90,9 @@ pub async fn execute_round_with_approval(
                     param_name: param.clone(),
                     decision: decision.clone(),
                 };
-                println!("{}", approval_preview(&queue_item, &item.call.params));
+                let preview = approval_preview(&queue_item, &item.call.params);
+                let _ = crate::pager::print_paged_collapsed(&preview);
+                tokio::time::sleep(APPROVAL_PAUSE).await;
                 match decide(&queue_item) {
                     Approval::Approve => {}
                     Approval::Deny => approved[index] = false,
@@ -111,7 +120,27 @@ pub async fn execute_round_with_approval(
             ));
             continue;
         }
+        // Auto-approved calls (AcceptEdit) skip the approval preview, so
+        // capture the edit/write diff beforehand and show it after a
+        // successful execution to confirm what changed.
+        // 自动放行的调用（AcceptEdit）不会展示审批预览；执行前捕获
+        // edit/write 的 diff，成功执行后再展示，便于确认实际改动。
+        let executed_diff = if item.pending.is_empty() {
+            match item.call.tool_name.as_str() {
+                "edit" => Some(edit_diff_preview(&item.call.params)),
+                "write" => Some(write_preview(&item.call.params)),
+                _ => None,
+            }
+        } else {
+            None
+        };
         let mut result = executor.execute(item.call).await;
+        if result.success
+            && let Some(diff) = executed_diff
+            && !diff.trim().is_empty()
+        {
+            let _ = crate::pager::print_paged_collapsed(&diff);
+        }
         if !item.pending.is_empty() {
             // An approved call no longer needs the "approval needed"
             // annotation in its summary.
@@ -195,6 +224,11 @@ mod tests {
         assert_eq!(ask_approval(&item), Approval::DenyWithText(String::new()));
         push_test_input(&[""]);
         assert_eq!(ask_approval(&item), Approval::Deny);
+    }
+
+    #[test]
+    fn approval_pause_is_half_a_second() {
+        assert_eq!(APPROVAL_PAUSE, Duration::from_millis(500));
     }
 
     fn parsed_call() -> ParsedToolCall {

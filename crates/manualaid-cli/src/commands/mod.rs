@@ -49,7 +49,7 @@ pub fn run(cli: Cli, home: Option<&Path>) -> Result<(), String> {
     match cli.command {
         None => {
             print!("{}", format_default_output(&default_message()));
-            run_loop(home, cli.lang)
+            run_loop(home, cli.lang, cli.mode.map(Into::into))
         }
         Some(Command::Mask { input }) => run_mask(&input, home),
         Some(Command::Restore { input, snapshot }) => run_restore(&input, &snapshot),
@@ -97,6 +97,7 @@ mod tests {
         // 让 loop 立即结束。
         let code = run_main(Cli {
             lang: None,
+            mode: None,
             command: None,
         });
         assert_eq!(code, 0);

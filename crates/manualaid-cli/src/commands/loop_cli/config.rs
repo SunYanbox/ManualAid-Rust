@@ -4,6 +4,7 @@
 use std::io::Write;
 use std::path::Path;
 
+use manualaid_core::audit::SessionMode;
 use manualaid_core::parser::FormatRegistry;
 use manualaid_core::skill::{all_skills, set_enabled};
 use manualaid_ws::config::{Config, save_project};
@@ -46,6 +47,19 @@ pub(super) fn config_menu(
             "8" => options.auto_copy = !options.auto_copy,
             "9" => options.clear_screen = !options.clear_screen,
             "10" => skill_config_menu(),
+            "11" => {
+                options.mode = match options.mode {
+                    SessionMode::Manual => SessionMode::AcceptEdit,
+                    SessionMode::AcceptEdit => SessionMode::Manual,
+                };
+                println!(
+                    "{}",
+                    t_fmt(
+                        "cli.config.mode_switched",
+                        &[("mode", &mode_label(options.mode))]
+                    )
+                );
+            }
             "0" | "" => break,
             _ => println!("{}", i18n::t_str("cli.loop.menu_invalid")),
         }
@@ -91,13 +105,13 @@ pub fn render_config_menu(config: &Config, options: &LoopOptions) -> String {
     };
     let state = |enabled: bool| {
         if enabled {
-            i18n::t_str("cli.config.enabled")
+            crate::style::success(&i18n::t_str("cli.config.enabled"))
         } else {
-            i18n::t_str("cli.config.disabled")
+            crate::style::muted(&i18n::t_str("cli.config.disabled"))
         }
     };
     [
-        i18n::t_str("cli.config.title"),
+        crate::style::header(&i18n::t_str("cli.config.title")),
         t_fmt("cli.config.lang", &[("lang", lang_name)]),
         t_fmt("cli.config.format", &[("format", &config.tool_call_format)]),
         t_fmt("cli.config.shell", &[("state", &state(config.shell))]),
@@ -114,9 +128,19 @@ pub fn render_config_menu(config: &Config, options: &LoopOptions) -> String {
             &[("state", &state(options.clear_screen))],
         ),
         i18n::t_str("cli.config.skill_list"),
+        t_fmt("cli.config.mode", &[("mode", &mode_label(options.mode))]),
         i18n::t_str("cli.config.back"),
     ]
     .join("\n")
+}
+
+/// Localized label of the current approval mode.
+/// 当前审批模式的本地化名称。
+fn mode_label(mode: SessionMode) -> String {
+    match mode {
+        SessionMode::Manual => i18n::t_str("cli.config.mode_manual"),
+        SessionMode::AcceptEdit => i18n::t_str("cli.config.mode_accept_edit"),
+    }
 }
 
 /// The SKILL enable/disable sub-menu: toggle by index, all on, all off.
@@ -194,6 +218,7 @@ mod tests {
         assert!(menu.contains(&i18n::t_str("cli.config.enabled")));
         assert!(menu.contains(&i18n::t_str("cli.config.disabled")));
         assert!(menu.contains(&i18n::t_str("cli.config.skill_list")));
+        assert!(menu.contains(&i18n::t_str("cli.config.mode_manual")));
         assert!(menu.contains(&i18n::t_str("cli.config.back")));
     }
 
@@ -209,6 +234,7 @@ mod tests {
         let options = LoopOptions {
             auto_copy: false,
             clear_screen: true,
+            ..LoopOptions::default()
         };
         let menu = render_config_menu(&config, &options);
         assert!(menu.contains("中文"));
@@ -282,6 +308,20 @@ mod tests {
         config_menu(&mut config, &registry, &root, &mut options);
         assert!(!options.auto_copy);
         assert!(options.clear_screen);
+    }
+
+    #[test]
+    fn config_menu_toggles_approval_mode_without_persisting() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("config-menu-mode");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["11", "0"]);
+        config_menu(&mut config, &registry, &root, &mut options);
+        assert_eq!(options.mode, SessionMode::AcceptEdit);
+        assert!(!root.join(".ManualAid").join("config.toml").exists());
     }
 
     #[test]

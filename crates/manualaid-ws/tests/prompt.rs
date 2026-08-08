@@ -175,6 +175,13 @@ fn format_results_within_limit_is_unchanged() {
 }
 
 #[test]
+fn format_results_preserves_whitespace_of_slices() {
+    let result = ToolResult::success("read", "    indented\n  second  \n", true);
+    let text = format_results(&[result], MAX);
+    assert!(text.contains("    indented\n  second  \n\n</tool_result>"));
+}
+
+#[test]
 fn format_results_truncates_proportionally_with_notices_and_warning() {
     with_locale("en", || {
         let results = vec![

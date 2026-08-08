@@ -209,7 +209,10 @@ pub fn format_results(results: &[ToolResult], max_result_chars: usize) -> String
             );
             ResultPart {
                 header,
-                content: result.output.trim().to_string(),
+                // Keep the tool output verbatim: trimming would drop trailing
+                // spaces that can be significant in read slices or code blocks.
+                // 保留工具输出原文：trim 会丢失 read 切片或代码块中可能有意义的尾部空格。
+                content: result.output.to_string(),
                 footer: "\n</tool_result>".to_string(),
             }
         })

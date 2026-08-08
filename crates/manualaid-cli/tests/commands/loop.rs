@@ -185,6 +185,53 @@ async fn pre_failed_calls_never_ask_for_approval() {
     assert!(!results[0].success);
 }
 
+#[tokio::test]
+async fn accept_edit_auto_approves_workspace_write() {
+    let ws =
+        std::env::temp_dir().join(format!("manualaid-loop-accept-edit-{}", std::process::id()));
+    std::fs::create_dir_all(&ws).unwrap();
+    let registry = FormatRegistry::new();
+    let calls = format!(
+        "<write><file_path>{}/auto.txt</file_path><content>A</content></write>",
+        ws.display()
+    );
+    let mut decisions = 0;
+    let (_, results) = execute_round_with_approval(&executor(&ws), &registry, &calls, |_| {
+        decisions += 1;
+        Approval::Deny
+    })
+    .await
+    .unwrap();
+    assert_eq!(decisions, 0);
+    assert!(results[0].success);
+    assert!(ws.join("auto.txt").exists());
+}
+
+#[tokio::test]
+async fn manual_mode_asks_before_workspace_write() {
+    let ws = std::env::temp_dir().join(format!("manualaid-loop-manual-{}", std::process::id()));
+    std::fs::create_dir_all(&ws).unwrap();
+    let registry = FormatRegistry::new();
+    let calls = format!(
+        "<write><file_path>{}/asked.txt</file_path><content>A</content></write>",
+        ws.display()
+    );
+    let executor = Executor::new(
+        Auditor::new(ws.clone()).with_mode(SessionMode::Manual),
+        Arc::new(None),
+    );
+    let mut decisions = 0;
+    let (_, results) = execute_round_with_approval(&executor, &registry, &calls, |_| {
+        decisions += 1;
+        Approval::Approve
+    })
+    .await
+    .unwrap();
+    assert_eq!(decisions, 1);
+    assert!(results[0].success);
+    assert!(ws.join("asked.txt").exists());
+}
+
 #[test]
 fn menu_contains_all_options() {
     let menu = render_menu();

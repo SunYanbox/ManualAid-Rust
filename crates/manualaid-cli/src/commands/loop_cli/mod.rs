@@ -10,15 +10,17 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
-use manualaid_core::audit::Auditor;
+use manualaid_core::audit::{Auditor, SessionMode};
 use manualaid_core::executor::Executor;
 use manualaid_core::parser::FormatRegistry;
 use manualaid_core::skill::reload_skills_with_home;
 use manualaid_core::user_dir::home_dir;
+use manualaid_ws::config::Config;
 use manualaid_ws::session::SessionLog;
 
 mod approval;
 mod config;
+mod diff;
 mod handlers;
 mod inline;
 mod preview;
@@ -65,6 +67,9 @@ pub struct LoopOptions {
     /// Whether the screen is cleared before each menu render.
     /// 每次渲染菜单前是否清屏。
     pub clear_screen: bool,
+    /// Whether Edit/Write inside the workspace auto-approve.
+    /// 工作区内的 Edit/Write 是否自动放行。
+    pub mode: SessionMode,
 }
 
 impl Default for LoopOptions {
@@ -72,6 +77,7 @@ impl Default for LoopOptions {
         Self {
             auto_copy: true,
             clear_screen: false,
+            mode: SessionMode::Manual,
         }
     }
 }
@@ -79,30 +85,43 @@ impl Default for LoopOptions {
 /// Run the interactive loop with a new Tokio runtime; the caller remains
 /// synchronous.
 /// 用新建的 Tokio runtime 运行交互式 loop；调用方保持同步。
-pub fn run_loop(home: Option<&Path>, lang: Option<String>) -> Result<(), String> {
+pub fn run_loop(
+    home: Option<&Path>,
+    lang: Option<String>,
+    mode: Option<SessionMode>,
+) -> Result<(), String> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(|e| format!("Failed to build runtime: {e}"))?;
-    runtime.block_on(loop_main(home, lang))
+    runtime.block_on(loop_main(home, lang, mode))
 }
 
 /// The interactive loop body (async because tool execution is async).
 /// 交互式 loop 主体（异步，因为工具执行是异步的）。
-async fn loop_main(home: Option<&Path>, lang: Option<String>) -> Result<(), String> {
+async fn loop_main(
+    home: Option<&Path>,
+    lang: Option<String>,
+    mode: Option<SessionMode>,
+) -> Result<(), String> {
     let current_dir = std::env::current_dir()
         .map_err(|e| t_fmt("cli.error.current_dir", &[("error", &e.to_string())]))?;
     let home = match home {
         Some(home) => home.to_path_buf(),
         None => home_dir().map_err(|e| e.to_string())?,
     };
-    loop_main_at(&current_dir, &home, lang).await
+    loop_main_at(&current_dir, &home, lang, mode).await
 }
 
 /// The interactive loop body against explicit project and home directories
 /// so tests can run it on a temporary workspace.
 /// 面向显式项目目录与主目录的交互式 loop 主体，测试可在临时工作区运行。
-async fn loop_main_at(current_dir: &Path, home: &Path, lang: Option<String>) -> Result<(), String> {
+async fn loop_main_at(
+    current_dir: &Path,
+    home: &Path,
+    lang: Option<String>,
+    mode: Option<SessionMode>,
+) -> Result<(), String> {
     let (mut config, issues) = manualaid_ws::config::load(current_dir, home)
         .map_err(|e| t_fmt("cli.error.init", &[("error", &e.to_string())]))?;
     // Snapshot for the startup hint: the CLI language override below must
@@ -134,11 +153,13 @@ async fn loop_main_at(current_dir: &Path, home: &Path, lang: Option<String>) -> 
     let registry = FormatRegistry::new();
     apply_format_mode(&registry, &config)?;
 
-    let auditor = Auditor::new(current_dir.to_path_buf())
-        .with_allowed_commands(config.allow_commands.clone());
-    let executor = Executor::new(auditor, Arc::new(None));
+    let mode = mode.unwrap_or_default();
+    let mut executor = build_executor(current_dir, &config, mode);
     let mut session = SessionLog::new();
-    let mut options = LoopOptions::default();
+    let mut options = LoopOptions {
+        mode,
+        ..LoopOptions::default()
+    };
 
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let shell = manualaid_core::shell::detected_shell();
@@ -205,7 +226,13 @@ async fn loop_main_at(current_dir: &Path, home: &Path, lang: Option<String>) -> 
                 .await
             }
             "4" => copy_round_result(&session, config.max_result_chars),
-            "5" => config_menu(&mut config, &registry, current_dir, &mut options),
+            "5" => {
+                let mode_before = options.mode;
+                config_menu(&mut config, &registry, current_dir, &mut options);
+                if options.mode != mode_before {
+                    executor = build_executor(current_dir, &config, options.mode);
+                }
+            }
             "6" => print_session_summary(&config, &session),
             "0" => should_exit = true,
             _ => println!("{}", i18n::t_str("cli.loop.menu_invalid")),
@@ -220,9 +247,19 @@ async fn loop_main_at(current_dir: &Path, home: &Path, lang: Option<String>) -> 
     Ok(())
 }
 
+/// Build an executor with the given session approval mode.
+/// 按给定的会话审批模式构建执行器。
+fn build_executor(root: &Path, config: &Config, mode: SessionMode) -> Executor {
+    Executor::new(
+        Auditor::new(root.to_path_buf())
+            .with_allowed_commands(config.allow_commands.clone())
+            .with_mode(mode),
+        Arc::new(None),
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::preview::colorize_diff;
     use super::utils::push_test_input;
     use super::*;
 
@@ -315,20 +352,26 @@ mod tests {
 
     #[test]
     fn format_round_summary_shows_state_and_output() {
+        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
         i18n::set_locale("en");
         let results = vec![
             ToolResult::success("read", "hello", true),
             ToolResult::failure("edit", "boom"),
         ];
         let summary = format_round_summary(&results);
-        assert!(summary.contains("[read] success"));
+        assert!(summary.contains("[read]"));
+        assert!(summary.contains("success"));
         assert!(summary.contains("hello"));
-        assert!(summary.contains("[edit] failure"));
+        assert!(summary.contains("[edit]"));
+        assert!(summary.contains("failure"));
         assert!(summary.contains("boom"));
     }
 
     #[test]
     fn format_round_summary_shows_approval_reasons() {
+        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
         i18n::set_locale("en");
         let mut result = ToolResult::success("shell", "done", true);
         result.audit_decisions.push((
@@ -337,6 +380,23 @@ mod tests {
         ));
         let summary = format_round_summary(&[result]);
         assert!(summary.contains("command (needs review)"));
+    }
+
+    #[test]
+    fn format_round_summary_styles_blocks_when_enabled() {
+        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(true);
+        let summary = format_round_summary(&[
+            ToolResult::success("read", "hello", true),
+            ToolResult::failure("edit", "boom"),
+        ]);
+        assert!(summary.contains("\x1b["));
+        let plain = crate::style::strip_ansi(&summary);
+        assert!(plain.contains("[read] success"));
+        assert!(plain.contains("  hello"));
+        assert!(plain.contains("[edit] failure"));
+        assert!(plain.contains("  boom"));
+        crate::style::set_enabled(false);
     }
 
     #[test]
@@ -405,18 +465,11 @@ mod tests {
         assert!(preview.contains("/etc/passwd"));
     }
 
-    #[test]
-    fn colorize_diff_keeps_plain_text_without_style() {
-        crate::style::set_enabled(false);
-        let colored = colorize_diff("@@ -1 +1 @@\n-a\n+b\n");
-        assert!(!colored.contains("\x1b["));
-        crate::style::set_enabled(true);
-        let styled = colorize_diff("@@ -1 +1 @@\n-a\n+b\n");
-        assert!(styled.contains("\x1b["));
-        crate::style::set_enabled(false);
-    }
-
     #[tokio::test]
+    // The locks must span the awaits so no concurrent test changes the
+    // locale or skill store while the scripted loop is running.
+    // 锁须跨 await 持有，避免并发测试在脚本化 loop 运行期间改动 locale 或技能库。
+    #[allow(clippy::await_holding_lock)]
     async fn loop_main_at_drives_menu_flow_with_scripted_input() {
         let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
@@ -436,18 +489,20 @@ mod tests {
         let file = current_dir.join("target.txt");
         std::fs::write(&file, "hello").unwrap();
         // 4: copy with no rounds (no clipboard access), 5: config menu
-        // (9 toggles clear_screen, 0 exits), 3: typed round, 6: summary,
+        // (9 toggles clear_screen, 11 toggles the approval mode which
+        // rebuilds the executor, 0 exits), 3: typed round, 6: summary,
         // x: invalid option; the queue then runs dry, ending the loop on
         // stdin EOF.
         // 4：无轮次复制（不触碰剪贴板），5：配置菜单（9 切换清屏，0 返回），
-        // 3：手动输入一轮，6：摘要，x：非法选项；随后队列耗尽，以 stdin EOF
-        // 结束循环。
+        // 11 切换审批模式并重建执行器，0 返回），3：手动输入一轮，6：摘要，
+        // x：非法选项；随后队列耗尽，以 stdin EOF 结束循环。
         push_test_input(&[
             "/tools",
             "/format 2",
             "4",
             "5",
             "9",
+            "11",
             "0",
             "3",
             format!("<read><file_path>{}</file_path></read>", file.display()).as_str(),
@@ -456,13 +511,73 @@ mod tests {
             "6",
             "x",
         ]);
-        loop_main_at(&current_dir, &home, None).await.unwrap();
+        loop_main_at(&current_dir, &home, None, None).await.unwrap();
         // The /format inline command persists its change; the pre-written
         // lang stays untouched.
         let content =
             std::fs::read_to_string(current_dir.join(".ManualAid").join("config.toml")).unwrap();
         assert!(content.contains("lang = \"zh-CN\""));
         assert!(content.contains("tool_call_format = \"xml\""));
+        manualaid_core::skill::reset_skills();
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn loop_main_at_paste_menu_submits_clipboard() {
+        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        let _clipboard_lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let current_dir = crate::test_support::temp_dir("loop-paste-menu");
+        let home = crate::test_support::temp_dir("loop-paste-menu-home");
+        let file = current_dir.join("target.txt");
+        std::fs::write(&file, "hello").unwrap();
+        manualaid_core::clipboard::write_clipboard(format!(
+            "<read><file_path>{}</file_path></read>",
+            file.display()
+        ))
+        .expect("set clipboard for pasting");
+        push_test_input(&["2"]);
+        loop_main_at(&current_dir, &home, None, None).await.unwrap();
+        manualaid_core::skill::reset_skills();
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn loop_main_at_accept_edit_auto_approves_workspace_write() {
+        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let current_dir = crate::test_support::temp_dir("loop-accept-edit");
+        let home = crate::test_support::temp_dir("loop-accept-edit-home");
+        let file = current_dir.join("created.txt");
+        // Disable auto-copy first (menu 8) so the round never touches the
+        // clipboard; then submit a workspace write that AcceptEdit mode
+        // executes without asking for approval.
+        // 先在菜单 8 关闭自动复制，避免该轮触碰剪贴板；随后提交一个工作区
+        // 写入，AcceptEdit 模式会直接执行而不询问审批。
+        push_test_input(&[
+            "5",
+            "8",
+            "0",
+            "3",
+            format!(
+                "<write><file_path>{}</file_path><content>ok</content></write>",
+                file.display()
+            )
+            .as_str(),
+            "/end",
+        ]);
+        loop_main_at(
+            &current_dir,
+            &home,
+            None,
+            Some(manualaid_core::audit::SessionMode::AcceptEdit),
+        )
+        .await
+        .unwrap();
+        assert!(file.exists());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "ok");
         manualaid_core::skill::reset_skills();
     }
 
@@ -477,14 +592,33 @@ mod tests {
         std::env::set_current_dir(&cwd).unwrap();
         let home = crate::test_support::temp_dir("run-loop-home");
         push_test_input(&["0"]);
-        run_loop(Some(&home), None).unwrap();
+        run_loop(Some(&home), None, None).unwrap();
         // The home_dir() fallback reads the real user home, so no temp home
         // is passed here; the loop only reads it.
         // home_dir() 回退读取真实用户主目录，此处不传临时主目录；loop 只读它。
         push_test_input(&["0"]);
-        run_loop(None, None).unwrap();
+        run_loop(None, None, None).unwrap();
         std::env::set_current_dir(&original).unwrap();
         assert!(cwd.join(".ManualAid").join("config.toml").is_file());
+        manualaid_core::skill::reset_skills();
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn loop_main_at_reports_invalid_config() {
+        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let current_dir = crate::test_support::temp_dir("loop-bad-config");
+        let home = crate::test_support::temp_dir("loop-bad-config-home");
+        std::fs::create_dir_all(current_dir.join(".ManualAid")).unwrap();
+        std::fs::write(
+            current_dir.join(".ManualAid").join("config.toml"),
+            "not [valid toml",
+        )
+        .unwrap();
+        let result = loop_main_at(&current_dir, &home, None, None).await;
+        assert!(result.is_err());
         manualaid_core::skill::reset_skills();
     }
 }

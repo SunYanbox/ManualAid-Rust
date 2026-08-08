@@ -10,7 +10,9 @@ use manualaid_ws::session::SessionLog;
 
 use super::config::persist_and_confirm;
 use super::handlers::{copy_round_result, copy_system_prompt};
-use super::utils::{apply_format_mode, cycle_format, cycle_lang, parse_round_index, t_fmt};
+use super::utils::{
+    apply_format_mode, cycle_format, cycle_lang, parse_round_index, print_muted_block, t_fmt,
+};
 
 /// Handle an inline `/command` typed at the menu prompt.
 /// 处理在菜单提示符输入的内置 `/命令`。
@@ -35,13 +37,10 @@ pub(super) fn handle_inline_command(
                 match manualaid_core::clipboard::write_clipboard(
                     manualaid_ws::prompt::format_results(results, config.max_result_chars),
                 ) {
-                    Ok(()) => println!(
-                        "{}",
-                        t_fmt(
-                            "cli.message.result_copied",
-                            &[("index", &index.to_string())]
-                        )
-                    ),
+                    Ok(()) => print_muted_block(&[t_fmt(
+                        "cli.message.result_copied",
+                        &[("index", &index.to_string())],
+                    )]),
                     Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
                 }
             } else {
@@ -58,7 +57,7 @@ pub(super) fn handle_inline_command(
             if let Some(tool) = ToolKind::from_name(tool_name) {
                 match registry.render_tool_call_template(&tool) {
                     Ok(template) => match manualaid_core::clipboard::write_clipboard(&template) {
-                        Ok(()) => println!("{}", i18n::t_str("cli.loop.copied")),
+                        Ok(()) => print_muted_block(&[i18n::t_str("cli.loop.copied")]),
                         Err(e) => {
                             eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]))
                         }

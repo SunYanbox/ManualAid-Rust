@@ -105,7 +105,7 @@ fn clean_global_scope_confirm_no_aborts() {
 #[test]
 fn clean_manualaid_dirs_reports_missing_dirs() {
     let home = temp_dir("clean-missing");
-    let lines = clean_manualaid_dirs(&[home.clone()]).unwrap();
+    let lines = clean_manualaid_dirs(std::slice::from_ref(&home)).unwrap();
     assert_eq!(lines.len(), 1);
     assert!(lines[0].contains("does not exist") || lines[0].contains("不存在"));
     let _ = std::fs::remove_dir_all(&home);

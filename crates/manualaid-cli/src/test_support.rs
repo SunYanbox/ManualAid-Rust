@@ -16,6 +16,10 @@ pub(crate) static SKILL_LOCK: Mutex<()> = Mutex::new(());
 /// 串行化会修改进程工作目录的测试。
 pub(crate) static CWD_LOCK: Mutex<()> = Mutex::new(());
 
+/// Serializes tests that mutate the process-wide styling switch.
+/// 串行化修改进程级样式开关的测试。
+pub(crate) static STYLE_LOCK: Mutex<()> = Mutex::new(());
+
 /// Serializes tests that read or write the real system clipboard, so a
 /// concurrent test cannot clobber the content another test depends on.
 /// 串行化读写真实系统剪贴板的测试，避免并发测试覆盖掉其他测试依赖的
