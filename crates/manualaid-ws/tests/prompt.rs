@@ -53,7 +53,7 @@ fn system_prompt_reflects_config_switches() {
             ..Config::default()
         };
         let registry = FormatRegistry::new();
-        let prompt = build_system_prompt(&config, Path::new("C:/ws"), &registry, &[]);
+        let prompt = build_system_prompt(&config, Path::new("C:/ws"), &registry, &[], &[]);
         assert!(prompt.contains("<system_prompt>"));
         assert!(prompt.contains("C:/ws"));
         assert!(!prompt.contains("<skill-usage>"));
@@ -65,7 +65,7 @@ fn system_prompt_drops_skill_when_none_are_enabled() {
     with_locale("en", || {
         let config = Config::default();
         let registry = FormatRegistry::new();
-        let prompt = build_system_prompt(&config, Path::new("C:/ws"), &registry, &[]);
+        let prompt = build_system_prompt(&config, Path::new("C:/ws"), &registry, &[], &[]);
         assert!(!prompt.contains("<skill-usage>"));
         assert!(!prompt.contains("## skill"));
         assert!(!prompt.contains("<available_skills>"));
@@ -86,7 +86,7 @@ fn system_prompt_includes_enabled_skills() {
             is_global: false,
             is_enabled: true,
         };
-        let prompt = build_system_prompt(&config, Path::new("C:/ws"), &registry, &[skill]);
+        let prompt = build_system_prompt(&config, Path::new("C:/ws"), &registry, &[skill], &[]);
         assert!(prompt.contains("<skill-usage>"));
         assert!(prompt.contains("## skill"));
         assert!(prompt.contains("<available_skills>"));
@@ -117,11 +117,67 @@ fn system_prompt_skips_disabled_skills_in_list() {
             is_global: false,
             is_enabled: false,
         };
-        let prompt =
-            build_system_prompt(&config, Path::new("C:/ws"), &registry, &[enabled, disabled]);
+        let prompt = build_system_prompt(
+            &config,
+            Path::new("C:/ws"),
+            &registry,
+            &[enabled, disabled],
+            &[],
+        );
         assert!(prompt.contains("<available_skills>"));
         assert!(prompt.contains("demo"));
         assert!(!prompt.contains("hidden"));
+    });
+}
+
+#[test]
+fn system_prompt_includes_selected_context_files() {
+    with_locale("en", || {
+        let root = std::env::temp_dir().join(format!(
+            "manualaid-ws-prompt-context-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("AGENTS.md"), "coverage >= 80%").unwrap();
+        let config = Config::default();
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(
+            &config,
+            Path::new("C:/ws"),
+            &registry,
+            &[],
+            &[root.join("AGENTS.md")],
+        );
+        assert!(prompt.contains("<context_files path=\"AGENTS.md\">"));
+        assert!(prompt.contains("coverage >= 80%"));
+        let _ = std::fs::remove_dir_all(&root);
+    });
+}
+
+#[test]
+fn system_prompt_omits_context_when_auto_load_is_disabled() {
+    with_locale("en", || {
+        let root = std::env::temp_dir().join(format!(
+            "manualaid-ws-prompt-context-off-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("AGENTS.md"), "secret rules").unwrap();
+        let config = Config {
+            context_auto_load: false,
+            ..Config::default()
+        };
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(
+            &config,
+            Path::new("C:/ws"),
+            &registry,
+            &[],
+            &[root.join("AGENTS.md")],
+        );
+        assert!(!prompt.contains("<context_files"));
+        assert!(!prompt.contains("secret rules"));
+        let _ = std::fs::remove_dir_all(&root);
     });
 }
 

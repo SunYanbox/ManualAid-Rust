@@ -5,13 +5,14 @@
 //! 已启用技能列表；并提供复制回剪贴板的 XML 包裹结果文本。
 
 use std::fmt::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use manualaid_core::parser::FormatRegistry;
 use manualaid_core::skill::Skill;
 use manualaid_core::tools::{ToolKind, ToolResult};
 
 use crate::config::Config;
+use crate::context;
 
 /// Build the full `<system_prompt>` text for `config`.
 /// 为 `config` 构建完整的 `<system_prompt>` 文本。
@@ -20,6 +21,7 @@ pub fn build_system_prompt(
     workspace_root: &Path,
     registry: &FormatRegistry,
     skills: &[Skill],
+    context_files: &[PathBuf],
 ) -> String {
     // With no enabled skills the skill tool is useless, so the prompt is
     // generated as if the skill switch were off: no skill rules and no
@@ -61,6 +63,11 @@ pub fn build_system_prompt(
     out.push('\n');
 
     let workspace_info = workspace_info_text(workspace_root);
+    let context_files_text = if config.context_auto_load {
+        context::render_context_files(context_files)
+    } else {
+        String::new()
+    };
     let skills_list = if skill_active {
         skills_list_text(skills)
     } else {
@@ -70,6 +77,7 @@ pub fn build_system_prompt(
         "prompt.system.dynamic-context",
         &[
             ("workspace_info", &workspace_info),
+            ("context_files", &context_files_text),
             ("skills_list", &skills_list),
         ],
     ));
@@ -180,14 +188,13 @@ fn git_info_text(workspace_root: &Path) -> String {
         .arg("status")
         .current_dir(workspace_root)
         .output();
-    if let Ok(out) = status {
-        if out.status.success() {
-            if let Ok(text) = String::from_utf8(out.stdout) {
-                output.push_str(&text);
-                if !text.ends_with('\n') {
-                    output.push('\n');
-                }
-            }
+    if let Ok(out) = status
+        && out.status.success()
+        && let Ok(text) = String::from_utf8(out.stdout)
+    {
+        output.push_str(&text);
+        if !text.ends_with('\n') {
+            output.push('\n');
         }
     }
 
@@ -197,14 +204,13 @@ fn git_info_text(workspace_root: &Path) -> String {
         .args(["log", "--oneline", "-5"])
         .current_dir(workspace_root)
         .output();
-    if let Ok(out) = log {
-        if out.status.success() {
-            if let Ok(text) = String::from_utf8(out.stdout) {
-                output.push_str(&text);
-                if !text.ends_with('\n') {
-                    output.push('\n');
-                }
-            }
+    if let Ok(out) = log
+        && out.status.success()
+        && let Ok(text) = String::from_utf8(out.stdout)
+    {
+        output.push_str(&text);
+        if !text.ends_with('\n') {
+            output.push('\n');
         }
     }
 
@@ -475,7 +481,7 @@ mod tests {
     fn system_prompt_contains_context_and_skills() {
         let config = Config::default();
         let registry = FormatRegistry::new();
-        let prompt = build_system_prompt(&config, Path::new("/ws"), &registry, &[]);
+        let prompt = build_system_prompt(&config, Path::new("/ws"), &registry, &[], &[]);
         assert!(prompt.starts_with("<system_prompt>"));
         assert!(prompt.ends_with("</system_prompt>"));
         assert!(prompt.contains("<workspace_root>"));

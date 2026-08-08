@@ -136,6 +136,14 @@ pub fn sync_global_config(root: &Path, config: &Config) -> Vec<String> {
             &defaults.max_result_chars.to_string(),
         ));
     }
+    if config.context_auto_load != defaults.context_auto_load {
+        messages.push(changed_global_hint(
+            &path,
+            "context_auto_load",
+            &config.context_auto_load.to_string(),
+            &defaults.context_auto_load.to_string(),
+        ));
+    }
     messages
 }
 

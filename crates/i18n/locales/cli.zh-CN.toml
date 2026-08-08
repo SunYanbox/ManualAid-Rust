@@ -65,6 +65,7 @@ prompt = "批准该操作？（y=同意，n=拒绝，t=拒绝并输入文本）[
 auto_copy = "8. 自动复制工具调用结果（当前：%{state}）"
 back = "0. 返回"
 clear_screen = "9. 清屏（当前：%{state}）"
+context_auto_load = "12. 切换上下文文件自动加载（当前：%{state}）"
 disabled = "已禁用"
 edit = "6. Edit 工具（当前：%{state}）"
 enabled = "已启用"
@@ -83,6 +84,13 @@ skill = "7. SKILL 工具（当前：%{state}）"
 skill_list = "10. SKILL 启用/禁用列表"
 title = "配置"
 write = "5. Write 工具（当前：%{state}）"
+
+[cli.context]
+duplicate_note = "（与 %{name} 内容重复）"
+found_multiple = "发现多个上下文文件："
+item = "%{index}. %{name}（%{size}）%{duplicate_note}"
+loaded = "已加载上下文文件：%{names}"
+prompt = "请选择要加载的上下文文件 [如 1 或 1,2，回车跳过]："
 
 [cli.loop]
 copied = "已复制到剪贴板"

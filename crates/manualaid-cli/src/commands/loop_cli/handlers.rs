@@ -12,13 +12,28 @@ use manualaid_ws::session::SessionLog;
 
 use super::LoopOptions;
 use super::approval::{ask_approval, execute_round_with_approval};
+use super::context::select_context_files;
 use super::utils::{format_round_summary, parse_round_index, print_muted_block, read_line, t_fmt};
 
-/// Generate the system prompt and copy it to the clipboard.
-/// 生成系统提示词并复制到剪贴板。
+/// Generate the system prompt with the selected context files and copy it
+/// to the clipboard. Context files are resolved at this point so the
+/// selection question is only asked when the prompt is actually generated.
+/// 结合所选上下文文件生成系统提示词并复制到剪贴板。上下文文件在此刻解析，因此只在真正
+/// 生成提示词时才询问选择。
 pub(super) fn copy_system_prompt(config: &Config, root: &Path, registry: &FormatRegistry) {
     let start = std::time::Instant::now();
-    let text = manualaid_ws::prompt::build_system_prompt(config, root, registry, &all_skills());
+    let context_files = if config.context_auto_load {
+        select_context_files(root)
+    } else {
+        Vec::new()
+    };
+    let text = manualaid_ws::prompt::build_system_prompt(
+        config,
+        root,
+        registry,
+        &all_skills(),
+        &context_files,
+    );
     let mut block = vec![t_fmt(
         "cli.loop.timing_prompt",
         &[("elapsed", &crate::format_duration(start.elapsed()))],
@@ -438,6 +453,22 @@ mod tests {
         copy_system_prompt(&Config::default(), &root, &FormatRegistry::new());
         let clipboard = manualaid_core::clipboard::read_clipboard().expect("read clipboard");
         assert!(clipboard.contains("<read>"));
+    }
+
+    #[test]
+    fn copy_system_prompt_includes_selected_context_files() {
+        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let root = crate::test_support::temp_dir("copy-prompt-context");
+        std::fs::write(root.join("AGENTS.md"), "# project rules").unwrap();
+        copy_system_prompt(&Config::default(), &root, &FormatRegistry::new());
+        let clipboard = manualaid_core::clipboard::read_clipboard().expect("read clipboard");
+        let dynamic = clipboard
+            .split_once("<dynamic-context>")
+            .and_then(|(_, rest)| rest.split_once("</dynamic-context>"))
+            .map(|(inner, _)| inner)
+            .unwrap_or_default();
+        assert!(dynamic.contains("<context_files path=\"AGENTS.md\">"));
+        assert!(dynamic.contains("# project rules"));
     }
 
     #[tokio::test]

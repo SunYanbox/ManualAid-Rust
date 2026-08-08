@@ -65,6 +65,7 @@ prompt = "Approve this operation? (y=approve, n=deny, t=deny with text) [n]: "
 auto_copy = "8. Auto-copy tool call results (current: %{state})"
 back = "0. Back"
 clear_screen = "9. Clear screen (current: %{state})"
+context_auto_load = "12. Toggle context file auto-load (current: %{state})"
 disabled = "disabled"
 edit = "6. Edit tool (current: %{state})"
 enabled = "enabled"
@@ -83,6 +84,13 @@ skill = "7. SKILL tool (current: %{state})"
 skill_list = "10. SKILL enable/disable list"
 title = "Configuration"
 write = "5. Write tool (current: %{state})"
+
+[cli.context]
+duplicate_note = " (duplicate of %{name})"
+found_multiple = "Found multiple context files:"
+item = "%{index}. %{name} (%{size})%{duplicate_note}"
+loaded = "Context files loaded: %{names}"
+prompt = "Choose context file(s) to load [e.g. 1 or 1,2; Enter to skip]: "
 
 [cli.loop]
 copied = "Copied to clipboard"

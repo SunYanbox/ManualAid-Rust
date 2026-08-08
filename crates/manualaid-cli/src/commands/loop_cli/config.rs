@@ -60,6 +60,10 @@ pub(super) fn config_menu(
                     )
                 );
             }
+            "12" => {
+                config.context_auto_load = !config.context_auto_load;
+                persist_and_confirm(config, root, "cli.config.saved", "");
+            }
             "0" | "" => break,
             _ => println!("{}", i18n::t_str("cli.loop.menu_invalid")),
         }
@@ -129,6 +133,10 @@ pub fn render_config_menu(config: &Config, options: &LoopOptions) -> String {
         ),
         i18n::t_str("cli.config.skill_list"),
         t_fmt("cli.config.mode", &[("mode", &mode_label(options.mode))]),
+        t_fmt(
+            "cli.config.context_auto_load",
+            &[("state", &state(config.context_auto_load))],
+        ),
         i18n::t_str("cli.config.back"),
     ]
     .join("\n")
@@ -219,6 +227,17 @@ mod tests {
         assert!(menu.contains(&i18n::t_str("cli.config.disabled")));
         assert!(menu.contains(&i18n::t_str("cli.config.skill_list")));
         assert!(menu.contains(&i18n::t_str("cli.config.mode_manual")));
+        // The rendered line replaces `%{state}` with styled text, so only
+        // the placeholder-free prefix is asserted.
+        // 渲染行会将 `%{state}` 替换为带样式的文本，因此只断言无占位符的前缀。
+        assert!(
+            menu.contains(
+                i18n::t_str("cli.config.context_auto_load")
+                    .split("%{state}")
+                    .next()
+                    .unwrap()
+            )
+        );
         assert!(menu.contains(&i18n::t_str("cli.config.back")));
     }
 
@@ -322,6 +341,21 @@ mod tests {
         config_menu(&mut config, &registry, &root, &mut options);
         assert_eq!(options.mode, SessionMode::AcceptEdit);
         assert!(!root.join(".ManualAid").join("config.toml").exists());
+    }
+
+    #[test]
+    fn config_menu_toggles_context_auto_load_and_persists() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("config-menu-context");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["12", "0"]);
+        config_menu(&mut config, &registry, &root, &mut options);
+        assert!(!config.context_auto_load);
+        let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("context_auto_load = false"));
     }
 
     #[test]

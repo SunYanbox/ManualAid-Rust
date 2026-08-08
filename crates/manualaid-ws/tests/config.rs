@@ -59,6 +59,7 @@ fn save_project_round_trips_through_load() {
         tool_call_format: "json-codeblock".to_string(),
         shell: false,
         allow_commands: vec!["git status".to_string()],
+        context_auto_load: false,
         ..Config::default()
     };
     save_project(&root, &config).unwrap();
@@ -66,6 +67,29 @@ fn save_project_round_trips_through_load() {
     assert_eq!(loaded, config);
     assert!(issues.is_empty());
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn project_context_auto_load_overrides_global() {
+    let root = temp_root("ctx-auto");
+    let home = temp_root("ctx-auto-home");
+    std::fs::create_dir_all(home.join(".ManualAid")).unwrap();
+    std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+    std::fs::write(
+        home.join(".ManualAid").join("config.toml"),
+        "[global]\ncontext_auto_load = true\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join(".ManualAid").join("config.toml"),
+        "[global]\ncontext_auto_load = false\n",
+    )
+    .unwrap();
+    let (config, issues) = load(&root, &home).unwrap();
+    assert!(!config.context_auto_load);
+    assert!(issues.is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]

@@ -20,6 +20,7 @@ use manualaid_ws::session::SessionLog;
 
 mod approval;
 mod config;
+mod context;
 mod diff;
 mod handlers;
 mod inline;
@@ -619,6 +620,73 @@ mod tests {
         .unwrap();
         let result = loop_main_at(&current_dir, &home, None, None).await;
         assert!(result.is_err());
+        manualaid_core::skill::reset_skills();
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn loop_main_at_loads_single_context_file_automatically() {
+        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        let _clipboard_lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let current_dir = crate::test_support::temp_dir("loop-ctx-single");
+        let home = crate::test_support::temp_dir("loop-ctx-single-home");
+        std::fs::write(current_dir.join("AGENTS.md"), "# rules").unwrap();
+        push_test_input(&["1", "0"]);
+        loop_main_at(&current_dir, &home, None, None).await.unwrap();
+        let clipboard =
+            manualaid_core::clipboard::read_clipboard().expect("read clipboard for context check");
+        assert!(clipboard.contains("<context_files path=\"AGENTS.md\">"));
+        assert!(clipboard.contains("# rules"));
+        manualaid_core::skill::reset_skills();
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn loop_main_at_asks_selection_when_multiple_context_files_exist() {
+        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        let _clipboard_lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let current_dir = crate::test_support::temp_dir("loop-ctx-multi");
+        let home = crate::test_support::temp_dir("loop-ctx-multi-home");
+        std::fs::write(current_dir.join("AGENTS.md"), "same").unwrap();
+        std::fs::write(current_dir.join("CLAUDE.md"), "same").unwrap();
+        // The selection line carries the Windows `\r\n` line ending, which
+        // must be trimmed before parsing the indices.
+        // 选择行携带 Windows 的 `\r\n` 行尾，解析索引前必须先去除。
+        push_test_input(&["1", "1\r\n", "0"]);
+        loop_main_at(&current_dir, &home, None, None).await.unwrap();
+        let clipboard =
+            manualaid_core::clipboard::read_clipboard().expect("read clipboard for context check");
+        assert!(clipboard.contains("<context_files path=\"AGENTS.md\">"));
+        assert!(!clipboard.contains("<context_files path=\"CLAUDE.md\">"));
+        manualaid_core::skill::reset_skills();
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn loop_main_at_skips_context_selection_when_auto_load_is_disabled() {
+        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        let _clipboard_lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let current_dir = crate::test_support::temp_dir("loop-ctx-off");
+        let home = crate::test_support::temp_dir("loop-ctx-off-home");
+        std::fs::create_dir_all(current_dir.join(".ManualAid")).unwrap();
+        std::fs::write(
+            current_dir.join(".ManualAid").join("config.toml"),
+            "[global]\ncontext_auto_load = false\n",
+        )
+        .unwrap();
+        std::fs::write(current_dir.join("AGENTS.md"), "a").unwrap();
+        std::fs::write(current_dir.join("CLAUDE.md"), "b").unwrap();
+        push_test_input(&["1", "0"]);
+        loop_main_at(&current_dir, &home, None, None).await.unwrap();
+        let clipboard =
+            manualaid_core::clipboard::read_clipboard().expect("read clipboard for context check");
+        assert!(!clipboard.contains("<context_files"));
         manualaid_core::skill::reset_skills();
     }
 }

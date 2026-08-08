@@ -59,6 +59,9 @@ pub struct GlobalSection {
     /// Maximum characters for result text copied to clipboard.
     /// 复制到剪贴板的结果文本最大字符数。
     pub max_result_chars: Option<usize>,
+    /// Whether context files (AGENTS.md etc.) are loaded into the prompt.
+    /// 是否将上下文文件（AGENTS.md 等）加载到提示词中。
+    pub context_auto_load: Option<bool>,
 }
 
 /// The `[tools]` table of a config file.
@@ -124,6 +127,9 @@ pub struct Config {
     /// Maximum characters for result text copied to clipboard.
     /// 复制到剪贴板的结果文本最大字符数。
     pub max_result_chars: usize,
+    /// Whether context files (AGENTS.md etc.) are loaded into the prompt.
+    /// 是否将上下文文件（AGENTS.md 等）加载到提示词中。
+    pub context_auto_load: bool,
 }
 
 impl Default for Config {
@@ -138,6 +144,7 @@ impl Default for Config {
             skill: true,
             allow_commands: Vec::new(),
             max_result_chars: 50_000,
+            context_auto_load: true,
         }
     }
 }
@@ -278,6 +285,11 @@ fn merge_with_issues(
             .max_result_chars
             .or(global.global.max_result_chars)
             .unwrap_or(defaults.max_result_chars),
+        context_auto_load: project
+            .global
+            .context_auto_load
+            .or(global.global.context_auto_load)
+            .unwrap_or(defaults.context_auto_load),
     };
     (config, issues)
 }
@@ -420,6 +432,12 @@ pub fn save_project(project_root: &Path, config: &Config) -> CoreResult<()> {
         "max_result_chars",
         config.max_result_chars,
     );
+    set_table_bool(
+        &mut doc,
+        "global",
+        "context_auto_load",
+        config.context_auto_load,
+    );
     set_table_bool(&mut doc, "tools", "shell", config.shell);
     set_table_bool(&mut doc, "tools", "read", config.read);
     set_table_bool(&mut doc, "tools", "edit", config.edit);
@@ -503,6 +521,7 @@ mod tests {
                 lang: Some("en".into()),
                 tool_call_format: Some("xml".into()),
                 max_result_chars: Some(200_000),
+                context_auto_load: Some(true),
             },
             tools: ToolsSection {
                 shell: Some(true),
