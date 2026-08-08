@@ -151,9 +151,9 @@ pub(super) fn skill_config_menu() {
         let mut lines = vec![i18n::t_str("cli.skill_config.title")];
         for (index, skill) in skills.iter().enumerate() {
             let state = if skill.is_enabled {
-                i18n::t_str("cli.config.enabled")
+                crate::style::success(&i18n::t_str("cli.config.enabled"))
             } else {
-                i18n::t_str("cli.config.disabled")
+                crate::style::muted(&i18n::t_str("cli.config.disabled"))
             };
             lines.push(t_fmt(
                 "cli.skill_config.item",

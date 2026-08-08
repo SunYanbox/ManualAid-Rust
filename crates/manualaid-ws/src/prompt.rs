@@ -130,14 +130,106 @@ fn is_enabled(config: &Config, tool: &ToolKind) -> bool {
     }
 }
 
-/// The `<dynamic-context>` workspace section: root path and shell.
-/// `<dynamic-context>` 的工作区部分：根路径与 Shell。
+/// The `<dynamic-context>` workspace section: root path, shell, git info, and directory listing.
+/// `<dynamic-context>` 的工作区部分：根路径、Shell、git 信息与目录列表。
 fn workspace_info_text(workspace_root: &Path) -> String {
     let shell = manualaid_core::shell::detected_shell();
-    format!(
+    let git_info = git_info_text(workspace_root);
+    let dir_list = directory_listing_text(workspace_root);
+    let mut result = format!(
         "<workspace_root>\n{}\n</workspace_root>\n<shell_environment>\n{shell}\n</shell_environment>\n",
         workspace_root.display()
-    )
+    );
+    if !git_info.is_empty() {
+        result.push_str("<git_information>\n");
+        result.push_str(&git_info);
+        result.push_str("</git_information>\n");
+    }
+    if !dir_list.is_empty() {
+        result.push_str("<directory_listing>\n");
+        result.push_str(&dir_list);
+        result.push_str("</directory_listing>\n");
+    }
+    result
+}
+
+/// Capture `git status` and `git log --oneline -5` output if git is available.
+/// 若 git 可用，捕获 `git status` 与 `git log --oneline -5` 输出。
+fn git_info_text(workspace_root: &Path) -> String {
+    use std::process::Command;
+    let mut output = String::new();
+
+    // Check if git is available and the directory is a git repository.
+    // 检查 git 是否可用且目录是否为 git 仓库。
+    let git_check = Command::new("git")
+        .arg("rev-parse")
+        .arg("--is-inside-work-tree")
+        .current_dir(workspace_root)
+        .output();
+    if let Ok(check) = git_check {
+        if !check.status.success() {
+            return String::new();
+        }
+    } else {
+        return String::new();
+    }
+
+    // Git status
+    // git 状态
+    let status = Command::new("git")
+        .arg("status")
+        .current_dir(workspace_root)
+        .output();
+    if let Ok(out) = status {
+        if out.status.success() {
+            if let Ok(text) = String::from_utf8(out.stdout) {
+                output.push_str(&text);
+                if !text.ends_with('\n') {
+                    output.push('\n');
+                }
+            }
+        }
+    }
+
+    // Git log (oneline, last 5 commits)
+    // git 日志（单行，最近5条）
+    let log = Command::new("git")
+        .args(["log", "--oneline", "-5"])
+        .current_dir(workspace_root)
+        .output();
+    if let Ok(out) = log {
+        if out.status.success() {
+            if let Ok(text) = String::from_utf8(out.stdout) {
+                output.push_str(&text);
+                if !text.ends_with('\n') {
+                    output.push('\n');
+                }
+            }
+        }
+    }
+
+    output
+}
+
+/// List files and directories under the workspace root, similar to `ls -la`.
+/// 列出工作区根目录下的文件和文件夹，类似 `ls -la`。
+fn directory_listing_text(workspace_root: &Path) -> String {
+    use std::fs;
+    let mut lines = Vec::new();
+    if let Ok(entries) = fs::read_dir(workspace_root) {
+        let mut items: Vec<(String, bool)> = Vec::new();
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+            items.push((name, is_dir));
+        }
+        items.sort_by_key(|(name, _)| name.to_lowercase());
+        for (name, is_dir) in items {
+            let marker = if is_dir { "<DIR>" } else { "     " };
+            lines.push(format!("{marker}  {name}"));
+        }
+    }
+    lines.join("\n")
 }
 
 /// The `<dynamic-context>` skills section from the enabled skills.
