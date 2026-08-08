@@ -169,3 +169,263 @@ pub(super) fn colorize_diff(diff: &str) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use manualaid_core::audit::{AuditDecision, AuditQueueItem};
+
+    fn params(pairs: &[(&str, &str)]) -> IndexMap<String, Value> {
+        pairs
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), Value::String((*value).to_string())))
+            .collect()
+    }
+
+    fn queue_item(tool: &str, param: &str, reason: Option<&str>) -> AuditQueueItem {
+        AuditQueueItem {
+            tool_name: tool.to_string(),
+            param_name: param.to_string(),
+            decision: reason
+                .map(|reason| AuditDecision::NeedsApproval(reason.to_string()))
+                .unwrap_or(AuditDecision::Allowed),
+        }
+    }
+
+    #[test]
+    fn edit_preview_shows_diff_against_existing_file() {
+        let root = crate::test_support::temp_dir("edit-preview");
+        let file = root.join("doc.txt");
+        std::fs::write(&file, "old text\n").unwrap();
+        let preview = edit_diff_preview(&params(&[
+            ("file_path", file.to_str().unwrap()),
+            ("old_string", "old"),
+            ("new_string", "new"),
+        ]));
+        assert!(preview.contains("-old text"));
+        assert!(preview.contains("+new text"));
+    }
+
+    #[test]
+    fn edit_preview_replace_all_swaps_every_occurrence() {
+        let root = crate::test_support::temp_dir("edit-replace-all");
+        let file = root.join("doc.txt");
+        std::fs::write(&file, "x a x b x\n").unwrap();
+        let mut preview = edit_diff_preview(&params(&[
+            ("file_path", file.to_str().unwrap()),
+            ("old_string", "x"),
+            ("new_string", "y"),
+        ]));
+        assert!(preview.contains("-x a x b x"));
+        assert!(preview.contains("+y a x b x"));
+        let mut replace_all = params(&[
+            ("file_path", file.to_str().unwrap()),
+            ("old_string", "x"),
+            ("new_string", "y"),
+        ]);
+        replace_all.insert("replace_all".to_string(), Value::Bool(true));
+        preview = edit_diff_preview(&replace_all);
+        assert!(preview.contains("-x a x b x"));
+        assert!(preview.contains("+y a y b y"));
+    }
+
+    #[test]
+    fn edit_preview_missing_file_falls_back_to_block() {
+        let preview = edit_diff_preview(&params(&[
+            ("file_path", "Z:/missing/preview.txt"),
+            ("old_string", "old"),
+            ("new_string", "new"),
+        ]));
+        assert!(preview.contains("- old"));
+        assert!(preview.contains("+ new"));
+    }
+
+    #[test]
+    fn edit_preview_unchanged_content_falls_back_to_block() {
+        let root = crate::test_support::temp_dir("edit-unchanged");
+        let file = root.join("doc.txt");
+        std::fs::write(&file, "same\n").unwrap();
+        let preview = edit_diff_preview(&params(&[
+            ("file_path", file.to_str().unwrap()),
+            ("old_string", "same"),
+            ("new_string", "same"),
+        ]));
+        assert!(preview.contains("- same"));
+        assert!(preview.contains("+ same"));
+    }
+
+    #[test]
+    fn edit_preview_missing_params_is_empty() {
+        assert!(edit_diff_preview(&IndexMap::new()).is_empty());
+    }
+
+    #[test]
+    fn write_preview_shows_diff_against_existing_file() {
+        let root = crate::test_support::temp_dir("write-preview");
+        let file = root.join("doc.txt");
+        std::fs::write(&file, "old\n").unwrap();
+        let preview = write_preview(&params(&[
+            ("file_path", file.to_str().unwrap()),
+            ("content", "new\n"),
+        ]));
+        assert!(preview.contains(&format!("write {} (1 lines", file.display())));
+        assert!(preview.contains("-old"));
+        assert!(preview.contains("+new"));
+    }
+
+    #[test]
+    fn write_preview_unchanged_content_is_marked() {
+        let root = crate::test_support::temp_dir("write-unchanged");
+        let file = root.join("doc.txt");
+        std::fs::write(&file, "same\n").unwrap();
+        let preview = write_preview(&params(&[
+            ("file_path", file.to_str().unwrap()),
+            ("content", "same\n"),
+        ]));
+        assert!(preview.contains("content unchanged"));
+    }
+
+    #[test]
+    fn write_preview_missing_file_shows_content() {
+        let preview = write_preview(&params(&[
+            ("file_path", "Z:/missing/write.txt"),
+            ("content", "line one\nline two\n"),
+        ]));
+        assert!(preview.contains("line one"));
+        assert!(preview.contains("line two"));
+    }
+
+    #[test]
+    fn write_preview_truncates_long_content() {
+        let content = (1..=50)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let preview = write_preview(&params(&[
+            ("file_path", "Z:/missing/long.txt"),
+            ("content", &content),
+        ]));
+        assert!(preview.contains("(10 more lines)"));
+    }
+
+    #[test]
+    fn write_preview_truncates_long_diff() {
+        let root = crate::test_support::temp_dir("write-long-diff");
+        let file = root.join("doc.txt");
+        let original = (1..=50)
+            .map(|n| format!("old {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let content = (1..=50)
+            .map(|n| format!("new {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(&file, &original).unwrap();
+        let preview = write_preview(&params(&[
+            ("file_path", file.to_str().unwrap()),
+            ("content", &content),
+        ]));
+        assert!(preview.contains("more diff lines"));
+    }
+
+    #[test]
+    fn write_preview_missing_path_is_empty() {
+        assert!(write_preview(&IndexMap::new()).is_empty());
+    }
+
+    #[test]
+    fn write_preview_accepts_non_string_content() {
+        let preview = write_preview(&params(&[("file_path", "Z:/missing/n.txt")]));
+        assert!(preview.starts_with("write Z:/missing/n.txt"));
+        let mut numeric = params(&[("file_path", "Z:/missing/n.txt")]);
+        numeric.insert("content".to_string(), Value::Number(42.into()));
+        let preview = write_preview(&numeric);
+        assert!(preview.contains("42"));
+    }
+
+    #[test]
+    fn unified_diff_uses_a_and_b_headers() {
+        let diff = unified_diff("doc.txt", "a\nb\n", "a\nc\n");
+        assert!(diff.contains("a/doc.txt"));
+        assert!(diff.contains("b/doc.txt"));
+        assert!(diff.contains("-b"));
+        assert!(diff.contains("+c"));
+    }
+
+    #[test]
+    fn colorize_diff_styles_each_line_kind() {
+        crate::style::set_enabled(true);
+        let colored = colorize_diff("@@ -1 +1 @@\n--- a/x\n+++ b/x\n-old\n+new\n context\nplain");
+        assert!(colored.contains("\x1b["));
+        assert!(
+            !colored
+                .lines()
+                .any(|line| line.ends_with("plain") && line.contains("\x1b["))
+        );
+        crate::style::set_enabled(false);
+    }
+
+    #[test]
+    fn approval_preview_edit_tool_shows_diff() {
+        let root = crate::test_support::temp_dir("approval-edit");
+        let file = root.join("doc.txt");
+        std::fs::write(&file, "old\n").unwrap();
+        let item = queue_item("edit", "old_string", Some("outside"));
+        let preview = approval_preview(
+            &item,
+            &params(&[
+                ("file_path", file.to_str().unwrap()),
+                ("old_string", "old"),
+                ("new_string", "new"),
+            ]),
+        );
+        assert!(preview.contains("+new"));
+    }
+
+    #[test]
+    fn approval_preview_write_tool_shows_target() {
+        let item = queue_item("write", "file_path", Some("outside"));
+        let preview = approval_preview(
+            &item,
+            &params(&[
+                ("file_path", "Z:/missing/approval.txt"),
+                ("content", "hello"),
+            ]),
+        );
+        assert!(preview.contains("write Z:/missing/approval.txt"));
+        assert!(preview.contains("hello"));
+    }
+
+    #[test]
+    fn approval_preview_shell_without_command_uses_header_only() {
+        let item = queue_item("shell", "command", Some("needs review"));
+        let preview = approval_preview(&item, &IndexMap::new());
+        assert!(!preview.contains("$ "));
+        assert!(preview.contains("needs review"));
+    }
+
+    #[test]
+    fn approval_preview_empty_detail_uses_header_only() {
+        let item = queue_item("read", "missing_param", Some("outside"));
+        let preview = approval_preview(&item, &IndexMap::new());
+        assert!(preview.contains("outside"));
+        assert!(!preview.contains('\n'));
+    }
+
+    #[test]
+    fn approval_preview_uses_default_reason_without_decision_reason() {
+        let item = queue_item("read", "file_path", None);
+        let preview = approval_preview(&item, &params(&[("file_path", "Z:/a.txt")]));
+        assert!(preview.contains("approval required"));
+    }
+
+    #[test]
+    fn approval_preview_appends_description() {
+        let item = queue_item("read", "file_path", Some("outside"));
+        let preview = approval_preview(
+            &item,
+            &params(&[("file_path", "Z:/a.txt"), ("description", "check the file")]),
+        );
+        assert!(preview.contains("check the file"));
+    }
+}

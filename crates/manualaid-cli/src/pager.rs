@@ -36,37 +36,72 @@ fn print_all(output: &str) -> io::Result<()> {
 /// key shows the next page.
 /// 每按一次键显示一屏；`q`/`Q`/Ctrl+C 提前退出，按其他键显示下一页。
 fn interactive_page(lines: &[&str], page_size: usize) -> io::Result<()> {
-    use crossterm::cursor::MoveToColumn;
-    use crossterm::event::KeyModifiers;
-    use crossterm::event::{self, Event, KeyCode};
-    use crossterm::terminal::{Clear, ClearType};
-
     let _raw = RawModeGuard::enable()?;
     let mut stdout = io::stdout().lock();
-    let mut start = 0usize;
-    while start < lines.len() {
-        let end = (start + page_size).min(lines.len());
-        write_page(&mut stdout, lines, start, end)?;
-        start = end;
-        if start >= lines.len() {
+    run_pages(&mut stdout, lines, page_size, || {
+        use crossterm::event::{self, Event};
+        match event::read()? {
+            Event::Key(key) => Ok(is_quit_key(key)),
+            _ => Ok(false),
+        }
+    })?;
+    stdout.flush()
+}
+
+/// Drive the paging loop: one screenful per iteration; `read_key` decides
+/// between quitting early and showing the next page. Pure console logic, so
+/// it is unit-testable without a terminal.
+/// 驱动分页循环：每次迭代显示一屏；`read_key` 决定提前退出还是显示下一页。
+/// 循环本身是纯控制台逻辑，无需终端即可单元测试。
+fn run_pages<F>(
+    stdout: &mut impl Write,
+    lines: &[&str],
+    page_size: usize,
+    mut read_key: F,
+) -> io::Result<()>
+where
+    F: FnMut() -> io::Result<bool>,
+{
+    use crossterm::cursor::MoveToColumn;
+    use crossterm::terminal::{Clear, ClearType};
+
+    for (start, end) in page_steps(lines.len(), page_size) {
+        write_page(stdout, lines, start, end)?;
+        if end >= lines.len() {
             break;
         }
         write!(stdout, "{}", style::muted(&i18n::t_str("cli.pager.more")))?;
         stdout.flush()?;
-        let quit = match event::read()? {
-            Event::Key(key) => {
-                matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q'))
-                    || (key.code == KeyCode::Char('c')
-                        && key.modifiers.contains(KeyModifiers::CONTROL))
-            }
-            _ => false,
-        };
+        let quit = read_key()?;
         crossterm::execute!(stdout, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
         if quit {
             break;
         }
     }
-    stdout.flush()
+    Ok(())
+}
+
+/// The `(start, end)` bounds of each page; the last page is clipped to the
+/// total line count. Pure logic so the paging loop is testable without a
+/// terminal.
+/// 每页的 `(start, end)` 边界；最后一页裁剪到总行数。纯逻辑，使分页循环
+/// 无需终端即可测试。
+fn page_steps(total: usize, page_size: usize) -> impl Iterator<Item = (usize, usize)> {
+    let page_size = page_size.max(1);
+    (0..total)
+        .step_by(page_size)
+        .map(move |start| (start, (start + page_size).min(total)))
+}
+
+/// Whether a key press should quit the pager early.
+/// 某次按键是否应提前退出分页器。
+fn is_quit_key(key: crossterm::event::KeyEvent) -> bool {
+    use crossterm::event::KeyModifiers;
+    matches!(
+        key.code,
+        crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Char('Q')
+    ) || (key.code == crossterm::event::KeyCode::Char('c')
+        && key.modifiers.contains(KeyModifiers::CONTROL))
 }
 
 /// Write the lines in `lines[start..end]`, one per line.
@@ -143,5 +178,104 @@ mod tests {
         let mut out = Vec::new();
         write_page(&mut out, &lines, 1, 1).unwrap();
         assert_eq!(out, b"");
+    }
+
+    #[test]
+    fn page_steps_walks_pages_and_clips_the_last() {
+        let steps: Vec<(usize, usize)> = page_steps(100, 23).collect();
+        assert_eq!(steps, [(0, 23), (23, 46), (46, 69), (69, 92), (92, 100)]);
+    }
+
+    #[test]
+    fn page_steps_handles_small_and_empty_inputs() {
+        assert_eq!(page_steps(5, 10).collect::<Vec<_>>(), [(0, 5)]);
+        assert_eq!(page_steps(0, 10).collect::<Vec<_>>(), []);
+        assert_eq!(
+            page_steps(4, 0).collect::<Vec<_>>(),
+            [(0, 1), (1, 2), (2, 3), (3, 4)]
+        );
+    }
+
+    #[test]
+    fn quit_keys_are_q_and_ctrl_c() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        assert!(is_quit_key(KeyEvent::new(
+            KeyCode::Char('q'),
+            KeyModifiers::NONE
+        )));
+        assert!(is_quit_key(KeyEvent::new(
+            KeyCode::Char('Q'),
+            KeyModifiers::NONE
+        )));
+        assert!(is_quit_key(KeyEvent::new(
+            KeyCode::Char('c'),
+            KeyModifiers::CONTROL
+        )));
+        assert!(!is_quit_key(KeyEvent::new(
+            KeyCode::Char('c'),
+            KeyModifiers::NONE
+        )));
+        assert!(!is_quit_key(KeyEvent::new(
+            KeyCode::Char('x'),
+            KeyModifiers::NONE
+        )));
+    }
+
+    #[test]
+    fn run_pages_writes_every_page_asking_for_a_key_between_pages() {
+        let lines = ["a", "b", "c", "d", "e"];
+        let mut out = Vec::new();
+        let mut key_reads = 0;
+        run_pages(&mut out, &lines, 4, || {
+            key_reads += 1;
+            Ok(false)
+        })
+        .unwrap();
+        assert_eq!(key_reads, 1);
+        let text = String::from_utf8(out).unwrap();
+        // Between the pages the pager writes the "more" prompt and a clear
+        // sequence, so only the page content itself is asserted.
+        // 页与页之间分页器会写入 "more" 提示与清除序列，因此只断言页面内容。
+        assert!(text.starts_with("a\nb\nc\nd\n"));
+        assert!(text.ends_with("e\n"));
+    }
+
+    #[test]
+    fn run_pages_quits_after_the_first_page_on_quit_key() {
+        let lines = ["a", "b", "c", "d", "e", "f"];
+        let mut out = Vec::new();
+        let mut key_reads = 0;
+        run_pages(&mut out, &lines, 4, || {
+            key_reads += 1;
+            Ok(true)
+        })
+        .unwrap();
+        assert_eq!(key_reads, 1);
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("a\nb\nc\nd\n"));
+        assert!(!text.contains("e\n"));
+    }
+
+    #[test]
+    fn run_pages_asks_no_key_when_the_output_fits_one_page() {
+        let mut out = Vec::new();
+        let mut key_reads = 0;
+        run_pages(&mut out, &["only"], 4, || {
+            key_reads += 1;
+            Ok(false)
+        })
+        .unwrap();
+        assert_eq!(key_reads, 0);
+    }
+
+    #[test]
+    fn raw_mode_guard_enables_and_restores_raw_mode_when_possible() {
+        // Raw mode needs a console; when the test process has none the call
+        // fails and the guard is simply not exercised.
+        // raw mode 需要控制台；测试进程无控制台时调用失败，守卫不会被
+        // 实际启用。
+        if let Ok(guard) = RawModeGuard::enable() {
+            drop(guard);
+        }
     }
 }

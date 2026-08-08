@@ -181,3 +181,39 @@ fn tool_count_matches_builtin_tools() {
     assert!(executor.find_tool("read").is_some());
     assert!(executor.find_tool("nope").is_none());
 }
+
+#[test]
+fn audit_of_unknown_tool_is_empty() {
+    let executor = executor(&std::env::temp_dir());
+    let decisions = executor.audit(&call("bogus-tool", &[]));
+    assert!(decisions.is_empty());
+}
+
+#[tokio::test]
+async fn pre_check_reports_missing_required_params() {
+    let executor = executor(&std::env::temp_dir());
+    let result = executor.pre_check(&call("write", &[])).await;
+    let result = result.expect("missing params are a guaranteed failure");
+    assert!(!result.success);
+    assert!(result.output.contains("Missing required parameter"));
+}
+
+#[tokio::test]
+async fn pre_check_passes_when_params_are_valid() {
+    let root = std::env::temp_dir().join("manualaid-exec-prec");
+    let file = temp_file("prec");
+    std::fs::write(&file, "old").unwrap();
+    let executor = executor(&root);
+    let result = executor
+        .pre_check(&call(
+            "edit",
+            &[
+                ("file_path", file.to_str().unwrap()),
+                ("old_string", "old"),
+                ("new_string", "new"),
+            ],
+        ))
+        .await;
+    assert!(result.is_none());
+    let _ = std::fs::remove_file(&file);
+}

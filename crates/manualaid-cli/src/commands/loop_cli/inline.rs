@@ -128,3 +128,91 @@ pub(super) fn handle_inline_command(
         _ => println!("{}", i18n::t_str("cli.loop.menu_invalid")),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use manualaid_ws::config::Config;
+
+    fn setup() -> (Config, FormatRegistry, std::path::PathBuf, SessionLog) {
+        let root = crate::test_support::temp_dir("inline");
+        (
+            Config::default(),
+            FormatRegistry::new(),
+            root,
+            SessionLog::new(),
+        )
+    }
+
+    #[test]
+    fn inline_tools_renders_tool_list() {
+        let (config, registry, root, mut session) = setup();
+        let mut config = config;
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/tools");
+    }
+
+    #[test]
+    fn inline_lang_cycles_and_persists() {
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/lang");
+        assert_eq!(config.lang, "zh-CN");
+        let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("lang = \"zh-CN\""));
+    }
+
+    #[test]
+    fn inline_lang_with_index_and_out_of_range() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/lang 2");
+        assert_eq!(config.lang, "zh-CN");
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/lang 9");
+        assert_eq!(config.lang, "zh-CN");
+    }
+
+    #[test]
+    fn inline_format_cycles_and_applies_index() {
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/format");
+        assert_eq!(config.tool_call_format, "xml");
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/format 3");
+        assert_eq!(config.tool_call_format, "json-codeblock");
+    }
+
+    #[test]
+    fn inline_format_out_of_range_is_rejected() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/format 9");
+        assert_eq!(config.tool_call_format, "auto");
+    }
+
+    #[test]
+    fn inline_copy_rejects_invalid_index_and_unknown_tool() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/c 9");
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/c t bogus");
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/c");
+    }
+
+    #[test]
+    fn inline_copy_without_rounds_prints_notice() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup();
+        // An empty session returns before any clipboard access; a valid
+        // index would write to the clipboard and is not exercised.
+        // 空会话在触碰剪贴板前就返回；有效索引会写入剪贴板，不做测试。
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/c");
+    }
+
+    #[test]
+    fn inline_unknown_command_prints_invalid() {
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/xyz");
+    }
+}

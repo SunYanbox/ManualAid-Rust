@@ -150,3 +150,116 @@ fn parse_error_display_omits_absent_fields() {
     assert!(error.to_string().contains("at offset 3"));
     assert!(error.to_string().contains("deep"));
 }
+
+#[test]
+fn parsers_report_their_format_names() {
+    let xml = manualaid_core::parser::xml::XmlParser;
+    let json = manualaid_core::parser::json_codeblock::JsonCodeblockParser;
+    assert_eq!(xml.format_name(), "xml");
+    assert_eq!(json.format_name(), "json-codeblock");
+}
+
+#[test]
+fn xml_keeps_cdata_content_verbatim() {
+    let parser = manualaid_core::parser::xml::XmlParser;
+    let calls = parser
+        .try_parse("<write><file_path>/f</file_path><content><![CDATA[a<b & c]]></content></write>")
+        .unwrap();
+    assert_eq!(
+        calls[0].params.get("content").and_then(|v| v.as_str()),
+        Some("a<b & c")
+    );
+}
+
+#[test]
+fn xml_decodes_entity_references_in_text() {
+    let parser = manualaid_core::parser::xml::XmlParser;
+    let calls = parser
+        .try_parse(
+            "<write><file_path>/f</file_path><content>&lt;tag&gt; &amp; &#65;</content></write>",
+        )
+        .unwrap();
+    assert_eq!(
+        calls[0].params.get("content").and_then(|v| v.as_str()),
+        Some("<tag> & A")
+    );
+}
+
+#[test]
+fn xml_error_reports_offset_and_format() {
+    let parser = manualaid_core::parser::xml::XmlParser;
+    // Mismatched closing tags are a genuine XML error; an unterminated tag
+    // at EOF is tolerated as an empty result instead.
+    // 不匹配的闭合标签是真正的 XML 错误；EOF 处未闭合的标签则被容忍为
+    // 空结果。
+    let error = parser
+        .try_parse("<read><file_path>/a</file_path></write>")
+        .unwrap_err();
+    assert_eq!(error.format, Some(ToolCallFormat::Xml));
+    assert!(error.to_string().contains("offset"));
+}
+
+#[test]
+fn json_codeblock_rejects_non_object_values() {
+    let parser = manualaid_core::parser::json_codeblock::JsonCodeblockParser;
+    for input in ["42", "\"a string\"", "true", "null"] {
+        let error = parser
+            .try_parse(&format!("```json\n{input}\n```"))
+            .unwrap_err();
+        assert!(
+            error.message.contains("Expected a JSON object or array"),
+            "{input}"
+        );
+    }
+}
+
+#[test]
+fn json_codeblock_handles_params_in_other_shapes() {
+    let parser = manualaid_core::parser::json_codeblock::JsonCodeblockParser;
+    let calls = parser
+        .try_parse("```json\n{\"tool_use\": \"read\", \"file_path\": \"/flat\"}\n```")
+        .unwrap();
+    assert_eq!(calls.len(), 1);
+    let calls = parser
+        .try_parse("```json\n{\"tool_use\": \"read\", \"params\": \"oops\"}\n```")
+        .unwrap();
+    assert_eq!(
+        calls[0].params.get("params").and_then(|v| v.as_str()),
+        Some("oops")
+    );
+}
+
+#[test]
+fn bare_fence_with_non_json_content_yields_no_calls() {
+    let parser = manualaid_core::parser::json_codeblock::JsonCodeblockParser;
+    let calls = parser.try_parse("```\nplain text, not json\n```").unwrap();
+    assert!(calls.is_empty());
+}
+
+#[test]
+fn json_codeblock_without_closing_fence_uses_rest_of_input() {
+    let parser = manualaid_core::parser::json_codeblock::JsonCodeblockParser;
+    let calls = parser
+        .try_parse("```json\n{\"tool_use\": \"read\", \"params\": {\"file_path\": \"/a\"}}")
+        .unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].tool_name, "read");
+}
+
+#[test]
+fn json_codeblock_array_with_non_object_item_errors() {
+    let parser = manualaid_core::parser::json_codeblock::JsonCodeblockParser;
+    let error = parser.try_parse("```json\n[42]\n```").unwrap_err();
+    assert!(error.message.contains("must be a JSON object"));
+    assert_eq!(error.format, Some(ToolCallFormat::JsonCodeblock));
+}
+
+#[test]
+fn xml_tolerates_comments_between_tool_calls() {
+    let parser = manualaid_core::parser::xml::XmlParser;
+    let calls = parser
+        .try_parse("<read><file_path>/a</file_path></read><!-- keep going -->")
+        .unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].tool_name, "read");
+}

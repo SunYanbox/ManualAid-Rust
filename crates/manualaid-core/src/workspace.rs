@@ -200,6 +200,15 @@ mod tests {
     }
 
     #[test]
+    fn lexical_normalize_skips_dot_components_and_keeps_plain_paths() {
+        assert_eq!(lexical_normalize(Path::new("a/./b")), PathBuf::from("a/b"));
+        assert_eq!(
+            strip_verbatim(PathBuf::from("plain/path")),
+            PathBuf::from("plain/path")
+        );
+    }
+
+    #[test]
     fn normalize_caps_parent_above_root() {
         #[cfg(windows)]
         let root = Path::new("C:\\");

@@ -391,4 +391,18 @@ mod tests {
     fn xml_escape_handles_all_specials() {
         assert_eq!(xml_escape("a<b>&\"c\""), "a&lt;b&gt;&amp;&quot;c&quot;");
     }
+
+    #[test]
+    fn skills_list_text_is_empty_when_nothing_is_enabled() {
+        let skills = vec![Skill {
+            unique_name: "greeter".into(),
+            name: "greeter".into(),
+            description: "says hi".into(),
+            body: "## Usage\nhi".into(),
+            path: std::path::PathBuf::from("/skills/greeter"),
+            is_global: true,
+            is_enabled: false,
+        }];
+        assert_eq!(skills_list_text(&skills), "");
+    }
 }

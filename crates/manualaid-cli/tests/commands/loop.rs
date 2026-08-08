@@ -89,6 +89,84 @@ async fn deny_with_text_becomes_the_tool_result() {
 }
 
 #[tokio::test]
+async fn mixed_approve_and_deny_in_one_round() {
+    let ws = std::env::temp_dir().join(format!("manualaid-loop-mixed-{}", std::process::id()));
+    std::fs::create_dir_all(&ws).unwrap();
+    let registry = FormatRegistry::new();
+    let calls = format!(
+        "<write><file_path>{}/a.txt</file_path><content>A</content></write>\
+         <write><file_path>{}/b.txt</file_path><content>B</content></write>",
+        ws.display(),
+        ws.display()
+    );
+    let executor = Executor::new(
+        Auditor::new(ws.clone()).with_mode(SessionMode::Manual),
+        Arc::new(None),
+    );
+    let mut decisions = 0;
+    let (_, results) = execute_round_with_approval(&executor, &registry, &calls, |_| {
+        decisions += 1;
+        if decisions == 1 {
+            Approval::Approve
+        } else {
+            Approval::Deny
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(decisions, 2);
+    assert!(results[0].success);
+    assert!(
+        std::fs::read_to_string(ws.join("a.txt"))
+            .unwrap()
+            .contains("A")
+    );
+    assert!(!results[1].success);
+    assert!(!ws.join("b.txt").exists());
+}
+
+#[tokio::test]
+async fn pre_failed_call_skips_approval_while_others_are_asked() {
+    let ws = std::env::temp_dir().join(format!("manualaid-loop-prefail-{}", std::process::id()));
+    std::fs::create_dir_all(&ws).unwrap();
+    let registry = FormatRegistry::new();
+    let calls = format!(
+        "<edit><file_path>{}/missing.txt</file_path><old_string>a</old_string><new_string>b</new_string></edit>\
+         <write><file_path>{}/kept.txt</file_path><content>B</content></write>",
+        ws.display(),
+        ws.display()
+    );
+    let executor = Executor::new(
+        Auditor::new(ws.clone()).with_mode(SessionMode::Manual),
+        Arc::new(None),
+    );
+    let mut decisions = 0;
+    let (_, results) = execute_round_with_approval(&executor, &registry, &calls, |_| {
+        decisions += 1;
+        Approval::Approve
+    })
+    .await
+    .unwrap();
+    assert_eq!(decisions, 1);
+    assert!(!results[0].success);
+    assert!(results[1].success);
+    assert!(ws.join("kept.txt").exists());
+}
+
+#[tokio::test]
+async fn malformed_call_is_a_parse_error() {
+    let registry = FormatRegistry::new();
+    let result = execute_round_with_approval(
+        &executor(&std::env::temp_dir()),
+        &registry,
+        "<write><file_path>Z:/a.txt</file_path>",
+        |_| Approval::Approve,
+    )
+    .await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
 async fn pre_failed_calls_never_ask_for_approval() {
     let registry = FormatRegistry::new();
     let mut decisions = 0;

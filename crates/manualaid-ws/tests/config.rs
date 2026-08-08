@@ -20,8 +20,9 @@ fn temp_root(tag: &str) -> std::path::PathBuf {
 fn load_returns_defaults_when_files_are_missing() {
     let root = temp_root("missing");
     let home = temp_root("missing-home");
-    let config = load(&root, &home).unwrap();
+    let (config, issues) = load(&root, &home).unwrap();
     assert_eq!(config, Config::default());
+    assert!(issues.is_empty());
 }
 
 #[test]
@@ -40,10 +41,11 @@ fn project_config_overrides_global() {
         "[global]\nlang = \"zh-CN\"\n\n[tools]\nshell = false\n",
     )
     .unwrap();
-    let config = load(&root, &home).unwrap();
+    let (config, issues) = load(&root, &home).unwrap();
     assert_eq!(config.lang, "zh-CN");
     assert_eq!(config.tool_call_format, "xml");
     assert!(!config.shell);
+    assert!(issues.is_empty());
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -60,8 +62,9 @@ fn save_project_round_trips_through_load() {
         ..Config::default()
     };
     save_project(&root, &config).unwrap();
-    let loaded = load(&root, &home).unwrap();
+    let (loaded, issues) = load(&root, &home).unwrap();
     assert_eq!(loaded, config);
+    assert!(issues.is_empty());
     let _ = std::fs::remove_dir_all(&root);
 }
 

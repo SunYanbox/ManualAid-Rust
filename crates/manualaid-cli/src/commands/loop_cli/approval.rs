@@ -164,3 +164,71 @@ pub(super) fn ask_approval(item: &AuditQueueItem) -> Approval {
         _ => Approval::Deny,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::loop_cli::utils::push_test_input;
+    use manualaid_core::parser::FormatRegistry;
+
+    fn queue_item() -> AuditQueueItem {
+        AuditQueueItem {
+            tool_name: "read".to_string(),
+            param_name: "file_path".to_string(),
+            decision: AuditDecision::NeedsApproval("outside".to_string()),
+        }
+    }
+
+    #[test]
+    fn ask_approval_maps_answers() {
+        let item = queue_item();
+        push_test_input(&["y"]);
+        assert_eq!(ask_approval(&item), Approval::Approve);
+        push_test_input(&["n"]);
+        assert_eq!(ask_approval(&item), Approval::Deny);
+        push_test_input(&["t", "use another tool"]);
+        assert_eq!(
+            ask_approval(&item),
+            Approval::DenyWithText("use another tool".to_string())
+        );
+        push_test_input(&["t"]);
+        assert_eq!(ask_approval(&item), Approval::DenyWithText(String::new()));
+        push_test_input(&[""]);
+        assert_eq!(ask_approval(&item), Approval::Deny);
+    }
+
+    fn parsed_call() -> ParsedToolCall {
+        FormatRegistry::new()
+            .parse("<read><file_path>Z:/a.txt</file_path></read>")
+            .unwrap()
+            .remove(0)
+    }
+
+    #[test]
+    fn denied_result_prefers_typed_text() {
+        let result = denied_result(&parsed_call(), None, Some("use the other tool".into()));
+        assert!(!result.success);
+        assert_eq!(result.output, "use the other tool");
+    }
+
+    #[test]
+    fn denied_result_uses_decision_reason() {
+        let call = parsed_call();
+        let needs = denied_result(
+            &call,
+            Some(&AuditDecision::NeedsApproval("blocked".into())),
+            None,
+        );
+        assert!(needs.output.contains("blocked"));
+        let denied = denied_result(&call, Some(&AuditDecision::Denied("rejected".into())), None);
+        assert!(denied.output.contains("rejected"));
+    }
+
+    #[test]
+    fn denied_result_falls_back_to_default_message() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let result = denied_result(&parsed_call(), None, None);
+        assert!(result.output.contains("denied"));
+    }
+}

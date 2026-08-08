@@ -32,10 +32,14 @@ pub(crate) fn get_string(
     params: &indexmap::IndexMap<String, serde_json::Value>,
     key: &str,
 ) -> Option<String> {
-    params.get(key).and_then(|value| match value {
-        serde_json::Value::String(s) => Some(s.clone()),
-        _ => value.as_str().map(|s| s.to_string()),
-    })
+    // `Value::as_str` already returns `Some` only for `Value::String`, so the
+    // match would only have duplicated the first arm for other value kinds.
+    // `Value::as_str` 仅对 `Value::String` 返回 `Some`，其余类型分支与第一
+    // 个 arm 等价，无需 match。
+    params
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(String::from)
 }
 
 /// Extract an `i64` value from a parameter map.

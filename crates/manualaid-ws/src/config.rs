@@ -9,6 +9,24 @@ use std::path::{Path, PathBuf};
 use manualaid_core::error::{CoreError, CoreResult};
 use serde::{Deserialize, Serialize};
 
+/// A validation issue found while loading a config file.
+/// 加载配置文件时发现的验证问题。
+#[derive(Debug, Clone)]
+pub struct ConfigIssue {
+    /// The config key that has an invalid value.
+    /// 具有无效值的配置键。
+    pub key: String,
+    /// The invalid value.
+    /// 无效值。
+    pub value: String,
+    /// List of valid values for this key.
+    /// 该键的有效值列表。
+    pub available_values: Vec<String>,
+    /// Path to the config file containing the invalid value.
+    /// 包含无效值的配置文件路径。
+    pub path: PathBuf,
+}
+
 /// Raw on-disk shape of one config file. All fields are optional so a file
 /// can carry only the sections the user configured.
 /// 单个配置文件在磁盘上的原始形态。所有字段均为可选，文件可以只携带
@@ -156,41 +174,75 @@ impl Config {
 
 /// Load and merge the global and project config files. Project values
 /// override global values; missing files contribute their defaults.
+/// Returns the merged config and a list of validation issues for invalid
+/// values found in the config files.
 /// 加载并合并全局与项目配置文件。项目值覆盖全局值；缺失的文件按默认
-/// 值处理。
-pub fn load(project_root: &Path, home: &Path) -> CoreResult<Config> {
-    let global = read_config_file(&home.join(".ManualAid").join("config.toml"))?;
-    let project = read_config_file(&project_root.join(".ManualAid").join("config.toml"))?;
-    Ok(merge(global, project))
+/// 值处理。返回合并后的配置以及配置文件中发现的无效值验证问题列表。
+pub fn load(project_root: &Path, home: &Path) -> CoreResult<(Config, Vec<ConfigIssue>)> {
+    let global_path = home.join(".ManualAid").join("config.toml");
+    let project_path = project_root.join(".ManualAid").join("config.toml");
+    let global = read_config_file(&global_path)?;
+    let project = read_config_file(&project_path)?;
+    Ok(merge_with_issues(
+        global,
+        project,
+        &global_path,
+        &project_path,
+    ))
 }
 
-/// Merge a raw global file with a raw project file into runtime config.
-/// 将原始全局文件与原始项目文件合并为运行时配置。
-fn merge(global: ConfigFile, project: ConfigFile) -> Config {
+/// Merge a raw global file with a raw project file into runtime config,
+/// collecting validation issues for invalid values.
+/// 将原始全局文件与原始项目文件合并为运行时配置，并收集无效值的验证问题。
+fn merge_with_issues(
+    global: ConfigFile,
+    project: ConfigFile,
+    global_path: &Path,
+    project_path: &Path,
+) -> (Config, Vec<ConfigIssue>) {
     let defaults = Config::default();
-    Config {
-        lang: project
-            .global
-            .lang
-            .filter(|lang| Config::is_valid_lang(lang))
-            .or_else(|| {
-                global
-                    .global
-                    .lang
-                    .filter(|lang| Config::is_valid_lang(lang))
-            })
-            .unwrap_or(defaults.lang),
-        tool_call_format: project
-            .global
-            .tool_call_format
-            .filter(|format| Config::is_valid_format(format))
-            .or_else(|| {
-                global
-                    .global
-                    .tool_call_format
-                    .filter(|format| Config::is_valid_format(format))
-            })
-            .unwrap_or(defaults.tool_call_format),
+    let mut issues = Vec::new();
+    let paths = ConfigPaths {
+        global: global_path,
+        project: project_path,
+    };
+
+    // Validate and merge lang
+    let (lang, lang_issue) = resolve_string_with_validation(
+        project.global.lang.as_deref(),
+        global.global.lang.as_deref(),
+        "lang",
+        &defaults.lang,
+        Config::is_valid_lang,
+        || vec!["en".to_string(), "zh-CN".to_string()],
+        &paths,
+    );
+    if let Some(issue) = lang_issue {
+        issues.push(issue);
+    }
+
+    // Validate and merge tool_call_format
+    let (tool_call_format, format_issue) = resolve_string_with_validation(
+        project.global.tool_call_format.as_deref(),
+        global.global.tool_call_format.as_deref(),
+        "tool_call_format",
+        &defaults.tool_call_format,
+        Config::is_valid_format,
+        || {
+            manualaid_core::parser::RegistryMode::all_labels()
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
+        },
+        &paths,
+    );
+    if let Some(issue) = format_issue {
+        issues.push(issue);
+    }
+
+    let config = Config {
+        lang,
+        tool_call_format,
         shell: project
             .tools
             .shell
@@ -226,7 +278,76 @@ fn merge(global: ConfigFile, project: ConfigFile) -> Config {
             .max_result_chars
             .or(global.global.max_result_chars)
             .unwrap_or(defaults.max_result_chars),
+    };
+    (config, issues)
+}
+
+/// Paths of the global and project config files, used to locate the source
+/// of a validation issue. Grouping them keeps `resolve_string_with_validation`
+/// within the clippy argument-count limit.
+/// 全局与项目配置文件路径，用于定位验证问题的来源。将它们合并为一个参数
+/// 以将 `resolve_string_with_validation` 的参数数量控制在 clippy 限制内。
+struct ConfigPaths<'a> {
+    global: &'a Path,
+    project: &'a Path,
+}
+
+/// Resolve a string config value from project and global sources,
+/// validating it against a predicate. If invalid, record a ConfigIssue
+/// with available values and fall back to the default.
+/// 从项目和全局来源解析字符串配置值，并用断言进行验证。如果无效，
+/// 记录包含可用值的 ConfigIssue 并回退到默认值。
+fn resolve_string_with_validation<F: Fn(&str) -> bool, V: Fn() -> Vec<String>>(
+    project_val: Option<&str>,
+    global_val: Option<&str>,
+    key: &str,
+    default: &str,
+    is_valid: F,
+    available: V,
+    paths: &ConfigPaths<'_>,
+) -> (String, Option<ConfigIssue>) {
+    // Prefer project value if present and valid
+    if let Some(value) = project_val {
+        if is_valid(value) {
+            return (value.to_string(), None);
+        } else {
+            let issue = ConfigIssue {
+                key: key.to_string(),
+                value: value.to_string(),
+                available_values: available(),
+                path: paths.project.to_path_buf(),
+            };
+            // Fall through to check global
+            if let Some(global_value) = global_val {
+                if is_valid(global_value) {
+                    return (global_value.to_string(), Some(issue));
+                }
+                // Global also invalid - collect both?
+                // For simplicity, we only record the first invalid (project)
+                // and fall back to default
+                return (default.to_string(), Some(issue));
+            }
+            return (default.to_string(), Some(issue));
+        }
     }
+
+    // No project value, check global
+    if let Some(value) = global_val {
+        if is_valid(value) {
+            return (value.to_string(), None);
+        } else {
+            let issue = ConfigIssue {
+                key: key.to_string(),
+                value: value.to_string(),
+                available_values: available(),
+                path: paths.global.to_path_buf(),
+            };
+            return (default.to_string(), Some(issue));
+        }
+    }
+
+    // Neither present
+    (default.to_string(), None)
 }
 
 /// Read one config file; a missing file yields an empty [`ConfigFile`].
@@ -403,12 +524,18 @@ mod tests {
             },
             permissions: PermissionsSection::default(),
         };
-        let config = merge(global, project);
+        let (config, issues) = merge_with_issues(
+            global,
+            project,
+            Path::new("global.toml"),
+            Path::new("project.toml"),
+        );
         assert_eq!(config.lang, "zh-CN");
         assert_eq!(config.tool_call_format, "xml");
         assert_eq!(config.max_result_chars, 100_000);
         assert!(!config.shell);
         assert_eq!(config.allow_commands, vec!["git status"]);
+        assert!(issues.is_empty());
     }
 
     #[test]
@@ -421,10 +548,20 @@ mod tests {
             },
             ..Default::default()
         };
-        let config = merge(global, ConfigFile::default());
+        let (config, issues) = merge_with_issues(
+            global,
+            ConfigFile::default(),
+            Path::new("global.toml"),
+            Path::new("project.toml"),
+        );
         assert_eq!(config.lang, "en");
         assert_eq!(config.tool_call_format, "auto");
         assert_eq!(config.max_result_chars, 50_000);
+        assert_eq!(issues.len(), 2);
+        assert_eq!(issues[0].key, "lang");
+        assert_eq!(issues[0].value, "fr");
+        assert_eq!(issues[1].key, "tool_call_format");
+        assert_eq!(issues[1].value, "bogus");
     }
 
     #[test]
@@ -485,5 +622,188 @@ mod tests {
         assert!(content.contains("[global]"));
         assert!(content.contains("max_result_chars = 50000"));
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn project_invalid_lang_falls_back_to_valid_global() {
+        let global = ConfigFile {
+            global: GlobalSection {
+                lang: Some("en".into()),
+                max_result_chars: Some(200_000),
+                ..Default::default()
+            },
+            tools: ToolsSection {
+                shell: Some(true),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let project = ConfigFile {
+            global: GlobalSection {
+                lang: Some("fr".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let (config, issues) = merge_with_issues(
+            global,
+            project,
+            Path::new("global.toml"),
+            Path::new("project.toml"),
+        );
+        assert_eq!(config.lang, "en");
+        assert!(config.shell);
+        assert_eq!(config.max_result_chars, 200_000);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].key, "lang");
+        assert_eq!(issues[0].value, "fr");
+        assert_eq!(issues[0].path, Path::new("project.toml"));
+        assert_eq!(
+            issues[0].available_values,
+            vec!["en".to_string(), "zh-CN".to_string()]
+        );
+    }
+
+    #[test]
+    fn project_invalid_and_global_invalid_lang_use_default() {
+        let global = ConfigFile {
+            global: GlobalSection {
+                lang: Some("de".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let project = ConfigFile {
+            global: GlobalSection {
+                lang: Some("fr".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let (config, issues) = merge_with_issues(
+            global,
+            project,
+            Path::new("global.toml"),
+            Path::new("project.toml"),
+        );
+        assert_eq!(config.lang, "en");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].key, "lang");
+        assert_eq!(issues[0].value, "fr");
+        assert_eq!(issues[0].path, Path::new("project.toml"));
+    }
+
+    #[test]
+    fn project_invalid_lang_without_global_uses_default() {
+        let project = ConfigFile {
+            global: GlobalSection {
+                lang: Some("fr".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let (config, issues) = merge_with_issues(
+            ConfigFile::default(),
+            project,
+            Path::new("global.toml"),
+            Path::new("project.toml"),
+        );
+        assert_eq!(config.lang, "en");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].path, Path::new("project.toml"));
+    }
+
+    #[test]
+    fn invalid_project_format_falls_back_to_valid_global() {
+        let global = ConfigFile {
+            global: GlobalSection {
+                tool_call_format: Some("xml".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let project = ConfigFile {
+            global: GlobalSection {
+                tool_call_format: Some("bogus".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let (config, issues) = merge_with_issues(
+            global,
+            project,
+            Path::new("global.toml"),
+            Path::new("project.toml"),
+        );
+        assert_eq!(config.tool_call_format, "xml");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].key, "tool_call_format");
+        assert_eq!(issues[0].value, "bogus");
+        assert_eq!(issues[0].path, Path::new("project.toml"));
+    }
+
+    #[test]
+    fn read_config_file_io_error_is_reported() {
+        // A directory path fails with a non-NotFound error.
+        let dir =
+            std::env::temp_dir().join(format!("manualaid-ws-test-{}-read-io", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let err = read_config_file(&dir).unwrap_err();
+        assert!(matches!(err, CoreError::Io(_)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn project_doc_rejects_invalid_toml() {
+        let root = std::env::temp_dir().join(format!(
+            "manualaid-ws-test-{}-doc-invalid",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        std::fs::write(
+            root.join(".ManualAid").join("config.toml"),
+            "not [valid toml",
+        )
+        .unwrap();
+        let err = project_doc(&root).unwrap_err();
+        assert!(matches!(err, CoreError::Config(_)));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn project_doc_io_error_is_reported() {
+        // A directory at the config path fails with a non-NotFound error.
+        let root =
+            std::env::temp_dir().join(format!("manualaid-ws-test-{}-doc-io", std::process::id()));
+        std::fs::create_dir_all(root.join(".ManualAid").join("config.toml")).unwrap();
+        let err = project_doc(&root).unwrap_err();
+        assert!(matches!(err, CoreError::Io(_)));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn project_doc_create_dir_failure_is_reported() {
+        // A regular file at the `.ManualAid` path makes create_dir_all fail.
+        let root = std::env::temp_dir().join(format!(
+            "manualaid-ws-test-{}-doc-mkdir",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join(".ManualAid"), "occupied").unwrap();
+        let err = project_doc(&root).unwrap_err();
+        assert!(matches!(err, CoreError::Io(_)));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    #[should_panic(expected = "config table must be a table")]
+    fn save_project_panics_when_global_is_not_a_table() {
+        let root = std::env::temp_dir().join(format!(
+            "manualaid-ws-test-{}-not-table",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        std::fs::write(root.join(".ManualAid").join("config.toml"), "global = 5\n").unwrap();
+        let _ = save_project(&root, &Config::default());
     }
 }

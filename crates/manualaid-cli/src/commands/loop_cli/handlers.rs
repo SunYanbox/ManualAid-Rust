@@ -1,7 +1,7 @@
 //! Menu action handlers for the interactive loop.
 //! 交互式 loop 的菜单动作处理函数。
 
-use std::io::{BufRead, Write};
+use std::io::Write;
 use std::path::Path;
 
 use manualaid_core::executor::Executor;
@@ -82,15 +82,12 @@ pub(super) async fn input_and_submit(
 ) {
     println!("{}", i18n::t_str("cli.message.input_prompt"));
     let mut text = String::new();
-    for line in std::io::stdin().lock().lines() {
-        match line {
-            Ok(line) if line.trim() == INPUT_END_MARKER => break,
-            Ok(line) => {
-                text.push_str(&line);
-                text.push('\n');
-            }
-            Err(_) => break,
+    while let Some(line) = read_line() {
+        if line.trim() == INPUT_END_MARKER {
+            break;
         }
+        text.push_str(&line);
+        text.push('\n');
     }
     if text.trim().is_empty() {
         return;
@@ -220,4 +217,233 @@ pub(super) fn print_session_summary(config: &Config, session: &SessionLog) {
     ]
     .join("\n");
     let _ = crate::pager::print_paged(&text);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    use super::super::utils::push_test_input;
+    use manualaid_core::audit::{Auditor, SessionMode};
+
+    fn executor(root: &Path) -> Executor {
+        Executor::new(
+            Auditor::new(root.to_path_buf()).with_mode(SessionMode::AcceptEdit),
+            Arc::new(None),
+        )
+    }
+
+    fn read_call(root: &Path) -> String {
+        let file = root.join("target.txt");
+        std::fs::write(&file, "hello").unwrap();
+        format!("<read><file_path>{}</file_path></read>", file.display())
+    }
+
+    async fn session_with_round(root: &Path) -> SessionLog {
+        let mut session = SessionLog::new();
+        let registry = FormatRegistry::new();
+        let calls = registry.parse(&read_call(root)).unwrap();
+        let exec = executor(root);
+        let mut results = Vec::new();
+        for call in &calls {
+            results.push(exec.execute(call.clone()).await);
+        }
+        session.push(calls, results);
+        session
+    }
+
+    #[test]
+    fn ask_copy_accepts_yes_ignores_rest() {
+        push_test_input(&["y"]);
+        assert!(ask_copy());
+        push_test_input(&["Y"]);
+        assert!(ask_copy());
+        push_test_input(&["n"]);
+        assert!(!ask_copy());
+        push_test_input(&[""]);
+        assert!(!ask_copy());
+    }
+
+    #[tokio::test]
+    async fn print_session_summary_lists_stats() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("summary");
+        let session = session_with_round(&root).await;
+        print_session_summary(&Config::default(), &session);
+    }
+
+    #[test]
+    fn copy_round_result_without_rounds_prints_notice() {
+        let session = SessionLog::new();
+        copy_round_result(&session, 100);
+    }
+
+    #[tokio::test]
+    async fn copy_round_result_rejects_out_of_range_index() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("copy-index");
+        let session = session_with_round(&root).await;
+        push_test_input(&["9"]);
+        copy_round_result(&session, 100);
+    }
+
+    #[tokio::test]
+    async fn input_and_submit_eof_without_text_is_noop() {
+        let root = crate::test_support::temp_dir("input-eof");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&[]);
+        input_and_submit(
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn input_and_submit_end_marker_without_text_is_noop() {
+        let root = crate::test_support::temp_dir("input-marker");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["/end"]);
+        input_and_submit(
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn input_and_submit_executes_typed_round() {
+        let root = crate::test_support::temp_dir("input-round");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions {
+            auto_copy: false,
+            ..LoopOptions::default()
+        };
+        push_test_input(&[&read_call(&root), "/end", "n"]);
+        input_and_submit(
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 1);
+        assert_eq!(session.total_calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn submit_text_parse_error_prints_message_and_keeps_session_empty() {
+        let root = crate::test_support::temp_dir("submit-parse");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions::default();
+        submit_text(
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            "not a tool call",
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn submit_text_with_auto_copy_asks_and_skips_copy_on_no() {
+        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let root = crate::test_support::temp_dir("submit-autocopy");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["n"]);
+        submit_text(
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            &read_call(&root),
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 1);
+    }
+
+    // The following tests touch the system clipboard; per the note in
+    // `manualaid_core::clipboard`, the sample content is left there in a
+    // recognizable form and restoring it is not attempted. The clipboard
+    // lock keeps concurrent clipboard tests from clobbering each other.
+    // 以下测试会接触系统剪贴板；按 `manualaid_core::clipboard` 中的说明，
+    // 样例内容以可识别形式留在剪贴板上，不尝试还原。剪贴板锁保证并发的
+    // 剪贴板测试不会相互覆盖内容。
+
+    #[tokio::test]
+    async fn paste_and_submit_pastes_clipboard_text_as_a_round() {
+        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let root = crate::test_support::temp_dir("paste-round");
+        manualaid_core::clipboard::write_clipboard(&read_call(&root))
+            .expect("set clipboard for pasting");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["n"]);
+        paste_and_submit(
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn paste_and_submit_with_empty_clipboard_is_noop() {
+        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let root = crate::test_support::temp_dir("paste-empty");
+        manualaid_core::clipboard::write_clipboard("").expect("clear clipboard");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions::default();
+        paste_and_submit(
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 0);
+    }
+
+    #[test]
+    fn copy_system_prompt_writes_prompt_to_clipboard() {
+        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let root = crate::test_support::temp_dir("copy-prompt");
+        copy_system_prompt(&Config::default(), &root, &FormatRegistry::new());
+        let clipboard = manualaid_core::clipboard::read_clipboard().expect("read clipboard");
+        assert!(clipboard.contains("<read>"));
+    }
+
+    #[tokio::test]
+    async fn copy_round_result_copies_selected_round() {
+        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let root = crate::test_support::temp_dir("copy-valid");
+        let session = session_with_round(&root).await;
+        push_test_input(&["1"]);
+        copy_round_result(&session, 100);
+        let clipboard = manualaid_core::clipboard::read_clipboard().expect("read clipboard");
+        assert!(clipboard.contains("hello"));
+    }
 }

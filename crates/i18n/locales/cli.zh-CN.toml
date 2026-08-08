@@ -112,9 +112,12 @@ summary_enabled_tools = "已启用工具：%{tools}"
 summary_rounds = "批次：%{count}"
 summary_title = "会话摘要"
 summary_tool_calls = "工具调用：%{count}"
-max_result_chars_changed = "已通过配置文件 %{path} 更改默认配置：max_result_chars = %{value}（默认：%{default}）"
+global_config_changed = "已通过配置文件 %{path} 更改默认配置：%{key} = %{value}（默认：%{default}）"
 
 [cli.skill_config]
 item = "- [%{state}] %{index}. %{name}（%{unique_name}）"
 prompt = "输入技能索引以切换（a=全部启用，n=全部禁用，回车=返回）："
 title = "SKILL 配置"
+
+[cli.warning]
+invalid_config_value = "警告：配置文件 %{path} 中 `%{key}` 的值 '%{value}' 无效。可用值：%{available}。将使用默认值。"

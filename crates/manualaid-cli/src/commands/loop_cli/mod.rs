@@ -13,7 +13,7 @@ use std::sync::Arc;
 use manualaid_core::audit::Auditor;
 use manualaid_core::executor::Executor;
 use manualaid_core::parser::FormatRegistry;
-use manualaid_core::skill::reload_skills;
+use manualaid_core::skill::reload_skills_with_home;
 use manualaid_core::user_dir::home_dir;
 use manualaid_ws::session::SessionLog;
 
@@ -36,7 +36,7 @@ use handlers::{
 };
 use inline::handle_inline_command;
 use utils::{
-    apply_cli_lang, apply_format_mode, clear_screen, read_line, sync_max_result_chars, t_fmt,
+    apply_cli_lang, apply_format_mode, clear_screen, read_line, sync_global_config, t_fmt,
 };
 
 /// How the user answered one approval-queue item.
@@ -96,19 +96,46 @@ async fn loop_main(home: Option<&Path>, lang: Option<String>) -> Result<(), Stri
         Some(home) => home.to_path_buf(),
         None => home_dir().map_err(|e| e.to_string())?,
     };
+    loop_main_at(&current_dir, &home, lang).await
+}
 
-    let mut config = manualaid_ws::config::load(&current_dir, &home)
+/// The interactive loop body against explicit project and home directories
+/// so tests can run it on a temporary workspace.
+/// 面向显式项目目录与主目录的交互式 loop 主体，测试可在临时工作区运行。
+async fn loop_main_at(current_dir: &Path, home: &Path, lang: Option<String>) -> Result<(), String> {
+    let (mut config, issues) = manualaid_ws::config::load(current_dir, home)
         .map_err(|e| t_fmt("cli.error.init", &[("error", &e.to_string())]))?;
+    // Snapshot for the startup hint: the CLI language override below must
+    // not count as a config-file change.
+    // 快照用于启动提示：下方的 CLI 语言覆盖不应被算作配置文件更改。
+    let loaded_config = config.clone();
     apply_cli_lang(lang, &mut config);
     i18n::set_locale(&config.lang);
 
-    reload_skills(&current_dir).map_err(|e| e.to_string())?;
+    // Print validation warnings for invalid config values
+    // 打印配置验证警告
+    for issue in &issues {
+        println!(
+            "{}",
+            t_fmt(
+                "cli.warning.invalid_config_value",
+                &[
+                    ("key", &issue.key),
+                    ("value", &issue.value),
+                    ("available", &issue.available_values.join(", ")),
+                    ("path", &issue.path.display().to_string()),
+                ]
+            )
+        );
+    }
+
+    reload_skills_with_home(current_dir, home).map_err(|e| e.to_string())?;
 
     let registry = FormatRegistry::new();
     apply_format_mode(&registry, &config)?;
 
-    let auditor =
-        Auditor::new(current_dir.clone()).with_allowed_commands(config.allow_commands.clone());
+    let auditor = Auditor::new(current_dir.to_path_buf())
+        .with_allowed_commands(config.allow_commands.clone());
     let executor = Executor::new(auditor, Arc::new(None));
     let mut session = SessionLog::new();
     let mut options = LoopOptions::default();
@@ -128,10 +155,12 @@ async fn loop_main(home: Option<&Path>, lang: Option<String>) -> Result<(), Stri
     );
 
     // Keep the effective character limit visible and editable in the project
-    // config, and tell the user when a config file changed the default.
-    // 把生效的字符限额写入项目配置，使其始终可见可改；配置文件中改过
-    // 默认值时，在启动时告知用户。
-    if let Some(message) = sync_max_result_chars(&current_dir, config.max_result_chars) {
+    // config, and tell the user when a config file changed any `[global]`
+    // default. The write failure never aborts the loop.
+    // 把生效的字符限额写入项目配置，使其始终可见可改；配置文件改动过
+    // 任一 `[global]` 默认值时，在启动时逐条告知用户。写入失败不会中止
+    // loop。
+    for message in sync_global_config(current_dir, &loaded_config) {
         println!("{message}");
     }
 
@@ -150,11 +179,11 @@ async fn loop_main(home: Option<&Path>, lang: Option<String>) -> Result<(), Stri
         };
         let trimmed = line.trim();
         if trimmed.starts_with('/') {
-            handle_inline_command(&mut config, &registry, &current_dir, &mut session, trimmed);
+            handle_inline_command(&mut config, &registry, current_dir, &mut session, trimmed);
             continue;
         }
         match trimmed {
-            "1" => copy_system_prompt(&config, &current_dir, &registry),
+            "1" => copy_system_prompt(&config, current_dir, &registry),
             "2" => {
                 paste_and_submit(
                     &executor,
@@ -176,7 +205,7 @@ async fn loop_main(home: Option<&Path>, lang: Option<String>) -> Result<(), Stri
                 .await
             }
             "4" => copy_round_result(&session, config.max_result_chars),
-            "5" => config_menu(&mut config, &registry, &current_dir, &mut options),
+            "5" => config_menu(&mut config, &registry, current_dir, &mut options),
             "6" => print_session_summary(&config, &session),
             "0" => should_exit = true,
             _ => println!("{}", i18n::t_str("cli.loop.menu_invalid")),
@@ -194,6 +223,7 @@ async fn loop_main(home: Option<&Path>, lang: Option<String>) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::preview::colorize_diff;
+    use super::utils::push_test_input;
     use super::*;
 
     use indexmap::IndexMap;
@@ -203,34 +233,60 @@ mod tests {
     use serde_json::Value;
 
     #[test]
-    fn sync_max_result_chars_writes_default_without_hint() {
+    fn sync_global_config_writes_default_without_hints() {
         i18n::set_locale("en");
         let root = std::env::temp_dir().join(format!("manualaid-cli-sync-{}", std::process::id()));
-        let message = sync_max_result_chars(&root, Config::default().max_result_chars);
-        assert!(message.is_none());
+        let messages = sync_global_config(&root, &Config::default());
+        assert!(messages.is_empty());
         let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
         assert!(content.contains("max_result_chars = 50000"));
         let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn sync_max_result_chars_hints_when_changed_from_default() {
+    fn sync_global_config_hints_each_changed_global_value() {
         i18n::set_locale("en");
         let root =
             std::env::temp_dir().join(format!("manualaid-cli-sync-{}-v", std::process::id()));
-        let message = sync_max_result_chars(&root, 123_456).unwrap();
-        assert!(message.contains("max_result_chars = 123456"));
-        assert!(
-            message.contains(
-                &root
-                    .join(".ManualAid")
-                    .join("config.toml")
-                    .display()
-                    .to_string()
-            )
-        );
+        let config = Config {
+            lang: "zh-CN".to_string(),
+            tool_call_format: "xml".to_string(),
+            max_result_chars: 123_456,
+            ..Config::default()
+        };
+        let messages = sync_global_config(&root, &config);
+        assert_eq!(messages.len(), 3);
+        let path = root
+            .join(".ManualAid")
+            .join("config.toml")
+            .display()
+            .to_string();
+        // Key and value strings are identical in both locales, so these
+        // assertions survive the process-wide locale races with other tests.
+        // 键名与值在两种语言下完全相同，断言不受其他测试切换 locale 的影响。
+        assert!(messages[0].contains(&path));
+        assert!(messages[0].contains("lang = \"zh-CN\""));
+        assert!(messages[1].contains("tool_call_format = \"xml\""));
+        assert!(messages[2].contains("max_result_chars = 123456"));
         let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
         assert!(content.contains("max_result_chars = 123456"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn sync_global_config_hints_only_changed_values() {
+        i18n::set_locale("en");
+        let root =
+            std::env::temp_dir().join(format!("manualaid-cli-sync-{}-p", std::process::id()));
+        let config = Config {
+            lang: "zh-CN".to_string(),
+            ..Config::default()
+        };
+        let messages = sync_global_config(&root, &config);
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].contains("lang = \"zh-CN\""));
+        assert!(!messages[0].contains("tool_call_format"));
+        assert!(!messages[0].contains("max_result_chars"));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -269,6 +325,28 @@ mod tests {
         assert!(summary.contains("hello"));
         assert!(summary.contains("[edit] failure"));
         assert!(summary.contains("boom"));
+    }
+
+    #[test]
+    fn format_round_summary_shows_approval_reasons() {
+        i18n::set_locale("en");
+        let mut result = ToolResult::success("shell", "done", true);
+        result.audit_decisions.push((
+            "command".to_string(),
+            AuditDecision::NeedsApproval("needs review".into()),
+        ));
+        let summary = format_round_summary(&[result]);
+        assert!(summary.contains("command (needs review)"));
+    }
+
+    #[test]
+    fn apply_format_mode_rejects_unknown_label() {
+        let registry = FormatRegistry::new();
+        let config = Config {
+            tool_call_format: "bogus".to_string(),
+            ..Config::default()
+        };
+        assert!(apply_format_mode(&registry, &config).is_err());
     }
 
     #[test]
@@ -336,5 +414,77 @@ mod tests {
         let styled = colorize_diff("@@ -1 +1 @@\n-a\n+b\n");
         assert!(styled.contains("\x1b["));
         crate::style::set_enabled(false);
+    }
+
+    #[tokio::test]
+    async fn loop_main_at_drives_menu_flow_with_scripted_input() {
+        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let current_dir = crate::test_support::temp_dir("loop-main");
+        let home = crate::test_support::temp_dir("loop-main-home");
+        // A valid non-default lang triggers the sync hint; an invalid format
+        // label produces a validation warning at startup.
+        // 合法但非默认的 lang 触发同步提示；非法的 format 标签在启动时产生
+        // 验证警告。
+        std::fs::create_dir_all(current_dir.join(".ManualAid")).unwrap();
+        std::fs::write(
+            current_dir.join(".ManualAid").join("config.toml"),
+            "[global]\nlang = \"zh-CN\"\ntool_call_format = \"bogus\"\n",
+        )
+        .unwrap();
+        let file = current_dir.join("target.txt");
+        std::fs::write(&file, "hello").unwrap();
+        // 4: copy with no rounds (no clipboard access), 5: config menu
+        // (9 toggles clear_screen, 0 exits), 3: typed round, 6: summary,
+        // x: invalid option; the queue then runs dry, ending the loop on
+        // stdin EOF.
+        // 4：无轮次复制（不触碰剪贴板），5：配置菜单（9 切换清屏，0 返回），
+        // 3：手动输入一轮，6：摘要，x：非法选项；随后队列耗尽，以 stdin EOF
+        // 结束循环。
+        push_test_input(&[
+            "/tools",
+            "/format 2",
+            "4",
+            "5",
+            "9",
+            "0",
+            "3",
+            format!("<read><file_path>{}</file_path></read>", file.display()).as_str(),
+            "/end",
+            "n",
+            "6",
+            "x",
+        ]);
+        loop_main_at(&current_dir, &home, None).await.unwrap();
+        // The /format inline command persists its change; the pre-written
+        // lang stays untouched.
+        let content =
+            std::fs::read_to_string(current_dir.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("lang = \"zh-CN\""));
+        assert!(content.contains("tool_call_format = \"xml\""));
+        manualaid_core::skill::reset_skills();
+    }
+
+    #[test]
+    fn run_loop_works_against_explicit_and_real_home() {
+        let _cwd_lock = crate::test_support::CWD_LOCK.lock().unwrap();
+        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let original = std::env::current_dir().unwrap();
+        let cwd = crate::test_support::temp_dir("run-loop-cwd");
+        std::env::set_current_dir(&cwd).unwrap();
+        let home = crate::test_support::temp_dir("run-loop-home");
+        push_test_input(&["0"]);
+        run_loop(Some(&home), None).unwrap();
+        // The home_dir() fallback reads the real user home, so no temp home
+        // is passed here; the loop only reads it.
+        // home_dir() 回退读取真实用户主目录，此处不传临时主目录；loop 只读它。
+        push_test_input(&["0"]);
+        run_loop(None, None).unwrap();
+        std::env::set_current_dir(&original).unwrap();
+        assert!(cwd.join(".ManualAid").join("config.toml").is_file());
+        manualaid_core::skill::reset_skills();
     }
 }

@@ -1,5 +1,5 @@
 //! Edit tool execution: exact string replacement with pre-verification.
-//! The pre-verify logic in [`plan_edit`] is shared with the executor's
+//! The pre-verify logic in `plan_edit` is shared with the executor's
 //! pre-check so calls guaranteed to fail never reach the approval queue.
 //! Edit 工具执行：精确字符串替换并预验证。`plan_edit` 中的预验证逻辑与
 //! 执行器的预检共用，保证必然失败的调用不会进入批准队列。

@@ -168,3 +168,153 @@ pub(super) fn skill_config_menu() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::utils::push_test_input;
+    use super::*;
+
+    fn write_skill(home: &Path, folder: &str, name: &str) {
+        let dir = home.join(".ManualAid").join("skills").join(folder);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: test skill\n---\n# {name}\n"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn render_config_menu_shows_all_states() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let menu = render_config_menu(&Config::default(), &LoopOptions::default());
+        assert!(menu.contains("English"));
+        assert!(menu.contains("auto"));
+        assert!(menu.contains(&i18n::t_str("cli.config.enabled")));
+        assert!(menu.contains(&i18n::t_str("cli.config.disabled")));
+        assert!(menu.contains(&i18n::t_str("cli.config.skill_list")));
+        assert!(menu.contains(&i18n::t_str("cli.config.back")));
+    }
+
+    #[test]
+    fn render_config_menu_shows_chinese_lang_and_toggled_options() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let config = Config {
+            lang: "zh-CN".to_string(),
+            tool_call_format: "xml".to_string(),
+            ..Config::default()
+        };
+        let options = LoopOptions {
+            auto_copy: false,
+            clear_screen: true,
+        };
+        let menu = render_config_menu(&config, &options);
+        assert!(menu.contains("中文"));
+        assert!(menu.contains("xml"));
+    }
+
+    #[test]
+    fn toggle_tool_flips_each_tool_and_persists() {
+        let root = crate::test_support::temp_dir("toggle-tools");
+        for (tool, initial) in [
+            ("shell", true),
+            ("read", true),
+            ("write", true),
+            ("edit", true),
+            ("skill", true),
+        ] {
+            let mut config = Config::default();
+            toggle_tool(&mut config, &root, tool);
+            match tool {
+                "shell" => assert_eq!(config.shell, !initial),
+                "read" => assert_eq!(config.read, !initial),
+                "write" => assert_eq!(config.write, !initial),
+                "edit" => assert_eq!(config.edit, !initial),
+                "skill" => assert_eq!(config.skill, !initial),
+                _ => unreachable!(),
+            }
+        }
+        let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("[tools]"));
+    }
+
+    #[test]
+    fn toggle_tool_unknown_tool_is_noop() {
+        let root = crate::test_support::temp_dir("toggle-unknown");
+        let mut config = Config::default();
+        toggle_tool(&mut config, &root, "bogus");
+        assert!(!root.join(".ManualAid").join("config.toml").exists());
+    }
+
+    #[test]
+    fn persist_and_confirm_reports_write_failure() {
+        let root = crate::test_support::temp_dir("persist-fail");
+        std::fs::write(root.join(".ManualAid"), "occupied").unwrap();
+        persist_and_confirm(&Config::default(), &root, "cli.config.saved", "");
+    }
+
+    #[test]
+    fn config_menu_cycles_lang_then_exits() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("config-menu");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["1", "0"]);
+        config_menu(&mut config, &registry, &root, &mut options);
+        assert_eq!(config.lang, "zh-CN");
+        let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("lang = \"zh-CN\""));
+    }
+
+    #[test]
+    fn config_menu_toggles_options_and_rejects_unknown_input() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("config-menu-options");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["8", "9", "_", "0"]);
+        config_menu(&mut config, &registry, &root, &mut options);
+        assert!(!options.auto_copy);
+        assert!(options.clear_screen);
+    }
+
+    #[test]
+    fn config_menu_format_toggle_applies_to_registry() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("config-menu-format");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["2", "0"]);
+        config_menu(&mut config, &registry, &root, &mut options);
+        assert_eq!(config.tool_call_format, "xml");
+        assert_eq!(registry.mode().unwrap().label(), "xml");
+        let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("tool_call_format = \"xml\""));
+    }
+
+    #[test]
+    fn skill_config_menu_toggles_all_and_single() {
+        let _lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        let root = crate::test_support::temp_dir("skill-menu-root");
+        let home = crate::test_support::temp_dir("skill-menu-home");
+        write_skill(&home, "alpha", "alpha");
+        write_skill(&home, "beta", "beta");
+        manualaid_core::skill::reload_skills_with_home(&root, &home).unwrap();
+        push_test_input(&["a", "1", "n", ""]);
+        skill_config_menu();
+        // `set_enabled` persists to the project root config, not the home.
+        let config = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(config.contains("[skill]"));
+        let skills = manualaid_core::skill::all_skills();
+        assert!(skills.iter().all(|skill| !skill.is_enabled));
+        manualaid_core::skill::reset_skills();
+    }
+}

@@ -194,3 +194,16 @@ fn test_combined_regex_fallback_on_duplicate_named_group() {
     assert!(!masked.contains("cd"));
     assert_eq!(restore_masked_data(&masked, &mapping), "ab cd");
 }
+
+#[test]
+fn test_overlaps_ignores_degenerate_intervals() {
+    // An interval with end <= start can never overlap an occupied span;
+    // the guard must short-circuit before any index arithmetic.
+    // end <= start 的退化区间不可能与已占用区间重叠；该保护必须
+    // 在任何下标计算之前短路。
+    let mut set = IntervalSet::default();
+    set.insert(3, 10);
+    assert!(!set.overlaps(5, 5));
+    assert!(!set.overlaps(5, 3));
+    assert!(set.overlaps(5, 9));
+}

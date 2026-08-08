@@ -40,14 +40,20 @@ fn home_dir_resolvable() -> bool {
 
 #[test]
 fn no_args_prints_running_message_in_english() {
-    let output = run(&[]);
+    let tmp = common::TempDir::new("no-args-en");
+    // Run inside a temp dir so the loop's config sync does not pollute the
+    // crate directory with a tracked `.ManualAid/config.toml`.
+    // 在临时目录中运行，避免 loop 的配置同步向 crate 目录写入被跟踪的
+    // `.ManualAid/config.toml`。
+    let output = run_in(tmp.path(), tmp.path(), &[]);
     assert!(output.status.success());
     assert!(stdout(&output).contains("ManualAid running..."));
 }
 
 #[test]
 fn no_args_prints_running_message_in_chinese() {
-    let output = run(&["--lang", "zh-CN"]);
+    let tmp = common::TempDir::new("no-args-zh");
+    let output = run_in(tmp.path(), tmp.path(), &["--lang", "zh-CN"]);
     assert!(output.status.success());
     assert!(stdout(&output).contains("ManualAid正在运行..."));
 }
