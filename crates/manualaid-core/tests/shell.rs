@@ -192,17 +192,18 @@ async fn run_program_basic() {
 #[tokio::test]
 async fn run_program_timeout_kills_and_preserves_output() {
     let _guard = lock_shell();
-    // 2s timeout: PowerShell startup is slow, and the 5s sleep gives the kill
-    // plenty of room, but the assertion about "started" needs the engine up.
+    // The Windows branch uses cmd: an immediate echo writes "started" before
+    // the 500 ms timeout kills the process, and the ping keeps it running long
+    // enough for the timeout to fire. PowerShell cold startup can exceed the
+    // timeout on slow CI runners, which would lose the preserved output.
+    // Windows 分支使用 cmd：echo 立即输出 "started"，ping 保证进程存活到
+    // 超时触发；PowerShell 冷启动在慢 CI runner 上可能超过超时，导致
+    // 输出保留断言失败。
     #[cfg(windows)]
     let result = run_program(
-        "powershell.exe",
-        &[
-            "-NoProfile",
-            "-Command",
-            "Write-Output started; Start-Sleep -Seconds 5",
-        ],
-        Some(Duration::from_secs(2)),
+        "cmd.exe",
+        &["/C", "echo started & ping -n 6 127.0.0.1"],
+        Some(Duration::from_millis(500)),
     )
     .await;
     #[cfg(not(windows))]
