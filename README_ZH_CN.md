@@ -2,11 +2,38 @@
 
 中文 / [English](README.md)
 
+![Rust](https://img.shields.io/badge/rust-1.97.0+-blue.svg)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)
+
 一款**纯本地、需人工介入**的复制粘贴助手，专为 LLM 工作流设计。
 
-> **版本**: 0.1.0 | **Rust**: >=1.97.0
+> **版本**: 0.1.0
 
-> 当前项目为对原`ManualAid(Pythhon版)`的基于Rust的重构版本。
+> 当前项目为对原 `ManualAid（Python 版）` 的基于 Rust 的重构版本。
+
+## 功能特性
+
+- **交互式 Agent Loop** — 无参数运行 `manualaid-cli` 进入交互式会话。系统构建上下文感知提示词（工作区布局、git 状态、已启用工具、已加载技能），你将其粘贴到 LLM 聊天中，然后将 LLM 返回的工具调用响应粘贴回来。ManualAid 解析、审计、执行工具，并将结果返回用于下一轮对话。
+- **工具系统** — 内置工具：`Read`、`Edit`、`Write`、`Shell` 和 `Skill`。读取操作即时执行；编辑/写入操作默认需要用户明确审批（`manual` 模式），工作区内的变更可使用 `accept-edit` 模式自动放行。
+- **技能系统** — 技能定义为 `SKILL.md` 文件（YAML frontmatter + Markdown 正文），从项目与全局 agent 目录（`.claude/`、`.ManualAid/` 等）发现。仅技能名称与描述加载到系统提示词中；完整指令仅在 Agent 调用 Skill 工具时注入。
+- **会话日志** — 每轮工具调用均记录在内存中；可通过内置命令复制最新第 `i` 轮结果。
+
+详细设计与使用方法请参阅[文档](./doc/zh-cn/README.md)。
+
+## 安装
+
+### Windows
+
+1. 本地通过 `cargo build --release` 编译 / 从 [Github Release](https://github.com/SunYanbox/ManualAid-Rust/releases) 下载可执行文件
+2. 复制到 `%LOCALAPPDATA%\Programs\ManualAid\` 目录下（用户级安装）或复制到 `C:\Program Files\ManualAid\` 目录下（全局安装）
+3. 将上述路径添加到环境变量（用户级添加到用户的 Path 环境变量，全局级添加到全局 Path 环境变量）
+4. 重启终端后即可通过 `manualaid-cli.exe` 运行（PowerShell 一般情况只需要输入 `manu` + Tab 即可自动补全）
+
+### Linux
+
+1. 本地通过 `cargo build --release` 编译 / 从 [Github Release](https://github.com/SunYanbox/ManualAid-Rust/releases) 下载可执行文件
+2. 复制到 `/usr/local/bin` 目录下 / 如果是本地编译，还可以在项目根目录通过 `sudo install -m 755 target/release/manualaid-cli /usr/local/bin/` 快速安装
+3. 通过 `manualaid-cli` 运行（一般只需要输入 `manu` + Tab 即可自动补全）
 
 ### 约束
 

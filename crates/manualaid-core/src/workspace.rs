@@ -149,15 +149,41 @@ fn lexical_normalize(path: &Path) -> PathBuf {
     result
 }
 
-/// Resolve a path for containment comparison: canonicalize when it exists
-/// (resolving symlinks) and fall back to lexical normalization when it does
-/// not (e.g. a file about to be written).
-/// 解析用于包含比较的路径：存在时做 canonicalize（解析符号链接），不存在
-/// 时（例如待写入的文件）回退到词法归一化。
+/// Resolve a path for containment comparison: canonicalize the deepest
+/// existing ancestor and re-append the still-missing tail. Canonicalization
+/// resolves symlinks and junctions, so a nonexistent target (e.g. a file
+/// about to be written) must share the same resolved root as the workspace;
+/// comparing its raw lexical path against a canonicalized root would wrongly
+/// report it as outside (the GitHub Actions Windows temp directory is a
+/// junction). Falls back to lexical normalization when no ancestor exists.
+/// 解析用于包含比较的路径：对最深的已存在祖先做 canonicalize（解析符号链接与
+/// junction），再重新拼接尚未存在的尾部。尚不存在的目标（例如待写入的文件）
+/// 必须与工作区共享同一解析根；若将原始词法路径与已解析的工作区根比较，
+/// 会把目标误判为工作区之外（GitHub Actions 的 Windows 临时目录即为 junction）。
+/// 当没有任何祖先存在时回退到词法归一化。
 fn comparable(path: &Path) -> PathBuf {
-    match path.canonicalize() {
-        Ok(canonical) => strip_verbatim(canonical),
-        Err(_) => normalize_path(path),
+    let mut missing: Vec<&std::ffi::OsStr> = Vec::new();
+    let mut cursor = path;
+    loop {
+        match cursor.canonicalize() {
+            Ok(canonical) => {
+                let mut resolved = strip_verbatim(canonical);
+                for component in missing.iter().rev() {
+                    resolved.push(component);
+                }
+                return resolved;
+            }
+            Err(_) => match cursor.file_name() {
+                Some(name) => {
+                    missing.push(name);
+                    match cursor.parent() {
+                        Some(parent) => cursor = parent,
+                        None => return normalize_path(path),
+                    }
+                }
+                None => return normalize_path(path),
+            },
+        }
     }
 }
 
@@ -234,6 +260,45 @@ mod tests {
         let root = std::env::temp_dir();
         let target = root.join("manualaid-ws-nonexistent").join("new.txt");
         assert!(is_within_workspace(&target, &root));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn within_workspace_resolves_nonexistent_target_through_junction() {
+        use std::os::windows::fs::symlink_dir;
+        let root =
+            std::env::temp_dir().join(format!("manualaid-ws-junction-{}", std::process::id()));
+        let real = root.join("real");
+        let link = root.join("link");
+        std::fs::create_dir_all(&real).expect("create real dir");
+        // Directory symlink creation needs Developer Mode or an elevated
+        // shell; skip when the OS denies it so the suite still runs on
+        // unprivileged machines.
+        // 创建目录符号链接需要开发者模式或提权终端；操作系统拒绝时跳过，
+        // 保证测试套件在未提权机器上仍可运行。
+        if symlink_dir(&real, &link).is_err() {
+            return;
+        }
+        let target = link.join("new.txt");
+        assert!(is_within_workspace(&target, &link));
+        let _ = std::fs::remove_dir(&link);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn within_workspace_resolves_nonexistent_target_through_symlink() {
+        use std::os::unix::fs::symlink;
+        let root =
+            std::env::temp_dir().join(format!("manualaid-ws-symlink-{}", std::process::id()));
+        let real = root.join("real");
+        let link = root.join("link");
+        std::fs::create_dir_all(&real).expect("create real dir");
+        symlink(&real, &link).expect("create symlink");
+        let target = link.join("new.txt");
+        assert!(is_within_workspace(&target, &link));
+        let _ = std::fs::remove_dir(&link);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

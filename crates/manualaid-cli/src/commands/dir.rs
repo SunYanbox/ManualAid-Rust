@@ -57,9 +57,9 @@ pub fn run_dir_view(
     run_dir_view_with_home(project, global, limit, depth, &home)
 }
 
-/// Like [`run_dir_view`](run_dir_view) with an explicit home directory, used
+/// Like [`run_dir_view`] with an explicit home directory, used
 /// by tests to avoid touching the real user home.
-/// 同 [`run_dir_view`](run_dir_view)，但以显式指定的主目录代替真实用户主目录，
+/// 同 [`run_dir_view`]，但以显式指定的主目录代替真实用户主目录，
 /// 供测试避免触碰真实主目录。
 pub fn run_dir_view_with_home(
     project: bool,
@@ -147,9 +147,9 @@ pub fn run_dir_clean(
     run_dir_clean_with_home(project, global, yes, &home)
 }
 
-/// Like [`run_dir_clean`](run_dir_clean) with an explicit home directory,
+/// Like [`run_dir_clean`] with an explicit home directory,
 /// used by tests to avoid touching the real user home.
-/// 同 [`run_dir_clean`](run_dir_clean)，但以显式指定的主目录代替真实用户主目录，
+/// 同 [`run_dir_clean`]，但以显式指定的主目录代替真实用户主目录，
 /// 供测试避免触碰真实主目录。
 pub fn run_dir_clean_with_home(
     project: bool,
@@ -167,11 +167,11 @@ pub fn run_dir_clean_with_home(
     )
 }
 
-/// Like [`run_dir_clean_with_home`](run_dir_clean_with_home) with an
+/// Like [`run_dir_clean_with_home`] with an
 /// injectable stdin, so tests can deterministically exercise both the
 /// terminal and non-terminal confirmation paths without depending on the
 /// host environment.
-/// 同 [`run_dir_clean_with_home`](run_dir_clean_with_home)，但 stdin 可注入，
+/// 同 [`run_dir_clean_with_home`]，但 stdin 可注入，
 /// 供测试在不依赖宿主环境的情况下稳定覆盖终端/非终端确认分支。
 pub fn run_dir_clean_with_stdin(
     project: bool,

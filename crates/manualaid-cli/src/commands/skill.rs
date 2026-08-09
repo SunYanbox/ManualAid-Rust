@@ -22,9 +22,9 @@ pub fn run_skill(global: bool, project: bool, home: Option<&Path>) -> Result<(),
     run_skill_with_home(global, project, &home)
 }
 
-/// Like [`run_skill`](run_skill) with an explicit home directory, used by
+/// Like [`run_skill`] with an explicit home directory, used by
 /// tests to avoid touching the real user home.
-/// 同 [`run_skill`](run_skill)，但以显式指定的主目录代替真实用户主目录，
+/// 同 [`run_skill`]，但以显式指定的主目录代替真实用户主目录，
 /// 供测试避免触碰真实主目录。
 pub fn run_skill_with_home(global: bool, project: bool, home: &Path) -> Result<(), String> {
     let dir = current_dir()?;

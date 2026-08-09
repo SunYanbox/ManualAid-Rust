@@ -2,9 +2,36 @@
 
 [中文](README_ZH_CN.md) / English
 
+![Rust](https://img.shields.io/badge/rust-1.97.0+-blue.svg)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)
+
 A **local-only, human-in-the-loop** copypaste assistant for LLM workflows.
 
-> **Version**: 0.1.0 | **Rust**: >=1.97.0
+> **Version**: 0.1.0
+
+## Features
+
+- **Interactive Agent Loop** — Run `manualaid-cli` with no arguments to start an interactive session. The system builds a context-aware prompt (workspace layout, git status, enabled tools, loaded skills), you paste it into an LLM chat, then paste the LLM's tool-call response back. ManualAid parses, audits, executes the tools, and returns the results for the next turn.
+- **Tool System** — Built-in tools: `Read`, `Edit`, `Write`, `Shell`, and `Skill`. Read operations are immediate; edit/write operations require explicit user approval by default (`manual` mode), with an `accept-edit` mode available for workspace-internal changes.
+- **Skill System** — Skills are defined as `SKILL.md` files with YAML frontmatter and Markdown body, discovered from project and global agent directories (`.claude/`, `.ManualAid/`, etc.). Only skill names and descriptions are loaded into the system prompt; full instructions are injected only when the agent calls the Skill tool.
+- **Session Logging** — Every tool call round is recorded in memory; you can copy the latest `i`-th result with built-in commands.
+
+For detailed design and usage, see the [documentation](./doc/zh-cn/README.md).
+
+## Installation
+
+### Windows
+
+1. Build locally via `cargo build --release` or download the executable from [Github Release](https://github.com/SunYanbox/ManualAid-Rust/releases)
+2. Copy it to `%LOCALAPPDATA%\Programs\ManualAid\` (user-level installation) or to `C:\Program Files\ManualAid\` (system-wide installation)
+3. Add the above path to the environment variable (user-level Path for user installation, system-level Path for system-wide installation)
+4. Restart the terminal, then run with `manualaid-cli.exe` (in PowerShell you can usually type `manu` + Tab for auto-completion)
+
+### Linux
+
+1. Build locally via `cargo build --release` or download the executable from [Github Release](https://github.com/SunYanbox/ManualAid-Rust/releases)
+2. Copy it to `/usr/local/bin`; if built locally, you can also run `sudo install -m 755 target/release/manualaid-cli /usr/local/bin/` from the project root
+3. Run with `manualaid-cli` (usually type `manu` + Tab for auto-completion)
 
 ### Constraints
 

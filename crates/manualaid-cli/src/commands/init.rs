@@ -20,9 +20,9 @@ pub fn run_init(project: bool, global: bool, home: Option<&Path>) -> Result<(), 
     run_init_with_home(project, global, &home)
 }
 
-/// Like [`run_init`](run_init) with an explicit home directory, used by tests
+/// Like [`run_init`] with an explicit home directory, used by tests
 /// to avoid touching the real user home.
-/// 同 [`run_init`](run_init)，但以显式指定的主目录代替真实用户主目录，
+/// 同 [`run_init`]，但以显式指定的主目录代替真实用户主目录，
 /// 供测试避免触碰真实主目录。
 pub fn run_init_with_home(project: bool, global: bool, home: &Path) -> Result<(), String> {
     let project_root = current_dir()?;
