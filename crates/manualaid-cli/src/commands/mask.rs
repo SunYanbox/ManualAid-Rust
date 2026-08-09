@@ -20,9 +20,9 @@ pub fn run_mask(input: &str, home: Option<&Path>) -> Result<(), String> {
     run_mask_with_home(input, &home)
 }
 
-/// Like [`run_mask`](run_mask) with an explicit home directory, used by
+/// Like [`run_mask`] with an explicit home directory, used by
 /// tests to avoid touching the real user home.
-/// 同 [`run_mask`](run_mask)，但以显式指定的主目录代替真实用户主目录，
+/// 同 [`run_mask`]，但以显式指定的主目录代替真实用户主目录，
 /// 供测试避免触碰真实主目录。
 pub fn run_mask_with_home(input: &str, home: &Path) -> Result<(), String> {
     let extensions = PrivacyMaskExtension::load_with_home(&current_dir()?, home)

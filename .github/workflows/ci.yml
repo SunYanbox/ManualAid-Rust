@@ -63,8 +63,20 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
+      # The clipboard tests write to the real system clipboard, so the
+      # headless Linux runner needs a virtual X display (xvfb) to serve
+      # those X11 selections; Windows uses the OS clipboard directly.
+      # 剪贴板测试会写入真实系统剪贴板，无显示器的 Linux runner 需要虚拟
+      # X display（xvfb）来提供 X11 选区；Windows 直接使用系统剪贴板。
       - name: cargo test
-        run: cargo test --workspace --all-features
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            command -v xvfb-run >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y xvfb; }
+            xvfb-run -a cargo test --workspace --all-features
+          else
+            cargo test --workspace --all-features
+          fi
+        shell: bash
 
   # ============ 代码覆盖率（仅 Linux，上传 Codecov） ============
   coverage:
@@ -87,12 +99,14 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          cargo llvm-cov \
+          command -v xvfb-run >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y xvfb; }
+          xvfb-run -a cargo llvm-cov \
             --workspace \
             --all-features \
             --lcov \
             --output-path lcov.info \
             --show-missing-lines
+        shell: bash
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
