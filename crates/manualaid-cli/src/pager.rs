@@ -253,11 +253,16 @@ fn is_quit_key(key: crossterm::event::KeyEvent) -> bool {
         && key.modifiers.contains(KeyModifiers::CONTROL))
 }
 
-/// Write the lines in `lines[start..end]`, one per line.
-/// 逐行写出 `lines[start..end]`。
+/// Write the lines in `lines[start..end]`, one per line, each terminated
+/// by CRLF. Raw mode disables the terminal's output post-processing, so a
+/// bare LF would move the cursor down without returning it to column 0 and
+/// every paged line would start where the previous one ended.
+/// 逐行写出 `lines[start..end]`，每行以 CRLF 结尾。raw mode 会关闭终端
+/// 输出后处理，若只写 LF，光标只会下移而不会回到第 0 列，分页内容会
+/// 逐行向右错位。
 fn write_page(stdout: &mut impl Write, lines: &[&str], start: usize, end: usize) -> io::Result<()> {
     for line in &lines[start..end] {
-        writeln!(stdout, "{line}")?;
+        write!(stdout, "{line}\r\n")?;
     }
     Ok(())
 }
@@ -438,7 +443,7 @@ mod tests {
         let mut out = Vec::new();
         run_pages_collapsed(&mut out, &["a", "b", "c", "d"], 3, 4, || Ok(true)).unwrap();
         let text = String::from_utf8(out).unwrap();
-        assert!(text.starts_with("a\nb\nc\n"));
+        assert!(text.starts_with("a\r\nb\r\nc\r\n"));
     }
 
     #[test]
@@ -452,7 +457,7 @@ mod tests {
         let mut out = Vec::new();
         if let Ok(()) = interactive_paged(&mut out, &["a", "b", "c", "d"], 3, 4, || Ok(true)) {
             let text = String::from_utf8(out).unwrap();
-            assert!(text.starts_with("a\nb\nc\n"));
+            assert!(text.starts_with("a\r\nb\r\nc\r\n"));
         }
     }
 
@@ -461,7 +466,7 @@ mod tests {
         let lines = ["a", "b", "c", "d"];
         let mut out = Vec::new();
         write_page(&mut out, &lines, 1, 3).unwrap();
-        assert_eq!(String::from_utf8(out).unwrap(), "b\nc\n");
+        assert_eq!(String::from_utf8(out).unwrap(), "b\r\nc\r\n");
     }
 
     #[test]
@@ -510,9 +515,9 @@ mod tests {
         .unwrap();
         assert_eq!(key_reads, 2);
         let text = String::from_utf8(out).unwrap();
-        assert!(text.starts_with("a\nb\nc\n"));
-        assert!(text.contains("d\ne\nf\ng\n"));
-        assert!(text.ends_with("h\n"));
+        assert!(text.starts_with("a\r\nb\r\nc\r\n"));
+        assert!(text.contains("d\r\ne\r\nf\r\ng\r\n"));
+        assert!(text.ends_with("h\r\n"));
     }
 
     #[test]
@@ -527,15 +532,15 @@ mod tests {
         .unwrap();
         assert_eq!(key_reads, 1);
         let text = String::from_utf8(out).unwrap();
-        assert!(text.contains("a\nb\nc\n"));
-        assert!(!text.contains("d\n"));
+        assert!(text.contains("a\r\nb\r\nc\r\n"));
+        assert!(!text.contains("d\r\n"));
     }
 
     #[test]
     fn collapsed_pages_ask_no_key_when_output_fits_the_first_page() {
         let mut out = Vec::new();
         run_pages_collapsed(&mut out, &["a", "b"], 3, 4, key_unexpected).unwrap();
-        assert_eq!(String::from_utf8(out).unwrap(), "a\nb\n");
+        assert_eq!(String::from_utf8(out).unwrap(), "a\r\nb\r\n");
     }
 
     #[test]
@@ -578,8 +583,8 @@ mod tests {
         // Between the pages the pager writes the "more" prompt and a clear
         // sequence, so only the page content itself is asserted.
         // 页与页之间分页器会写入 "more" 提示与清除序列，因此只断言页面内容。
-        assert!(text.starts_with("a\nb\nc\nd\n"));
-        assert!(text.ends_with("e\n"));
+        assert!(text.starts_with("a\r\nb\r\nc\r\nd\r\n"));
+        assert!(text.ends_with("e\r\n"));
     }
 
     #[test]
@@ -594,8 +599,8 @@ mod tests {
         .unwrap();
         assert_eq!(key_reads, 1);
         let text = String::from_utf8(out).unwrap();
-        assert!(text.contains("a\nb\nc\nd\n"));
-        assert!(!text.contains("e\n"));
+        assert!(text.contains("a\r\nb\r\nc\r\nd\r\n"));
+        assert!(!text.contains("e\r\n"));
     }
 
     #[test]
