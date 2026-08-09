@@ -19,6 +19,10 @@
 
 pub mod strategies;
 
+pub use strategies::command::{
+    is_dangerous_allow_command, sanitize_allow_commands, wildcard_match,
+};
+
 use std::path::PathBuf;
 
 use indexmap::IndexMap;
@@ -26,6 +30,32 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::tools::{ParamSemantic, ToolKind};
+
+/// Whitelisted commands that are safe on every platform.
+/// 所有平台都安全的白名单命令。
+const COMMON_DEFAULT_COMMANDS: &[&str] = &["git status"];
+
+/// Platform listing commands auto-approved only on Windows.
+/// 仅 Windows 自动放行的平台列表命令。
+#[cfg(windows)]
+const PLATFORM_DEFAULT_COMMANDS: &[&str] = &["dir"];
+/// Platform listing commands auto-approved only on Unix/macOS.
+/// 仅 Unix/macOS 自动放行的平台列表命令。
+#[cfg(not(windows))]
+const PLATFORM_DEFAULT_COMMANDS: &[&str] = &["ls"];
+
+/// The built-in default command whitelist: platform listing commands plus
+/// commands safe on every platform. User-config `[permissions]` entries are
+/// merged on top of this list instead of replacing it.
+/// 内置的默认命令白名单：平台列表命令加所有平台都安全的命令。用户配置的
+/// `[permissions]` 条目会合并到该列表之上，而不是替换它。
+pub fn default_allowed_commands() -> Vec<String> {
+    COMMON_DEFAULT_COMMANDS
+        .iter()
+        .chain(PLATFORM_DEFAULT_COMMANDS)
+        .map(|command| (*command).to_string())
+        .collect()
+}
 
 /// Operating mode that affects audit behaviour.
 /// 影响审计行为的操作模式。
@@ -94,8 +124,10 @@ pub struct Auditor {
     /// Workspace root for path-boundary checks.
     /// 用于路径边界检查的工作区根目录。
     pub(crate) workspace_root: PathBuf,
-    /// Pre-approved shell commands (exact or base-command match).
-    /// 预批准的 shell 命令（精确匹配或基础命令匹配）。
+    /// Pre-approved shell commands: built-in defaults plus merged user
+    /// entries, matched by exact string or `*` wildcard.
+    /// 预批准的 shell 命令：内置默认加上合并的用户条目，按精确字符串或
+    /// `*` 通配符匹配。
     pub(crate) allowed_commands: Vec<String>,
     /// Additional paths exempt from workspace-boundary checks.
     /// 免除工作区边界检查的额外路径。
@@ -111,16 +143,27 @@ impl Auditor {
     pub fn new(workspace_root: PathBuf) -> Self {
         Self {
             workspace_root,
-            allowed_commands: Vec::new(),
+            allowed_commands: default_allowed_commands(),
             exempt_paths: Vec::new(),
             mode: SessionMode::default(),
         }
     }
 
-    /// Configure allowed (whitelisted) commands.
-    /// 配置允许（白名单）的命令。
+    /// Configure additional allowed (whitelisted) commands. The given
+    /// commands are merged into the built-in default whitelist, keeping the
+    /// default entries; entries that match a blacklisted command are
+    /// ignored.
+    /// 配置额外的允许（白名单）命令。给定命令会合并到内置默认白名单之上，
+    /// 默认条目仍然保留；命中黑名单命令的条目会被忽略。
     pub fn with_allowed_commands(mut self, commands: Vec<String>) -> Self {
-        self.allowed_commands = commands;
+        let (kept, _ignored) = sanitize_allow_commands(commands);
+        let mut merged = default_allowed_commands();
+        for command in kept {
+            if !merged.contains(&command) {
+                merged.push(command);
+            }
+        }
+        self.allowed_commands = merged;
         self
     }
 

@@ -38,7 +38,8 @@ use handlers::{
 };
 use inline::handle_inline_command;
 use utils::{
-    apply_cli_lang, apply_format_mode, clear_screen, read_line, sync_global_config, t_fmt,
+    apply_cli_lang, apply_format_mode, clear_screen, format_config_issue, read_line,
+    sync_global_config, t_fmt,
 };
 
 /// How the user answered one approval-queue item.
@@ -138,21 +139,11 @@ async fn loop_main_at(
     apply_cli_lang(lang, &mut config);
     i18n::set_locale(&config.lang);
 
-    // Print validation warnings for invalid config values
-    // 打印配置验证警告
+    // Print config validation warnings (invalid values, dangerous
+    // whitelist entries that were ignored).
+    // 打印配置验证警告（无效值、被忽略的危险白名单条目）。
     for issue in &issues {
-        crate::console::out_println!(
-            "{}",
-            t_fmt(
-                "cli.warning.invalid_config_value",
-                &[
-                    ("key", &issue.key),
-                    ("value", &issue.value),
-                    ("available", &issue.available_values.join(", ")),
-                    ("path", &issue.path.display().to_string()),
-                ]
-            )
-        );
+        crate::console::out_println!("{}", format_config_issue(issue));
     }
 
     reload_skills_with_home(current_dir, home).map_err(|e| e.to_string())?;
@@ -469,5 +460,30 @@ mod tests {
         params.insert("file_path".to_string(), Value::String("/etc/passwd".into()));
         let preview = approval_preview(&item, &params);
         assert!(preview.contains("/etc/passwd"));
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn loop_warns_when_allow_commands_match_the_blacklist() {
+        let _capture = crate::console::capture();
+        let _lang = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skills = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("loop-dangerous-ws");
+        let home = crate::test_support::temp_dir("loop-dangerous-home");
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        std::fs::write(
+            root.join(".ManualAid").join("config.toml"),
+            "[permissions]\nallow_commands = [\"git log *\", \"rm *\"]\n",
+        )
+        .unwrap();
+        super::utils::push_test_input(&["0"]);
+        loop_main_at(&root, &home, None, None).await.unwrap();
+        let output = _capture.text();
+        assert!(output.contains("rm *"));
+        assert!(output.contains("ignored"));
+        assert!(!output.contains("git log *"));
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&home);
     }
 }

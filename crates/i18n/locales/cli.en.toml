@@ -133,3 +133,4 @@ title = "SKILL configuration"
 
 [cli.warning]
 invalid_config_value = "Warning: invalid value '%{value}' for `%{key}` in %{path}. Expected one of: %{available}. Using default instead."
+dangerous_allow_command = "Warning: `allow_commands` entry `%{command}` in %{path} matches a blacklisted command and was ignored."
