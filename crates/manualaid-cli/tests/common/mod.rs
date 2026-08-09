@@ -1,7 +1,8 @@
 //! Shared helpers for integration tests: a unique temp directory removed on
-//! drop, and a helper that writes a skill folder.
-//! 集成测试的共享辅助：Drop 时移除的唯一临时目录，以及写入技能文件夹的
-//! 辅助函数。
+//! drop, a scripted child that keeps stdin open for step-by-step driving,
+//! and a helper that writes a skill folder.
+//! 集成测试的共享辅助：Drop 时移除的唯一临时目录、保持 stdin 打开以便逐步
+//! 驱动的子进程，以及写入技能文件夹的辅助函数。
 //!
 //! Every test binary includes this module but not every helper is used by
 //! every binary, so dead-code warnings are suppressed here.
@@ -42,6 +43,96 @@ impl TempDir {
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// Run the compiled binary in `cwd` with a scripted stdin and captured
+/// output. `home` is forwarded to the child when set so the loop never
+/// touches the real user home. The child's stdio is redirected, so the
+/// interactive pager and clear-screen paths stay quiet and assertions can
+/// inspect the real console output.
+/// 在 `cwd` 中以脚本化 stdin 运行编译后的二进制并捕获输出。设置 `home` 时转发
+/// 给子进程，避免 loop 触碰真实用户主目录。子进程 stdio 被重定向，交互分页与
+/// 清屏路径保持安静，断言可以直接检查真实控制台输出。
+pub fn run_binary_scripted(
+    cwd: &Path,
+    home: Option<&Path>,
+    args: &[&str],
+    lines: &[&str],
+) -> std::process::Output {
+    use std::io::Write;
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_manualaid-cli"));
+    command
+        .args(args)
+        .current_dir(cwd)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(home) = home {
+        command.env("HOME", home).env("USERPROFILE", home);
+    }
+    let mut child = command.spawn().expect("spawn manualaid-cli binary");
+    {
+        let mut stdin = child.stdin.take().expect("child stdin handle");
+        for line in lines {
+            writeln!(stdin, "{line}").expect("write scripted input");
+        }
+    }
+    child
+        .wait_with_output()
+        .expect("wait for manualaid-cli binary")
+}
+
+/// A spawned CLI binary whose stdin stays open, so a test can drive the
+/// loop one line at a time and inspect side effects (such as the system
+/// clipboard) while the child is still running.
+/// 一个 stdin 保持打开的 CLI 子进程，测试可以逐行驱动 loop，并在子进程
+/// 存活期间检查副作用（如系统剪贴板）。
+pub struct ScriptedChild {
+    child: std::process::Child,
+    stdin: Option<std::process::ChildStdin>,
+}
+
+impl ScriptedChild {
+    /// Spawn the binary in `cwd` with piped stdio and an optional home
+    /// override, mirroring [`run_binary_scripted`].
+    /// 在 `cwd` 中以管道 stdio 启动二进制，可选覆盖 home，与
+    /// [`run_binary_scripted`] 一致。
+    pub fn spawn(cwd: &Path, home: Option<&Path>, args: &[&str]) -> Self {
+        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_manualaid-cli"));
+        command
+            .args(args)
+            .current_dir(cwd)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        if let Some(home) = home {
+            command.env("HOME", home).env("USERPROFILE", home);
+        }
+        let mut child = command.spawn().expect("spawn manualaid-cli binary");
+        let stdin = child.stdin.take().expect("child stdin handle");
+        Self {
+            child,
+            stdin: Some(stdin),
+        }
+    }
+
+    /// Write one line to the child's stdin and flush it.
+    /// 向子进程 stdin 写入一行并冲刷。
+    pub fn send_line(&mut self, line: &str) {
+        use std::io::Write;
+        let stdin = self.stdin.as_mut().expect("child stdin already closed");
+        writeln!(stdin, "{line}").expect("write scripted input");
+        stdin.flush().expect("flush scripted input");
+    }
+
+    /// Close stdin and wait for the child to exit, returning its output.
+    /// 关闭 stdin 并等待子进程退出，返回其输出。
+    pub fn wait_with_output(mut self) -> std::process::Output {
+        drop(self.stdin.take());
+        self.child
+            .wait_with_output()
+            .expect("wait for manualaid-cli binary")
     }
 }
 

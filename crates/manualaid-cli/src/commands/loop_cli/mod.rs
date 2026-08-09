@@ -6,7 +6,6 @@
 //! 剪贴板粘贴或手动输入的工具调用文本（带逐项审计批准），并把结果复制
 //! 回剪贴板供外部 LLM 聊天使用。
 
-use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -135,7 +134,7 @@ async fn loop_main_at(
     // Print validation warnings for invalid config values
     // 打印配置验证警告
     for issue in &issues {
-        println!(
+        crate::console::out_println!(
             "{}",
             t_fmt(
                 "cli.warning.invalid_config_value",
@@ -164,7 +163,7 @@ async fn loop_main_at(
 
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let shell = manualaid_core::shell::detected_shell();
-    println!(
+    crate::console::out_println!(
         "{}",
         t_fmt(
             "cli.loop.header",
@@ -183,7 +182,7 @@ async fn loop_main_at(
     // 任一 `[global]` 默认值时，在启动时逐条告知用户。写入失败不会中止
     // loop。
     for message in sync_global_config(current_dir, &loaded_config) {
-        println!("{message}");
+        crate::console::out_println!("{message}");
     }
 
     let mut should_exit = false;
@@ -192,8 +191,8 @@ async fn loop_main_at(
             clear_screen();
         }
         let _ = crate::pager::print_paged(&render_menu());
-        print!("{}", i18n::t_str("cli.loop.menu_prompt"));
-        let _ = std::io::stdout().flush();
+        crate::console::out_print!("{}", i18n::t_str("cli.loop.menu_prompt"));
+        crate::console::flush();
 
         let line = match read_line() {
             Some(line) => line,
@@ -236,7 +235,7 @@ async fn loop_main_at(
             }
             "6" => print_session_summary(&config, &session),
             "0" => should_exit = true,
-            _ => println!("{}", i18n::t_str("cli.loop.menu_invalid")),
+            _ => crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid")),
         }
         if !should_exit && options.clear_screen {
             // Keep the previous action's output readable before the next
@@ -261,7 +260,6 @@ fn build_executor(root: &Path, config: &Config, mode: SessionMode) -> Executor {
 
 #[cfg(test)]
 mod tests {
-    use super::utils::push_test_input;
     use super::*;
 
     use indexmap::IndexMap;
@@ -464,229 +462,5 @@ mod tests {
         params.insert("file_path".to_string(), Value::String("/etc/passwd".into()));
         let preview = approval_preview(&item, &params);
         assert!(preview.contains("/etc/passwd"));
-    }
-
-    #[tokio::test]
-    // The locks must span the awaits so no concurrent test changes the
-    // locale or skill store while the scripted loop is running.
-    // 锁须跨 await 持有，避免并发测试在脚本化 loop 运行期间改动 locale 或技能库。
-    #[allow(clippy::await_holding_lock)]
-    async fn loop_main_at_drives_menu_flow_with_scripted_input() {
-        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let current_dir = crate::test_support::temp_dir("loop-main");
-        let home = crate::test_support::temp_dir("loop-main-home");
-        // A valid non-default lang triggers the sync hint; an invalid format
-        // label produces a validation warning at startup.
-        // 合法但非默认的 lang 触发同步提示；非法的 format 标签在启动时产生
-        // 验证警告。
-        std::fs::create_dir_all(current_dir.join(".ManualAid")).unwrap();
-        std::fs::write(
-            current_dir.join(".ManualAid").join("config.toml"),
-            "[global]\nlang = \"zh-CN\"\ntool_call_format = \"bogus\"\n",
-        )
-        .unwrap();
-        let file = current_dir.join("target.txt");
-        std::fs::write(&file, "hello").unwrap();
-        // 4: copy with no rounds (no clipboard access), 5: config menu
-        // (9 toggles clear_screen, 11 toggles the approval mode which
-        // rebuilds the executor, 0 exits), 3: typed round, 6: summary,
-        // x: invalid option; the queue then runs dry, ending the loop on
-        // stdin EOF.
-        // 4：无轮次复制（不触碰剪贴板），5：配置菜单（9 切换清屏，0 返回），
-        // 11 切换审批模式并重建执行器，0 返回），3：手动输入一轮，6：摘要，
-        // x：非法选项；随后队列耗尽，以 stdin EOF 结束循环。
-        push_test_input(&[
-            "/tools",
-            "/format 2",
-            "4",
-            "5",
-            "9",
-            "11",
-            "0",
-            "3",
-            format!("<read><file_path>{}</file_path></read>", file.display()).as_str(),
-            "/end",
-            "n",
-            "6",
-            "x",
-        ]);
-        loop_main_at(&current_dir, &home, None, None).await.unwrap();
-        // The /format inline command persists its change; the pre-written
-        // lang stays untouched.
-        let content =
-            std::fs::read_to_string(current_dir.join(".ManualAid").join("config.toml")).unwrap();
-        assert!(content.contains("lang = \"zh-CN\""));
-        assert!(content.contains("tool_call_format = \"xml\""));
-        manualaid_core::skill::reset_skills();
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn loop_main_at_paste_menu_submits_clipboard() {
-        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
-        let _clipboard_lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let current_dir = crate::test_support::temp_dir("loop-paste-menu");
-        let home = crate::test_support::temp_dir("loop-paste-menu-home");
-        let file = current_dir.join("target.txt");
-        std::fs::write(&file, "hello").unwrap();
-        manualaid_core::clipboard::write_clipboard(format!(
-            "<read><file_path>{}</file_path></read>",
-            file.display()
-        ))
-        .expect("set clipboard for pasting");
-        push_test_input(&["2"]);
-        loop_main_at(&current_dir, &home, None, None).await.unwrap();
-        manualaid_core::skill::reset_skills();
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn loop_main_at_accept_edit_auto_approves_workspace_write() {
-        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let current_dir = crate::test_support::temp_dir("loop-accept-edit");
-        let home = crate::test_support::temp_dir("loop-accept-edit-home");
-        let file = current_dir.join("created.txt");
-        // Disable auto-copy first (menu 8) so the round never touches the
-        // clipboard; then submit a workspace write that AcceptEdit mode
-        // executes without asking for approval.
-        // 先在菜单 8 关闭自动复制，避免该轮触碰剪贴板；随后提交一个工作区
-        // 写入，AcceptEdit 模式会直接执行而不询问审批。
-        push_test_input(&[
-            "5",
-            "8",
-            "0",
-            "3",
-            format!(
-                "<write><file_path>{}</file_path><content>ok</content></write>",
-                file.display()
-            )
-            .as_str(),
-            "/end",
-        ]);
-        loop_main_at(
-            &current_dir,
-            &home,
-            None,
-            Some(manualaid_core::audit::SessionMode::AcceptEdit),
-        )
-        .await
-        .unwrap();
-        assert!(file.exists());
-        assert_eq!(std::fs::read_to_string(&file).unwrap(), "ok");
-        manualaid_core::skill::reset_skills();
-    }
-
-    #[test]
-    fn run_loop_works_against_explicit_and_real_home() {
-        let _cwd_lock = crate::test_support::CWD_LOCK.lock().unwrap();
-        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let original = std::env::current_dir().unwrap();
-        let cwd = crate::test_support::temp_dir("run-loop-cwd");
-        std::env::set_current_dir(&cwd).unwrap();
-        let home = crate::test_support::temp_dir("run-loop-home");
-        push_test_input(&["0"]);
-        run_loop(Some(&home), None, None).unwrap();
-        // The home_dir() fallback reads the real user home, so no temp home
-        // is passed here; the loop only reads it.
-        // home_dir() 回退读取真实用户主目录，此处不传临时主目录；loop 只读它。
-        push_test_input(&["0"]);
-        run_loop(None, None, None).unwrap();
-        std::env::set_current_dir(&original).unwrap();
-        assert!(cwd.join(".ManualAid").join("config.toml").is_file());
-        manualaid_core::skill::reset_skills();
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn loop_main_at_reports_invalid_config() {
-        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let current_dir = crate::test_support::temp_dir("loop-bad-config");
-        let home = crate::test_support::temp_dir("loop-bad-config-home");
-        std::fs::create_dir_all(current_dir.join(".ManualAid")).unwrap();
-        std::fs::write(
-            current_dir.join(".ManualAid").join("config.toml"),
-            "not [valid toml",
-        )
-        .unwrap();
-        let result = loop_main_at(&current_dir, &home, None, None).await;
-        assert!(result.is_err());
-        manualaid_core::skill::reset_skills();
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn loop_main_at_loads_single_context_file_automatically() {
-        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
-        let _clipboard_lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let current_dir = crate::test_support::temp_dir("loop-ctx-single");
-        let home = crate::test_support::temp_dir("loop-ctx-single-home");
-        std::fs::write(current_dir.join("AGENTS.md"), "# rules").unwrap();
-        push_test_input(&["1", "0"]);
-        loop_main_at(&current_dir, &home, None, None).await.unwrap();
-        let clipboard =
-            manualaid_core::clipboard::read_clipboard().expect("read clipboard for context check");
-        assert!(clipboard.contains("<context_files path=\"AGENTS.md\">"));
-        assert!(clipboard.contains("# rules"));
-        manualaid_core::skill::reset_skills();
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn loop_main_at_asks_selection_when_multiple_context_files_exist() {
-        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
-        let _clipboard_lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let current_dir = crate::test_support::temp_dir("loop-ctx-multi");
-        let home = crate::test_support::temp_dir("loop-ctx-multi-home");
-        std::fs::write(current_dir.join("AGENTS.md"), "same").unwrap();
-        std::fs::write(current_dir.join("CLAUDE.md"), "same").unwrap();
-        // The selection line carries the Windows `\r\n` line ending, which
-        // must be trimmed before parsing the indices.
-        // 选择行携带 Windows 的 `\r\n` 行尾，解析索引前必须先去除。
-        push_test_input(&["1", "1\r\n", "0"]);
-        loop_main_at(&current_dir, &home, None, None).await.unwrap();
-        let clipboard =
-            manualaid_core::clipboard::read_clipboard().expect("read clipboard for context check");
-        assert!(clipboard.contains("<context_files path=\"AGENTS.md\">"));
-        assert!(!clipboard.contains("<context_files path=\"CLAUDE.md\">"));
-        manualaid_core::skill::reset_skills();
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn loop_main_at_skips_context_selection_when_auto_load_is_disabled() {
-        let _lang_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let _skill_lock = crate::test_support::SKILL_LOCK.lock().unwrap();
-        let _clipboard_lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let current_dir = crate::test_support::temp_dir("loop-ctx-off");
-        let home = crate::test_support::temp_dir("loop-ctx-off-home");
-        std::fs::create_dir_all(current_dir.join(".ManualAid")).unwrap();
-        std::fs::write(
-            current_dir.join(".ManualAid").join("config.toml"),
-            "[global]\ncontext_auto_load = false\n",
-        )
-        .unwrap();
-        std::fs::write(current_dir.join("AGENTS.md"), "a").unwrap();
-        std::fs::write(current_dir.join("CLAUDE.md"), "b").unwrap();
-        push_test_input(&["1", "0"]);
-        loop_main_at(&current_dir, &home, None, None).await.unwrap();
-        let clipboard =
-            manualaid_core::clipboard::read_clipboard().expect("read clipboard for context check");
-        assert!(!clipboard.contains("<context_files"));
-        manualaid_core::skill::reset_skills();
     }
 }

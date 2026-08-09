@@ -7,11 +7,13 @@ mod common;
 
 #[test]
 fn run_mask_with_explicit_home_returns_ok() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-mask-home");
     assert!(run_mask_with_home("hello", dir.path()).is_ok());
 }
 
 #[test]
 fn run_mask_without_home_falls_back_to_real_home() {
+    let _capture = manualaid_cli::console::capture();
     assert!(run_mask("hello", None).is_ok());
 }

@@ -48,7 +48,7 @@ pub fn run_main(cli: Cli) -> i32 {
 pub fn run(cli: Cli, home: Option<&Path>) -> Result<(), String> {
     match cli.command {
         None => {
-            print!("{}", format_default_output(&default_message()));
+            crate::console::out_print!("{}", format_default_output(&default_message()));
             run_loop(home, cli.lang, cli.mode.map(Into::into))
         }
         Some(Command::Mask { input }) => run_mask(&input, home),
@@ -85,6 +85,7 @@ mod tests {
 
     #[test]
     fn run_main_without_subcommand_starts_the_loop() {
+        let _capture = crate::console::capture();
         let _cwd = CWD_LOCK.lock().unwrap();
         let _lang = LOCALE_LOCK.lock().unwrap();
         let _skills = SKILL_LOCK.lock().unwrap();

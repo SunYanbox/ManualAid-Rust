@@ -447,11 +447,15 @@ fn snapshot_json_serializes_btree_deterministically() {
 
 #[test]
 fn pager_prints_all_when_not_terminal() {
+    let _capture = manualaid_cli::console::capture();
+    pager::set_enabled(false);
     pager::print_paged("line one\nline two\n").expect("print should succeed");
 }
 
 #[test]
 fn collapsed_pager_prints_all_when_not_terminal() {
+    let _capture = manualaid_cli::console::capture();
+    pager::set_enabled(false);
     let long = (1..=100)
         .map(|n| format!("line {n}"))
         .collect::<Vec<_>>()

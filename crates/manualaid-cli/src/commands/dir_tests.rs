@@ -66,6 +66,7 @@ fn confirm_or_abort_surfaces_read_errors() {
 
 #[test]
 fn clean_project_scope_uses_cwd_as_base() {
+    let _capture = crate::console::capture();
     let _cwd = CWD_LOCK.lock().unwrap();
     let original = std::env::current_dir().unwrap();
     let project = temp_dir("clean-project");
@@ -82,6 +83,7 @@ fn clean_project_scope_uses_cwd_as_base() {
 
 #[test]
 fn clean_global_scope_confirm_yes_removes_home_dir() {
+    let _capture = crate::console::capture();
     let home = temp_dir("clean-confirm-yes");
     std::fs::create_dir_all(home.join(".ManualAid")).unwrap();
     let mut stdin = "y\n".as_bytes();
@@ -92,6 +94,7 @@ fn clean_global_scope_confirm_yes_removes_home_dir() {
 
 #[test]
 fn clean_global_scope_confirm_no_aborts() {
+    let _capture = crate::console::capture();
     let _lock = LOCALE_LOCK.lock().unwrap();
     i18n::set_locale("en");
     let home = temp_dir("clean-confirm-no");
@@ -113,6 +116,7 @@ fn clean_manualaid_dirs_reports_missing_dirs() {
 
 #[test]
 fn dir_view_with_real_home_falls_back_to_home_dir() {
+    let _capture = crate::console::capture();
     let _lock = LOCALE_LOCK.lock().unwrap();
     i18n::set_locale("en");
     assert!(run_dir_view(false, true, None, None, None).is_ok());

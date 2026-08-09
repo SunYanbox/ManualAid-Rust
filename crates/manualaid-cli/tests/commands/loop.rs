@@ -55,33 +55,45 @@ async fn approved_round_executes_tools() {
 
 #[tokio::test]
 async fn denied_round_returns_failure_with_reason() {
+    let _capture = manualaid_cli::console::capture();
     let root = std::env::temp_dir().join("manualaid-loop-ws");
+    // An absolute path next to the workspace root stays outside the
+    // workspace on both Windows and Linux (`C:/outside/x.txt` is relative
+    // on Linux and would resolve inside the workspace instead).
+    // 工作区根目录旁的绝对路径在 Windows 与 Linux 上都位于工作区之外
+    // （`C:/outside/x.txt` 在 Linux 上是相对路径，会被解析进工作区）。
+    let outside = root
+        .parent()
+        .expect("temp dir has a parent")
+        .join("manualaid-loop-outside.txt");
+    let outside = outside.to_string_lossy();
     let registry = FormatRegistry::new();
-    let (_, results) = execute_round_with_approval(
-        &executor(&root),
-        &registry,
-        "<write><file_path>C:/outside/x.txt</file_path><content>y</content></write>",
-        |_| Approval::Deny,
-    )
-    .await
-    .unwrap();
+    let call = format!("<write><file_path>{outside}</file_path><content>y</content></write>");
+    let (_, results) =
+        execute_round_with_approval(&executor(&root), &registry, &call, |_| Approval::Deny)
+            .await
+            .unwrap();
     assert!(!results[0].success);
     // The audit reason embeds the original path, so this assertion holds in
     // every locale without pinning the process-wide i18n setting.
     // 审计原因包含原始路径，断言在所有语言下都成立，无需固定进程级 locale。
-    assert!(results[0].output.contains("C:/outside/x.txt"));
+    assert!(results[0].output.contains(&*outside));
 }
 
 #[tokio::test]
 async fn deny_with_text_becomes_the_tool_result() {
+    let _capture = manualaid_cli::console::capture();
     let root = std::env::temp_dir().join("manualaid-loop-ws");
+    let outside = root
+        .parent()
+        .expect("temp dir has a parent")
+        .join("manualaid-loop-outside-text.txt");
+    let outside = outside.to_string_lossy();
     let registry = FormatRegistry::new();
-    let (_, results) = execute_round_with_approval(
-        &executor(&root),
-        &registry,
-        "<write><file_path>C:/outside/x.txt</file_path><content>y</content></write>",
-        |_| Approval::DenyWithText("use the read tool instead".to_string()),
-    )
+    let call = format!("<write><file_path>{outside}</file_path><content>y</content></write>");
+    let (_, results) = execute_round_with_approval(&executor(&root), &registry, &call, |_| {
+        Approval::DenyWithText("use the read tool instead".to_string())
+    })
     .await
     .unwrap();
     assert!(!results[0].success);
@@ -90,6 +102,7 @@ async fn deny_with_text_becomes_the_tool_result() {
 
 #[tokio::test]
 async fn mixed_approve_and_deny_in_one_round() {
+    let _capture = manualaid_cli::console::capture();
     let ws = std::env::temp_dir().join(format!("manualaid-loop-mixed-{}", std::process::id()));
     std::fs::create_dir_all(&ws).unwrap();
     let registry = FormatRegistry::new();
@@ -127,6 +140,7 @@ async fn mixed_approve_and_deny_in_one_round() {
 
 #[tokio::test]
 async fn pre_failed_call_skips_approval_while_others_are_asked() {
+    let _capture = manualaid_cli::console::capture();
     let ws = std::env::temp_dir().join(format!("manualaid-loop-prefail-{}", std::process::id()));
     std::fs::create_dir_all(&ws).unwrap();
     let registry = FormatRegistry::new();
@@ -187,6 +201,7 @@ async fn pre_failed_calls_never_ask_for_approval() {
 
 #[tokio::test]
 async fn accept_edit_auto_approves_workspace_write() {
+    let _capture = manualaid_cli::console::capture();
     let ws =
         std::env::temp_dir().join(format!("manualaid-loop-accept-edit-{}", std::process::id()));
     std::fs::create_dir_all(&ws).unwrap();
@@ -209,6 +224,7 @@ async fn accept_edit_auto_approves_workspace_write() {
 
 #[tokio::test]
 async fn manual_mode_asks_before_workspace_write() {
+    let _capture = manualaid_cli::console::capture();
     let ws = std::env::temp_dir().join(format!("manualaid-loop-manual-{}", std::process::id()));
     std::fs::create_dir_all(&ws).unwrap();
     let registry = FormatRegistry::new();

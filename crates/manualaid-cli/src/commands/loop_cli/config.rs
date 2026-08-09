@@ -1,7 +1,6 @@
 //! Configuration menu and persistence.
 //! 配置菜单与持久化。
 
-use std::io::Write;
 use std::path::Path;
 
 use manualaid_core::audit::SessionMode;
@@ -21,7 +20,7 @@ pub(super) fn config_menu(
     options: &mut LoopOptions,
 ) {
     loop {
-        println!("{}", render_config_menu(config, options));
+        crate::console::out_println!("{}", render_config_menu(config, options));
         let line = read_line().unwrap_or_default();
         match line.trim() {
             "1" => {
@@ -52,7 +51,7 @@ pub(super) fn config_menu(
                     SessionMode::Manual => SessionMode::AcceptEdit,
                     SessionMode::AcceptEdit => SessionMode::Manual,
                 };
-                println!(
+                crate::console::out_println!(
                     "{}",
                     t_fmt(
                         "cli.config.mode_switched",
@@ -65,7 +64,7 @@ pub(super) fn config_menu(
                 persist_and_confirm(config, root, "cli.config.saved", "");
             }
             "0" | "" => break,
-            _ => println!("{}", i18n::t_str("cli.loop.menu_invalid")),
+            _ => crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid")),
         }
     }
 }
@@ -88,7 +87,7 @@ pub(super) fn toggle_tool(config: &mut Config, root: &Path, tool: &str) {
 /// 持久化配置并打印确认消息。
 pub(super) fn persist_and_confirm(config: &Config, root: &Path, key: &str, value: &str) {
     match save_project(root, config) {
-        Ok(()) => println!(
+        Ok(()) => crate::console::out_println!(
             "{}",
             t_fmt(key, &[("lang", value), ("format", value), ("value", value)])
         ),
@@ -173,9 +172,9 @@ pub(super) fn skill_config_menu() {
                 ],
             ));
         }
-        println!("{}", lines.join("\n"));
-        print!("{}", i18n::t_str("cli.skill_config.prompt"));
-        let _ = std::io::stdout().flush();
+        crate::console::out_println!("{}", lines.join("\n"));
+        crate::console::out_print!("{}", i18n::t_str("cli.skill_config.prompt"));
+        crate::console::flush();
         let line = read_line().unwrap_or_default();
         let trimmed = line.trim();
         if trimmed.is_empty() {
@@ -262,6 +261,7 @@ mod tests {
 
     #[test]
     fn toggle_tool_flips_each_tool_and_persists() {
+        let _capture = crate::console::capture();
         let root = crate::test_support::temp_dir("toggle-tools");
         for (tool, initial) in [
             ("shell", true),
@@ -295,6 +295,7 @@ mod tests {
 
     #[test]
     fn persist_and_confirm_reports_write_failure() {
+        let _capture = crate::console::capture();
         let root = crate::test_support::temp_dir("persist-fail");
         std::fs::write(root.join(".ManualAid"), "occupied").unwrap();
         persist_and_confirm(&Config::default(), &root, "cli.config.saved", "");
@@ -302,6 +303,7 @@ mod tests {
 
     #[test]
     fn config_menu_cycles_lang_then_exits() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("config-menu");
@@ -317,6 +319,7 @@ mod tests {
 
     #[test]
     fn config_menu_toggles_options_and_rejects_unknown_input() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("config-menu-options");
@@ -331,6 +334,7 @@ mod tests {
 
     #[test]
     fn config_menu_toggles_approval_mode_without_persisting() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("config-menu-mode");
@@ -345,6 +349,7 @@ mod tests {
 
     #[test]
     fn config_menu_toggles_context_auto_load_and_persists() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("config-menu-context");
@@ -360,6 +365,7 @@ mod tests {
 
     #[test]
     fn config_menu_format_toggle_applies_to_registry() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("config-menu-format");
@@ -376,6 +382,7 @@ mod tests {
 
     #[test]
     fn skill_config_menu_toggles_all_and_single() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::SKILL_LOCK.lock().unwrap();
         let root = crate::test_support::temp_dir("skill-menu-root");
         let home = crate::test_support::temp_dir("skill-menu-home");

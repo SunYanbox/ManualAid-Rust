@@ -1,7 +1,6 @@
 //! Context file selection for system-prompt generation.
 //! 生成系统提示词时上下文文件的选择。
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use manualaid_ws::context::{ContextFile, discover_context_files, duplicate_of};
@@ -29,7 +28,7 @@ pub(super) fn select_context_files(root: &Path) -> Vec<PathBuf> {
 /// identical to an earlier entry, and read one line of indices.
 /// 渲染多文件选择菜单（标记与更早条目内容相同的文件）并读取一行索引输入。
 fn menu_select(files: &[ContextFile]) -> Vec<PathBuf> {
-    println!("{}", i18n::t_str("cli.context.found_multiple"));
+    crate::console::out_println!("{}", i18n::t_str("cli.context.found_multiple"));
     let duplicates = duplicate_of(files);
     for (index, file) in files.iter().enumerate() {
         let duplicate_note = duplicates[index]
@@ -38,7 +37,7 @@ fn menu_select(files: &[ContextFile]) -> Vec<PathBuf> {
                 t_fmt("cli.context.duplicate_note", &[("name", name)])
             })
             .unwrap_or_default();
-        println!(
+        crate::console::out_println!(
             "{}",
             t_fmt(
                 "cli.context.item",
@@ -51,8 +50,8 @@ fn menu_select(files: &[ContextFile]) -> Vec<PathBuf> {
             )
         );
     }
-    print!("{}", i18n::t_str("cli.context.prompt"));
-    let _ = std::io::stdout().flush();
+    crate::console::out_print!("{}", i18n::t_str("cli.context.prompt"));
+    crate::console::flush();
     let line = read_line().unwrap_or_default();
     let indices = parse_selection(&line, files.len());
     if indices.is_empty() {
@@ -67,7 +66,7 @@ fn menu_select(files: &[ContextFile]) -> Vec<PathBuf> {
         .filter_map(|path| path.file_name().and_then(|name| name.to_str()))
         .collect::<Vec<_>>()
         .join(", ");
-    println!("{}", t_fmt("cli.context.loaded", &[("names", &names)]));
+    crate::console::out_println!("{}", t_fmt("cli.context.loaded", &[("names", &names)]));
     paths
 }
 
@@ -148,6 +147,7 @@ mod tests {
 
     #[test]
     fn menu_select_loads_chosen_indices_and_marks_duplicates() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         let root = crate::test_support::temp_dir("ctx-menu");
         std::fs::write(root.join("AGENTS.md"), "same").unwrap();
@@ -163,6 +163,7 @@ mod tests {
 
     #[test]
     fn menu_select_empty_input_loads_nothing() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         let root = crate::test_support::temp_dir("ctx-menu-empty");
         std::fs::write(root.join("AGENTS.md"), "a").unwrap();
