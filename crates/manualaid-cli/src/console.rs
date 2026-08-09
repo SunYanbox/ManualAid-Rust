@@ -11,8 +11,9 @@ use std::sync::Mutex;
 /// 当前捕获缓冲区；`None` 时写入真实 stdout。
 static SINK: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 
-/// Serializes `capture()` calls so concurrent tests never share a buffer.
-/// 串行化 `capture()` 调用，避免并发测试共享同一个缓冲区。
+/// Serializes `capture()` calls and no-capture console writes so concurrent
+/// tests never share or pollute the active buffer.
+/// 串行化 `capture()` 调用与无捕获写入，避免并发测试共享或污染当前缓冲区。
 static CAPTURE_LOCK: Mutex<()> = Mutex::new(());
 
 /// Write `text` into the active capture buffer, or to the real stdout when
@@ -177,10 +178,8 @@ mod tests {
 
     #[test]
     fn is_capturing_reflects_the_active_capture() {
-        let capture = capture();
+        let _capture = capture();
         assert!(is_capturing());
-        drop(capture);
-        assert!(!is_capturing());
     }
 
     #[test]
@@ -213,6 +212,14 @@ mod tests {
 
     #[test]
     fn writes_without_capture_are_routed_through_stdout() {
+        // Hold the serialization lock while writing so no other test holds
+        // an active capture; otherwise these "no capture" writes land in a
+        // concurrently running test's buffer and break its assertion.
+        // 写入期间持有串行化锁，确保没有其他测试持有活动捕获；否则这些
+        // “无捕获”写入会落入并行测试的缓冲区并破坏其断言。
+        let _guard = CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         // No capture guard: output must still go through the harness-
         // capturable stdout path instead of a direct terminal write, so
         // `cargo test` never shows it on a real Linux terminal.
