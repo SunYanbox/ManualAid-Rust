@@ -354,7 +354,7 @@ fn hex_to_hash(hex: &str) -> Option<Hash> {
     }
     let bytes = hex.as_bytes();
     let mut hash = [0u8; 64];
-    for (i, chunk) in bytes.chunks_exact(2).enumerate() {
+    for (i, chunk) in bytes.as_chunks::<2>().0.iter().enumerate() {
         let hi = hex_val(chunk[0])?;
         let lo = hex_val(chunk[1])?;
         hash[i] = (hi << 4) | lo;
