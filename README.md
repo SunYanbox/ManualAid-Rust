@@ -2,6 +2,9 @@
 
 [中文](README_ZH_CN.md) / English
 
+![Rust](https://img.shields.io/badge/rust-1.97.0+-blue.svg)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)
+
 A **local-only, human-in-the-loop** copypaste assistant for LLM workflows.
 
 > **Version**: 0.1.0 | **Rust**: >=1.97.0

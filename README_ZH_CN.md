@@ -2,6 +2,9 @@
 
 中文 / [English](README.md)
 
+![Rust](https://img.shields.io/badge/rust-1.97.0+-blue.svg)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)
+
 一款**纯本地、需人工介入**的复制粘贴助手，专为 LLM 工作流设计。
 
 > **版本**: 0.1.0 | **Rust**: >=1.97.0
