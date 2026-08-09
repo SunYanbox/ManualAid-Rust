@@ -191,3 +191,154 @@ fn non_string_params_are_audited_as_their_text_form() {
     let decisions = auditor.check(&parameters, ToolKind::Write);
     assert!(matches!(decisions[0].1, AuditDecision::NeedsApproval(_)));
 }
+
+#[test]
+fn wildcard_whitelist_command_is_allowed() {
+    let root = std::env::temp_dir();
+    let auditor = Auditor::new(root).with_allowed_commands(vec!["git log *".to_string()]);
+    let decisions = auditor.check(
+        &params(&[("command", "git log --oneline -5"), ("description", "x")]),
+        ToolKind::Shell,
+    );
+    assert!(decisions.is_empty());
+}
+
+#[test]
+fn wildcard_whitelist_matches_zero_or_more_characters() {
+    let root = std::env::temp_dir();
+    let auditor = Auditor::new(root).with_allowed_commands(vec!["git log *".to_string()]);
+    for command in ["git log --oneline", "git log --author=Alice -n 3"] {
+        let decisions = auditor.check(
+            &params(&[("command", command), ("description", "x")]),
+            ToolKind::Shell,
+        );
+        assert!(decisions.is_empty(), "{command} must be whitelisted");
+    }
+    // The literal space before `*` is part of the pattern, so the bare
+    // command is not covered by `git log *`.
+    // `*` 前的空格属于模式字面量，因此裸命令不在 `git log *` 的覆盖范围内。
+    let decisions = auditor.check(
+        &params(&[("command", "git log"), ("description", "x")]),
+        ToolKind::Shell,
+    );
+    assert!(matches!(decisions[0].1, AuditDecision::NeedsApproval(_)));
+}
+
+#[test]
+fn exact_whitelist_does_not_match_extra_arguments() {
+    let root = std::env::temp_dir();
+    let auditor = Auditor::new(root).with_allowed_commands(vec!["git log".to_string()]);
+    let allowed = auditor.check(
+        &params(&[("command", "git log"), ("description", "x")]),
+        ToolKind::Shell,
+    );
+    assert!(allowed.is_empty());
+    let decisions = auditor.check(
+        &params(&[("command", "git log --oneline"), ("description", "x")]),
+        ToolKind::Shell,
+    );
+    assert!(matches!(decisions[0].1, AuditDecision::NeedsApproval(_)));
+}
+
+#[test]
+fn config_commands_merge_with_default_whitelist() {
+    let root = std::env::temp_dir();
+    let auditor = Auditor::new(root).with_allowed_commands(vec!["git log *".to_string()]);
+    let decisions = auditor.check(
+        &params(&[("command", "git status"), ("description", "x")]),
+        ToolKind::Shell,
+    );
+    assert!(
+        decisions.is_empty(),
+        "built-in default must stay whitelisted"
+    );
+}
+
+#[test]
+fn default_whitelist_covers_platform_listing_command() {
+    let root = std::env::temp_dir();
+    let auditor = Auditor::new(root);
+    #[cfg(windows)]
+    let listing = "dir";
+    #[cfg(not(windows))]
+    let listing = "ls";
+    let decisions = auditor.check(
+        &params(&[("command", listing), ("description", "x")]),
+        ToolKind::Shell,
+    );
+    assert!(decisions.is_empty());
+}
+
+#[test]
+fn wildcard_whitelist_cannot_match_chained_command() {
+    let root = std::env::temp_dir();
+    let auditor = Auditor::new(root).with_allowed_commands(vec!["git *".to_string()]);
+    let decisions = auditor.check(
+        &params(&[("command", "git status; echo hi"), ("description", "x")]),
+        ToolKind::Shell,
+    );
+    assert!(matches!(decisions[0].1, AuditDecision::NeedsApproval(_)));
+}
+
+#[test]
+fn dangerous_whitelist_entries_are_detected() {
+    for pattern in ["rm -rf /", "rm *", "*", "> *", "mkfs*", "> /dev/sda"] {
+        assert!(
+            manualaid_core::audit::is_dangerous_allow_command(pattern),
+            "{pattern} must be dangerous"
+        );
+    }
+    for pattern in [
+        "git status",
+        "git log *",
+        "gh pr view *",
+        "cargo fmt -- --check",
+    ] {
+        assert!(
+            !manualaid_core::audit::is_dangerous_allow_command(pattern),
+            "{pattern} must be safe"
+        );
+    }
+}
+
+#[test]
+fn sanitize_allow_commands_keeps_order_and_ignores_dangerous() {
+    let (kept, ignored) = manualaid_core::audit::sanitize_allow_commands(vec![
+        "git log *".to_string(),
+        "rm *".to_string(),
+        "git status".to_string(),
+        "*".to_string(),
+    ]);
+    assert_eq!(kept, vec!["git log *", "git status"]);
+    assert_eq!(ignored, vec!["rm *", "*"]);
+}
+
+#[test]
+fn auditor_ignores_dangerous_config_commands() {
+    let root = std::env::temp_dir();
+    let auditor = Auditor::new(root).with_allowed_commands(vec!["rm *".to_string()]);
+    let decisions = auditor.check(
+        &params(&[("command", "rm file.txt"), ("description", "x")]),
+        ToolKind::Shell,
+    );
+    assert!(matches!(decisions[0].1, AuditDecision::NeedsApproval(_)));
+}
+
+#[test]
+fn wildcard_match_follows_star_semantics() {
+    assert!(manualaid_core::audit::wildcard_match(
+        "git log *",
+        "git log --oneline"
+    ));
+    assert!(manualaid_core::audit::wildcard_match("git log*", "git log"));
+    assert!(!manualaid_core::audit::wildcard_match(
+        "git log *",
+        "git log"
+    ));
+    assert!(manualaid_core::audit::wildcard_match("git *", "git status"));
+    assert!(!manualaid_core::audit::wildcard_match(
+        "git log *",
+        "git push"
+    ));
+    assert!(manualaid_core::audit::wildcard_match("*", "anything"));
+}

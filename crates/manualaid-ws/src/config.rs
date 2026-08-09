@@ -9,10 +9,26 @@ use std::path::{Path, PathBuf};
 use manualaid_core::error::{CoreError, CoreResult};
 use serde::{Deserialize, Serialize};
 
+/// The kind of a config issue, controlling how the CLI reports it.
+/// 配置问题的种类，决定 CLI 的展示方式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigIssueKind {
+    /// The value of a known config key is invalid.
+    /// 已知配置键的值无效。
+    InvalidValue,
+    /// A `[permissions].allow_commands` entry matches a blacklisted
+    /// command and was ignored.
+    /// `[permissions].allow_commands` 条目命中黑名单命令，已被忽略。
+    DangerousAllowCommand,
+}
+
 /// A validation issue found while loading a config file.
 /// 加载配置文件时发现的验证问题。
 #[derive(Debug, Clone)]
 pub struct ConfigIssue {
+    /// What kind of issue this is.
+    /// 该问题所属的种类。
+    pub kind: ConfigIssueKind,
     /// The config key that has an invalid value.
     /// 具有无效值的配置键。
     pub key: String,
@@ -275,11 +291,16 @@ fn merge_with_issues(
             .skill
             .or(global.tools.skill)
             .unwrap_or(defaults.skill),
-        allow_commands: project
-            .permissions
-            .allow_commands
-            .or(global.permissions.allow_commands)
-            .unwrap_or_default(),
+        allow_commands: {
+            let (allow_commands, allow_issues) = merge_allow_commands(
+                project.permissions.allow_commands,
+                global.permissions.allow_commands,
+                project_path,
+                global_path,
+            );
+            issues.extend(allow_issues);
+            allow_commands
+        },
         max_result_chars: project
             .global
             .max_result_chars
@@ -292,6 +313,38 @@ fn merge_with_issues(
             .unwrap_or(defaults.context_auto_load),
     };
     (config, issues)
+}
+
+/// Resolve the effective `[permissions].allow_commands` list (project wins,
+/// falling back to global) and drop entries that match a blacklisted
+/// command. Each dropped entry becomes a `ConfigIssue` so the CLI can warn
+/// the user that the dangerous rule was ignored.
+/// 解析生效的 `[permissions].allow_commands` 列表（项目优先，回退全局），
+/// 并丢弃命中黑名单命令的条目。每个被丢弃的条目生成一个 `ConfigIssue`，
+/// 供 CLI 警告用户该危险规则已被忽略。
+fn merge_allow_commands(
+    project: Option<Vec<String>>,
+    global: Option<Vec<String>>,
+    project_path: &Path,
+    global_path: &Path,
+) -> (Vec<String>, Vec<ConfigIssue>) {
+    let (source, path) = match (project, global) {
+        (Some(commands), _) => (commands, project_path),
+        (None, Some(commands)) => (commands, global_path),
+        (None, None) => return (Vec::new(), Vec::new()),
+    };
+    let (kept, ignored) = manualaid_core::audit::sanitize_allow_commands(source);
+    let issues = ignored
+        .into_iter()
+        .map(|command| ConfigIssue {
+            kind: ConfigIssueKind::DangerousAllowCommand,
+            key: "permissions.allow_commands".to_string(),
+            value: command,
+            available_values: Vec::new(),
+            path: path.to_path_buf(),
+        })
+        .collect();
+    (kept, issues)
 }
 
 /// Paths of the global and project config files, used to locate the source
@@ -324,6 +377,7 @@ fn resolve_string_with_validation<F: Fn(&str) -> bool, V: Fn() -> Vec<String>>(
             return (value.to_string(), None);
         } else {
             let issue = ConfigIssue {
+                kind: ConfigIssueKind::InvalidValue,
                 key: key.to_string(),
                 value: value.to_string(),
                 available_values: available(),
@@ -349,6 +403,7 @@ fn resolve_string_with_validation<F: Fn(&str) -> bool, V: Fn() -> Vec<String>>(
             return (value.to_string(), None);
         } else {
             let issue = ConfigIssue {
+                kind: ConfigIssueKind::InvalidValue,
                 key: key.to_string(),
                 value: value.to_string(),
                 available_values: available(),
@@ -824,5 +879,76 @@ mod tests {
         std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
         std::fs::write(root.join(".ManualAid").join("config.toml"), "global = 5\n").unwrap();
         let _ = save_project(&root, &Config::default());
+    }
+
+    #[test]
+    fn dangerous_allow_commands_are_dropped_with_issues() {
+        let project = ConfigFile {
+            permissions: PermissionsSection {
+                allow_commands: Some(vec![
+                    "git log *".into(),
+                    "rm *".into(),
+                    "*".into(),
+                    "gh pr view *".into(),
+                ]),
+            },
+            ..Default::default()
+        };
+        let (config, issues) = merge_with_issues(
+            ConfigFile::default(),
+            project,
+            Path::new("global.toml"),
+            Path::new("project.toml"),
+        );
+        assert_eq!(config.allow_commands, vec!["git log *", "gh pr view *"]);
+        assert_eq!(issues.len(), 2);
+        assert!(
+            issues
+                .iter()
+                .all(|issue| issue.kind == ConfigIssueKind::DangerousAllowCommand)
+        );
+        assert_eq!(issues[0].value, "rm *");
+        assert_eq!(issues[1].value, "*");
+        assert_eq!(issues[0].key, "permissions.allow_commands");
+        assert_eq!(issues[0].path, Path::new("project.toml"));
+    }
+
+    #[test]
+    fn dangerous_allow_commands_from_global_are_dropped_with_issues() {
+        let global = ConfigFile {
+            permissions: PermissionsSection {
+                allow_commands: Some(vec!["rm -rf /".into()]),
+            },
+            ..Default::default()
+        };
+        let (config, issues) = merge_with_issues(
+            global,
+            ConfigFile::default(),
+            Path::new("global.toml"),
+            Path::new("project.toml"),
+        );
+        assert!(config.allow_commands.is_empty());
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].kind, ConfigIssueKind::DangerousAllowCommand);
+        assert_eq!(issues[0].value, "rm -rf /");
+        assert_eq!(issues[0].path, Path::new("global.toml"));
+    }
+
+    #[test]
+    fn safe_allow_commands_produce_no_issues() {
+        let project = ConfigFile {
+            permissions: PermissionsSection {
+                allow_commands: Some(vec!["git log *".into(), "git status".into()]),
+            },
+            ..Default::default()
+        };
+        let (config, issues) = merge_with_issues(
+            ConfigFile::default(),
+            project,
+            Path::new("global.toml"),
+            Path::new("project.toml"),
+        );
+        assert_eq!(config.allow_commands, vec!["git log *", "git status"]);
+        assert!(issues.is_empty());
     }
 }

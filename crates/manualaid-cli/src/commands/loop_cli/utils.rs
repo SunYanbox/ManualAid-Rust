@@ -6,7 +6,7 @@ use std::path::Path;
 
 use manualaid_core::parser::{FormatRegistry, RegistryMode};
 use manualaid_core::tools::ToolResult;
-use manualaid_ws::config::Config;
+use manualaid_ws::config::{Config, ConfigIssue, ConfigIssueKind};
 
 /// Translate `key` and replace `%{name}` placeholders.
 /// 翻译 `key` 并替换 `%{name}` 占位符。
@@ -16,6 +16,29 @@ pub(super) fn t_fmt(key: &str, args: &[(&str, &str)]) -> String {
         template = template.replace(&format!("%{{{name}}}"), value);
     }
     template
+}
+
+/// Format one config-file validation issue as a user-facing warning line.
+/// 把一条配置校验问题格式化为面向用户的警告行。
+pub(super) fn format_config_issue(issue: &ConfigIssue) -> String {
+    match issue.kind {
+        ConfigIssueKind::InvalidValue => t_fmt(
+            "cli.warning.invalid_config_value",
+            &[
+                ("key", &issue.key),
+                ("value", &issue.value),
+                ("available", &issue.available_values.join(", ")),
+                ("path", &issue.path.display().to_string()),
+            ],
+        ),
+        ConfigIssueKind::DangerousAllowCommand => t_fmt(
+            "cli.warning.dangerous_allow_command",
+            &[
+                ("command", &issue.value),
+                ("path", &issue.path.display().to_string()),
+            ],
+        ),
+    }
 }
 
 /// Read one line from stdin; EOF or an error yields `None`.
@@ -364,5 +387,37 @@ mod tests {
         )]);
         assert!(summary.contains("      indented  "));
         assert!(summary.contains("    second"));
+    }
+
+    #[test]
+    fn format_config_issue_warns_about_dangerous_allow_command() {
+        i18n::set_locale("en");
+        let issue = ConfigIssue {
+            kind: ConfigIssueKind::DangerousAllowCommand,
+            key: "permissions.allow_commands".into(),
+            value: "rm *".into(),
+            available_values: Vec::new(),
+            path: std::path::PathBuf::from("project.toml"),
+        };
+        let message = format_config_issue(&issue);
+        assert!(message.contains("rm *"));
+        assert!(message.contains("project.toml"));
+        assert!(message.contains("ignored"));
+    }
+
+    #[test]
+    fn format_config_issue_reports_invalid_value() {
+        i18n::set_locale("en");
+        let issue = ConfigIssue {
+            kind: ConfigIssueKind::InvalidValue,
+            key: "lang".into(),
+            value: "fr".into(),
+            available_values: vec!["en".into(), "zh-CN".into()],
+            path: std::path::PathBuf::from("global.toml"),
+        };
+        let message = format_config_issue(&issue);
+        assert!(message.contains("lang"));
+        assert!(message.contains("fr"));
+        assert!(message.contains("en, zh-CN"));
     }
 }
