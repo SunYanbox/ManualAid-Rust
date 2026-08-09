@@ -122,6 +122,13 @@ async fn loop_main_at(
     lang: Option<String>,
     mode: Option<SessionMode>,
 ) -> Result<(), String> {
+    // Create the standard project `.ManualAid` files (config + gitignore)
+    // at startup so a fresh workspace never lacks its ignore rules;
+    // existing files are never overwritten.
+    // 启动时创建标准的项目 `.ManualAid` 文件（配置与 .gitignore），
+    // 避免新工作区缺少忽略规则；已有文件不会被覆盖。
+    manualaid_core::manualaid_dir::ensure_project_manualaid_dir(current_dir)
+        .map_err(|e| t_fmt("cli.error.init", &[("error", &e.to_string())]))?;
     let (mut config, issues) = manualaid_ws::config::load(current_dir, home)
         .map_err(|e| t_fmt("cli.error.init", &[("error", &e.to_string())]))?;
     // Snapshot for the startup hint: the CLI language override below must

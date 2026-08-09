@@ -39,13 +39,37 @@ struct FileTarget {
     content: &'static str,
 }
 
-/// Content of the generated home `.ManualAid/config.toml`:
-/// contains **commented‑out** `[privacy_mask_extension]` tables loaded by [`crate::privacy`].
-/// 生成的 `~/.ManualAid/config.toml` 的内容；含 [`crate::privacy`] 读取的
-/// 带注释的 `[privacy_mask_extension]` 表。
+/// Content of the generated home `.ManualAid/config.toml`: commented
+/// templates for every key loaded by the CLI loop and [`crate::privacy`].
+/// 生成的 `~/.ManualAid/config.toml` 的内容：CLI loop 与 [`crate::privacy`]
+/// 实际加载的全部配置项的注释模板。
 pub const DEFAULT_GLOBAL_CONFIG_CONTENT: &str = concat!(
     "# ManualAid 全局配置文件（~/.ManualAid/config.toml）。\n",
     "# 由 `manualaid init` 自动生成；文件已存在时不会被覆盖。\n",
+    "# 项目配置（<项目根>/.ManualAid/config.toml）按 key 覆盖全局配置。\n",
+    "\n",
+    "# 界面语言：`en` 或 `zh-CN`，默认 `en`。\n",
+    "# 工具调用格式：`auto` / `xml` / `json-codeblock`，默认 `auto`（自动探测）。\n",
+    "# 复制到剪贴板的结果文本最大字符数，默认 50000。\n",
+    "# 是否自动加载上下文文件（AGENTS.md 等），默认 true。\n",
+    "[global]\n",
+    "# lang = \"en\"\n",
+    "# tool_call_format = \"auto\"\n",
+    "# max_result_chars = 50000\n",
+    "# context_auto_load = true\n",
+    "\n",
+    "# 基础工具开关：控制工具是否出现在提示词与工具路由中，默认全部启用。\n",
+    "[tools]\n",
+    "# shell = true\n",
+    "# read = true\n",
+    "# edit = true\n",
+    "# write = true\n",
+    "# skill = true\n",
+    "\n",
+    "# 免审核白名单：命中即无需用户交互直接执行（精确匹配或 `*` 通配符；\n",
+    "# 含 `;`、`&`、`|` 连接符的命令不会命中白名单）。\n",
+    "[permissions]\n",
+    "# allow_commands = [\"gh pr view *\", \"cargo fmt -- --check\"]\n",
     "\n",
     "# 隐私掩码扩展 —— 正则匹配（可选）。\n",
     "# 键为类型名，值为正则字符串；匹配到的文本在发送给 LLM 前会被替换为占位符。\n",
@@ -60,18 +84,45 @@ pub const DEFAULT_GLOBAL_CONFIG_CONTENT: &str = concat!(
 
 /// Content of the generated project `.ManualAid/config.toml`: the `[skill]`
 /// table used by [`crate::skill`] for enable/disable state plus commented
-/// `[privacy_mask_extension]` tables. Also the base document used by
-/// [`crate::skill::set_enabled`] when the config file is missing or blank.
+/// templates for every key loaded by the CLI loop and [`crate::privacy`].
+/// Also the base document used by [`crate::skill::set_enabled`] when the
+/// config file is missing or blank.
 /// 生成的项目 `.ManualAid/config.toml` 的内容：供 [`crate::skill`] 读写
-/// 启用/禁用状态的 `[skill]` 表，以及带注释的 `[privacy_mask_extension]`
-/// 表。配置文件缺失或空白时，也作为 [`crate::skill`] 创建文件的基础文档。
+/// 启用/禁用状态的 `[skill]` 表，以及 CLI loop 与 [`crate::privacy`] 实际
+/// 加载的全部配置项的注释模板。配置文件缺失或空白时，也作为
+/// [`crate::skill`] 创建文件的基础文档。
 pub const DEFAULT_PROJECT_CONFIG_CONTENT: &str = concat!(
     "# ManualAid 项目配置文件（<项目根>/.ManualAid/config.toml）。\n",
     "# 由 `manualaid init` 自动生成；文件已存在时不会被覆盖。\n",
+    "# 项目配置按 key 覆盖全局配置；目录内的 .gitignore 保证本文件不被提交。\n",
+    "\n",
+    "# 界面语言：`en` 或 `zh-CN`；未设置时使用全局配置。\n",
+    "# 工具调用格式：`auto` / `xml` / `json-codeblock`；未设置时使用全局配置。\n",
+    "# 复制到剪贴板的结果文本最大字符数，默认 50000。\n",
+    "# 是否自动加载上下文文件（AGENTS.md 等），默认 true。\n",
+    "[global]\n",
+    "# lang = \"zh-CN\"\n",
+    "# tool_call_format = \"auto\"\n",
+    "# max_result_chars = 50000\n",
+    "# context_auto_load = true\n",
+    "\n",
+    "# 基础工具开关：控制工具是否出现在提示词与工具路由中，默认全部启用。\n",
+    "[tools]\n",
+    "# shell = true\n",
+    "# read = true\n",
+    "# edit = true\n",
+    "# write = true\n",
+    "# skill = true\n",
+    "\n",
+    "# 免审核白名单：命中即无需用户交互直接执行（精确匹配或 `*` 通配符；\n",
+    "# 含 `;`、`&`、`|` 连接符的命令不会命中白名单）。\n",
+    "[permissions]\n",
+    "# allow_commands = [\"gh pr view *\", \"cargo fmt -- --check\"]\n",
     "\n",
     "# 技能启用/禁用状态（可选，一般由 skill 相关功能读写）。\n",
     "# 键为技能目录的绝对路径（路径分隔符用 /，键需加引号），值为布尔值。\n",
     "[skill]\n",
+    "# \"/absolute/path/to/skill\" = true\n",
     "\n",
     "# 隐私掩码扩展 —— 正则匹配（可选；与全局配置按 key 合并，项目覆盖全局）。\n",
     "# 键为类型名，值为正则字符串；匹配到的文本在发送给 LLM 前会被替换为占位符。\n",

@@ -9,10 +9,22 @@ use crate::style;
 /// Produce a unified diff between two texts with `a/`/`b/` headers.
 /// 生成两个文本之间带 `a/`/`b/` 头的 unified diff。
 pub(super) fn unified_diff(path: &str, original: &str, modified: &str) -> String {
+    let header = diff_header_path(path);
     similar::TextDiff::from_lines(original, modified)
         .unified_diff()
-        .header(format!("a/{path}").as_str(), format!("b/{path}").as_str())
+        .header(
+            format!("a/{header}").as_str(),
+            format!("b/{header}").as_str(),
+        )
         .to_string()
+}
+
+/// Strip a single leading slash so Unix absolute paths render as
+/// `a/tmp/x` instead of `a//tmp/x` in diff headers.
+/// 去掉单个前导斜杠，使 Unix 绝对路径在 diff 头中显示为 `a/tmp/x`
+/// 而不是 `a//tmp/x`。
+fn diff_header_path(path: &str) -> &str {
+    path.strip_prefix('/').unwrap_or(path)
 }
 
 /// Color a unified diff line-by-line, only when ANSI styling is enabled.
@@ -55,6 +67,15 @@ mod tests {
         assert!(diff.contains("b/doc.txt"));
         assert!(diff.contains("-b"));
         assert!(diff.contains("+c"));
+    }
+
+    #[test]
+    fn unified_diff_avoids_double_slash_for_absolute_paths() {
+        let diff = unified_diff("/tmp/doc.txt", "a\n", "b\n");
+        assert!(diff.contains("a/tmp/doc.txt"));
+        assert!(diff.contains("b/tmp/doc.txt"));
+        assert!(!diff.contains("a//"));
+        assert!(!diff.contains("b//"));
     }
 
     #[test]

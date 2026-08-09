@@ -71,6 +71,32 @@ fn ensure_default_config_parses_as_privacy_extension() {
     assert!(ext.literal.is_empty());
 }
 
+/// Both default templates cover every section the runtime actually loads,
+/// with example keys commented out, and parse as valid TOML.
+/// 两个默认模板都覆盖运行时会加载的所有配置节（示例键均注释），并解析
+/// 为合法 TOML。
+#[test]
+fn default_templates_cover_all_loaded_sections() {
+    let global: toml::Table =
+        toml::from_str(DEFAULT_GLOBAL_CONFIG_CONTENT).expect("global template parses");
+    let project: toml::Table =
+        toml::from_str(DEFAULT_PROJECT_CONFIG_CONTENT).expect("project template parses");
+
+    for table in [&global, &project] {
+        for section in ["global", "tools", "permissions", "privacy_mask_extension"] {
+            assert!(table.contains_key(section), "missing `{section}` section");
+        }
+        let privacy = &table["privacy_mask_extension"];
+        assert!(privacy.get("regex").is_some(), "missing `regex` table");
+        assert!(privacy.get("literal").is_some(), "missing `literal` table");
+    }
+
+    // `[skill]` is project-only: the global file never carries skill state.
+    // `[skill]` 仅存在于项目配置：全局文件不承载技能启用状态。
+    assert!(!global.contains_key("skill"));
+    assert!(project.contains_key("skill"));
+}
+
 /// Running `ensure_manualaid_dirs` twice succeeds both times.
 /// 连续两次运行 `ensure_manualaid_dirs` 均成功。
 #[test]

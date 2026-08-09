@@ -255,10 +255,20 @@ fn loop_binary_skips_context_selection_when_auto_load_is_disabled() {
     std::fs::write(dir.path().join("CLAUDE.md"), "b").unwrap();
     let _clipboard_lock = ClipboardLock::acquire();
     with_clipboard_restored(|| {
-        let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["1", "0"]);
-        assert!(output.status.success());
-        let clipboard =
-            manualaid_core::clipboard::read_clipboard().expect("read clipboard for context check");
+        let mut child = common::ScriptedChild::spawn(dir.path(), Some(home.path()), &[]);
+        child.send_line("1");
+        // Read while the child still owns the X11 selection: the prompt
+        // written by the short-lived binary would be lost once it exits.
+        // Poll for this workspace's own path so a stale clipboard from a
+        // previous run can never satisfy the wait.
+        // 在子进程仍持有 X11 选择权时读取：短命二进制写入的提示词会在它
+        // 退出后丢失。轮询本工作区独有的路径，避免上一次运行残留的剪贴板
+        // 内容满足等待条件。
+        let workspace_marker = dir.path().display().to_string();
+        let clipboard = wait_for_clipboard_content(&workspace_marker);
         assert!(!clipboard.contains("<context_files"));
+        child.send_line("0");
+        let output = child.wait_with_output();
+        assert!(output.status.success());
     });
 }

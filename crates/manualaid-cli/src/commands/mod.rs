@@ -104,6 +104,11 @@ mod tests {
         assert_eq!(code, 0);
         std::env::set_current_dir(&original).unwrap();
         assert!(dir.join(".ManualAid").join("config.toml").is_file());
+        assert!(dir.join(".ManualAid").join(".gitignore").is_file());
+        assert_eq!(
+            std::fs::read_to_string(dir.join(".ManualAid").join(".gitignore")).unwrap(),
+            manualaid_core::manualaid_dir::GITIGNORE_CONTENT
+        );
         manualaid_core::skill::reset_skills();
     }
 }
