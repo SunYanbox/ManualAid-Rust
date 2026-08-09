@@ -1,8 +1,8 @@
 //! The auditor inspects tool-call parameters through their
-//! [`ParamSemantic`](crate::tools::ParamSemantic) tags and decides whether
+//! [`ParamSemantic`] tags and decides whether
 //! an operation is safe, needs user approval, or should be denied — without
 //! hard-coding tool names.
-//! 审计器通过参数的 [`ParamSemantic`](crate::tools::ParamSemantic) 标签
+//! 审计器通过参数的 [`ParamSemantic`] 标签
 //! 检查工具调用，并决定操作是安全、需要用户批准还是应被拒绝——不依赖
 //! 工具名硬编码。
 //!

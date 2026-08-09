@@ -8,6 +8,24 @@ use std::sync::Mutex;
 /// 串行化依赖进程级 i18n locale 的测试。
 pub(crate) static LOCALE_LOCK: Mutex<()> = Mutex::new(());
 
+/// Serializes tests that reload the global skill store with a temp home.
+/// 串行化用临时主目录重载全局技能库的测试。
+pub(crate) static SKILL_LOCK: Mutex<()> = Mutex::new(());
+
+/// Serializes tests that change the process working directory.
+/// 串行化会修改进程工作目录的测试。
+pub(crate) static CWD_LOCK: Mutex<()> = Mutex::new(());
+
+/// Serializes tests that mutate the process-wide styling switch.
+/// 串行化修改进程级样式开关的测试。
+pub(crate) static STYLE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Serializes tests that read or write the real system clipboard, so a
+/// concurrent test cannot clobber the content another test depends on.
+/// 串行化读写真实系统剪贴板的测试，避免并发测试覆盖掉其他测试依赖的
+/// 剪贴板内容。
+pub(crate) static CLIPBOARD_LOCK: Mutex<()> = Mutex::new(());
+
 /// Create a unique temporary directory for a unit test.
 /// 为单元测试创建唯一的临时目录。
 pub(crate) fn temp_dir(tag: &str) -> PathBuf {

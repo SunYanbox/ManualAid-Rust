@@ -66,6 +66,7 @@ Formatting requirements:
 dynamic-context = """
 <dynamic-context>
 %{workspace_info}
+%{context_files}
 %{skills_list}
 </dynamic-context>
 """

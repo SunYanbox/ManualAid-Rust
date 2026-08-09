@@ -1,9 +1,13 @@
 //! ANSI escape styling for console output: colors, bold, dim and related
 //! helpers, controlled by a process-wide switch that defaults to disabled
 //! and is enabled automatically when stdout is a terminal and `NO_COLOR`
-//! is unset.
+//! is unset. On Windows the ANSI support check also enables virtual
+//! terminal processing, otherwise raw escape sequences would be ignored by
+//! the legacy console.
 //! 控制台输出的 ANSI 转义样式：颜色、加粗、弱化等辅助函数，由进程级开关控制，
 //! 默认关闭；当 stdout 是终端且未设置 `NO_COLOR` 时自动启用。
+//! 在 Windows 上 ANSI 支持检测会顺带启用虚拟终端处理，否则旧版控制台会忽略
+//! 原始转义序列。
 
 use std::io::{self, IsTerminal};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -45,10 +49,16 @@ pub fn is_enabled() -> bool {
 }
 
 /// Enable styling based on the environment: stdout is a terminal and
-/// `NO_COLOR` is unset. Returns whether styling ended up enabled.
-/// 根据环境启用样式：stdout 是终端且未设置 `NO_COLOR`。返回样式是否已启用。
+/// `NO_COLOR` is unset. On Windows this also enables virtual terminal
+/// processing so ANSI colors actually render in `cmd.exe`. Returns whether
+/// styling ended up enabled.
+/// 根据环境启用样式：stdout 是终端且未设置 `NO_COLOR`。Windows 上还会启用
+/// 虚拟终端处理，使 ANSI 颜色在 `cmd.exe` 中真正生效。返回样式是否已启用。
 pub fn auto_init() -> bool {
-    auto_init_with(io::stdout().is_terminal())
+    let stdout_is_terminal = io::stdout().is_terminal();
+    #[cfg(windows)]
+    let stdout_is_terminal = stdout_is_terminal && crossterm::ansi_support::supports_ansi();
+    auto_init_with(stdout_is_terminal)
 }
 
 /// Decide styling based on an explicit terminal flag, mirroring
@@ -212,18 +222,14 @@ fn no_color_set() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Mutex, MutexGuard};
+    use std::sync::MutexGuard;
 
     use super::*;
-
-    /// Serializes tests that mutate process-wide style state or env vars.
-    /// 串行化修改进程级样式状态或环境变量的测试。
-    static STYLE_LOCK: Mutex<()> = Mutex::new(());
 
     /// Lock for style tests; tolerates a poisoned mutex so one failing test
     /// does not hide the others.
     fn style_guard() -> MutexGuard<'static, ()> {
-        STYLE_LOCK
+        crate::test_support::STYLE_LOCK
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }

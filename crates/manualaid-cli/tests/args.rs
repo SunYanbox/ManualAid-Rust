@@ -5,7 +5,7 @@ use std::path::Path;
 
 use clap::Parser;
 
-use manualaid_cli::cli::{Cli, Command};
+use manualaid_cli::cli::{Cli, Command, ModeArg};
 
 fn parse(args: &[&str]) -> Cli {
     Cli::try_parse_from(args).expect("args should parse")
@@ -15,13 +15,37 @@ fn parse(args: &[&str]) -> Cli {
 fn parses_no_args() {
     let cli = parse(&["manualaid-cli"]);
     assert!(cli.command.is_none());
-    assert_eq!(cli.lang, "en");
+    assert!(cli.lang.is_none());
+    assert!(cli.mode.is_none());
 }
 
 #[test]
 fn parses_lang_flag() {
     let cli = parse(&["manualaid-cli", "--lang", "zh-CN"]);
-    assert_eq!(cli.lang, "zh-CN");
+    assert_eq!(cli.lang.as_deref(), Some("zh-CN"));
+}
+
+#[test]
+fn parses_mode_flag() {
+    let cli = parse(&["manualaid-cli", "--mode", "accept-edit"]);
+    assert!(matches!(cli.mode, Some(ModeArg::AcceptEdit)));
+    let cli = parse(&["manualaid-cli", "--mode", "manual"]);
+    assert!(matches!(cli.mode, Some(ModeArg::Manual)));
+}
+
+#[test]
+fn rejects_invalid_mode_value() {
+    assert!(Cli::try_parse_from(["manualaid-cli", "--mode", "bogus"]).is_err());
+}
+
+#[test]
+fn mode_arg_maps_to_session_mode() {
+    use manualaid_core::audit::SessionMode;
+    assert_eq!(SessionMode::from(ModeArg::Manual), SessionMode::Manual);
+    assert_eq!(
+        SessionMode::from(ModeArg::AcceptEdit),
+        SessionMode::AcceptEdit
+    );
 }
 
 #[test]

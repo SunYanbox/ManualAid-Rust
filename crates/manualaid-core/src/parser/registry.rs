@@ -2,6 +2,17 @@
 //! registered parsers in auto-detect order, or exactly one fixed format.
 //! 格式注册表决定由哪个解析器处理传入文本：自动检测模式下按注册顺序
 //! 尝试全部解析器，或固定使用某一种格式。
+//!
+//! # Test notes
+//! The "No parser registered for format" error branch of the fixed mode is
+//! unreachable: [`RegistryMode::Fixed`] only accepts the two formats that
+//! are always registered (`xml` and `json-codeblock`). It stays as a
+//! defensive guard for future formats and is not required to have high test
+//! coverage.
+//! # 测试说明
+//! 固定模式下“未注册该格式的解析器”错误分支不可达：[`RegistryMode::Fixed`]
+//! 只接受始终注册的两种格式（`xml` 与 `json-codeblock`）。该分支保留为
+//! 面向未来格式的防御性检查，不要求高测试覆盖率。
 
 use std::sync::RwLock;
 

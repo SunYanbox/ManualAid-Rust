@@ -172,3 +172,13 @@ fn exempt_paths_do_not_auto_allow_outside_writes() {
     assert!(matches!(decisions[0].1, AuditDecision::NeedsApproval(_)));
     let _ = std::fs::remove_dir_all(&exempt);
 }
+
+#[test]
+fn non_string_params_are_audited_as_their_text_form() {
+    let root = std::env::temp_dir().join("manualaid-audit-ws");
+    let auditor = Auditor::new(root);
+    let mut parameters = params(&[("file_path", "/outside/x.txt")]);
+    parameters.insert("content".to_string(), Value::Bool(true));
+    let decisions = auditor.check(&parameters, ToolKind::Write);
+    assert!(matches!(decisions[0].1, AuditDecision::NeedsApproval(_)));
+}

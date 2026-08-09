@@ -5,7 +5,28 @@
 
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+/// Session approval mode values accepted by `--mode`.
+/// `--mode` 接受的会话审批模式取值。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ModeArg {
+    /// Ask for approval before every edit/write operation.
+    /// 每次编辑/写入操作都要求审批。
+    Manual,
+    /// Auto-approve edit/write operations inside the workspace.
+    /// 自动放行工作区内的编辑/写入操作。
+    AcceptEdit,
+}
+
+impl From<ModeArg> for manualaid_core::audit::SessionMode {
+    fn from(mode: ModeArg) -> Self {
+        match mode {
+            ModeArg::Manual => Self::Manual,
+            ModeArg::AcceptEdit => Self::AcceptEdit,
+        }
+    }
+}
 
 /// The parsed command line arguments.
 /// 解析后的命令行参数。
@@ -16,10 +37,14 @@ use clap::{Parser, Subcommand};
     about = "ManualAid command line interface"
 )]
 pub struct Cli {
-    /// Interface language code: en or zh-CN
-    /// 界面语言代码：en 或 zh-CN
-    #[arg(short, long, global = true, default_value = "en")]
-    pub lang: String,
+    /// Interface language code: en or zh-CN (defaults to en)
+    /// 界面语言代码：en 或 zh-CN（默认 en）
+    #[arg(short, long, global = true)]
+    pub lang: Option<String>,
+    /// Session approval mode: manual or accept-edit (defaults to manual)
+    /// 会话审批模式：manual 或 accept-edit（默认 manual）
+    #[arg(long, global = true)]
+    pub mode: Option<ModeArg>,
     #[command(subcommand)]
     pub command: Option<Command>,
 }

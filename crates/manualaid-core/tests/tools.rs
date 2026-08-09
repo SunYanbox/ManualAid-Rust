@@ -5,7 +5,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use indexmap::IndexMap;
-use manualaid_core::tools::{ToolKind, ToolResult, all_tools, params_summary_of};
+use manualaid_core::tools::{ToolCallFormat, ToolKind, ToolResult, all_tools, params_summary_of};
 use serde_json::Value;
 
 /// A unique temporary file path (not pre-created).
@@ -34,6 +34,14 @@ fn from_name_round_trips_every_tool() {
         assert_eq!(ToolKind::from_name(tool.name()), Some(*tool));
     }
     assert_eq!(ToolKind::from_name("nope"), None);
+}
+
+#[test]
+fn all_formats_lists_every_builtin_variant() {
+    assert_eq!(
+        ToolCallFormat::all(),
+        &[ToolCallFormat::Xml, ToolCallFormat::JsonCodeblock]
+    );
 }
 
 #[test]
@@ -351,4 +359,11 @@ fn params_for(pairs: &[(&str, &str)]) -> IndexMap<String, Value> {
         .iter()
         .map(|(key, value)| ((*key).to_string(), Value::String((*value).to_string())))
         .collect()
+}
+
+#[tokio::test]
+async fn read_without_file_path_is_a_failure() {
+    let result = ToolKind::Read.run(&IndexMap::new()).await;
+    assert!(!result.success);
+    assert!(result.output.contains("file_path"));
 }

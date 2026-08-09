@@ -12,6 +12,7 @@ use crate::{format_default_output, format_error_output, style};
 
 mod dir;
 mod init;
+pub mod loop_cli;
 mod mask;
 mod restore;
 mod skill;
@@ -21,6 +22,7 @@ pub use dir::{
     run_dir_view_with_home,
 };
 pub use init::{run_init, run_init_with_home};
+pub use loop_cli::run_loop;
 pub use mask::{run_mask, run_mask_with_home};
 pub use restore::run_restore;
 pub use skill::{run_skill, run_skill_with_home};
@@ -30,7 +32,7 @@ use dir::{DirAction, run_dir};
 /// Run the CLI with the current process settings and return the exit code.
 /// 使用当前进程设置运行 CLI 并返回退出码。
 pub fn run_main(cli: Cli) -> i32 {
-    i18n::set_locale(&cli.lang);
+    i18n::set_locale(cli.lang.as_deref().unwrap_or("en"));
     style::auto_init();
     match run(cli, None) {
         Ok(()) => 0,
@@ -47,7 +49,7 @@ pub fn run(cli: Cli, home: Option<&Path>) -> Result<(), String> {
     match cli.command {
         None => {
             print!("{}", format_default_output(&default_message()));
-            Ok(())
+            run_loop(home, cli.lang, cli.mode.map(Into::into))
         }
         Some(Command::Mask { input }) => run_mask(&input, home),
         Some(Command::Restore { input, snapshot }) => run_restore(&input, &snapshot),
@@ -72,5 +74,35 @@ pub fn run(cli: Cli, home: Option<&Path>) -> Result<(), String> {
             };
             run_dir(action, project, global, limit, depth, yes, home)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::Cli;
+    use crate::test_support::{CWD_LOCK, LOCALE_LOCK, SKILL_LOCK};
+
+    #[test]
+    fn run_main_without_subcommand_starts_the_loop() {
+        let _cwd = CWD_LOCK.lock().unwrap();
+        let _lang = LOCALE_LOCK.lock().unwrap();
+        let _skills = SKILL_LOCK.lock().unwrap();
+        let original = std::env::current_dir().unwrap();
+        let dir = crate::test_support::temp_dir("run-main");
+        std::env::set_current_dir(&dir).unwrap();
+        // No command: the default branch prints the startup message and
+        // enters the loop, which ends immediately on scripted stdin EOF.
+        // 无子命令：默认分支打印启动消息并进入 loop，脚本 stdin 的 EOF
+        // 让 loop 立即结束。
+        let code = run_main(Cli {
+            lang: None,
+            mode: None,
+            command: None,
+        });
+        assert_eq!(code, 0);
+        std::env::set_current_dir(&original).unwrap();
+        assert!(dir.join(".ManualAid").join("config.toml").is_file());
+        manualaid_core::skill::reset_skills();
     }
 }

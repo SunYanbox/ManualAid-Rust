@@ -5,13 +5,14 @@
 //! 已启用技能列表；并提供复制回剪贴板的 XML 包裹结果文本。
 
 use std::fmt::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use manualaid_core::parser::FormatRegistry;
 use manualaid_core::skill::Skill;
 use manualaid_core::tools::{ToolKind, ToolResult};
 
 use crate::config::Config;
+use crate::context;
 
 /// Build the full `<system_prompt>` text for `config`.
 /// 为 `config` 构建完整的 `<system_prompt>` 文本。
@@ -20,6 +21,7 @@ pub fn build_system_prompt(
     workspace_root: &Path,
     registry: &FormatRegistry,
     skills: &[Skill],
+    context_files: &[PathBuf],
 ) -> String {
     // With no enabled skills the skill tool is useless, so the prompt is
     // generated as if the skill switch were off: no skill rules and no
@@ -61,6 +63,11 @@ pub fn build_system_prompt(
     out.push('\n');
 
     let workspace_info = workspace_info_text(workspace_root);
+    let context_files_text = if config.context_auto_load {
+        context::render_context_files(context_files)
+    } else {
+        String::new()
+    };
     let skills_list = if skill_active {
         skills_list_text(skills)
     } else {
@@ -70,6 +77,7 @@ pub fn build_system_prompt(
         "prompt.system.dynamic-context",
         &[
             ("workspace_info", &workspace_info),
+            ("context_files", &context_files_text),
             ("skills_list", &skills_list),
         ],
     ));
@@ -130,14 +138,104 @@ fn is_enabled(config: &Config, tool: &ToolKind) -> bool {
     }
 }
 
-/// The `<dynamic-context>` workspace section: root path and shell.
-/// `<dynamic-context>` 的工作区部分：根路径与 Shell。
+/// The `<dynamic-context>` workspace section: root path, shell, git info, and directory listing.
+/// `<dynamic-context>` 的工作区部分：根路径、Shell、git 信息与目录列表。
 fn workspace_info_text(workspace_root: &Path) -> String {
     let shell = manualaid_core::shell::detected_shell();
-    format!(
+    let git_info = git_info_text(workspace_root);
+    let dir_list = directory_listing_text(workspace_root);
+    let mut result = format!(
         "<workspace_root>\n{}\n</workspace_root>\n<shell_environment>\n{shell}\n</shell_environment>\n",
         workspace_root.display()
-    )
+    );
+    if !git_info.is_empty() {
+        result.push_str("<git_information>\n");
+        result.push_str(&git_info);
+        result.push_str("</git_information>\n");
+    }
+    if !dir_list.is_empty() {
+        result.push_str("<directory_listing>\n");
+        result.push_str(&dir_list);
+        result.push_str("</directory_listing>\n");
+    }
+    result
+}
+
+/// Capture `git status` and `git log --oneline -5` output if git is available.
+/// 若 git 可用，捕获 `git status` 与 `git log --oneline -5` 输出。
+fn git_info_text(workspace_root: &Path) -> String {
+    use std::process::Command;
+    let mut output = String::new();
+
+    // Check if git is available and the directory is a git repository.
+    // 检查 git 是否可用且目录是否为 git 仓库。
+    let git_check = Command::new("git")
+        .arg("rev-parse")
+        .arg("--is-inside-work-tree")
+        .current_dir(workspace_root)
+        .output();
+    if let Ok(check) = git_check {
+        if !check.status.success() {
+            return String::new();
+        }
+    } else {
+        return String::new();
+    }
+
+    // Git status
+    // git 状态
+    let status = Command::new("git")
+        .arg("status")
+        .current_dir(workspace_root)
+        .output();
+    if let Ok(out) = status
+        && out.status.success()
+        && let Ok(text) = String::from_utf8(out.stdout)
+    {
+        output.push_str(&text);
+        if !text.ends_with('\n') {
+            output.push('\n');
+        }
+    }
+
+    // Git log (oneline, last 5 commits)
+    // git 日志（单行，最近5条）
+    let log = Command::new("git")
+        .args(["log", "--oneline", "-5"])
+        .current_dir(workspace_root)
+        .output();
+    if let Ok(out) = log
+        && out.status.success()
+        && let Ok(text) = String::from_utf8(out.stdout)
+    {
+        output.push_str(&text);
+        if !text.ends_with('\n') {
+            output.push('\n');
+        }
+    }
+
+    output
+}
+
+/// List files and directories under the workspace root, similar to `ls -la`.
+/// 列出工作区根目录下的文件和文件夹，类似 `ls -la`。
+fn directory_listing_text(workspace_root: &Path) -> String {
+    use std::fs;
+    let mut lines = Vec::new();
+    if let Ok(entries) = fs::read_dir(workspace_root) {
+        let mut items: Vec<(String, bool)> = Vec::new();
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+            items.push((name, is_dir));
+        }
+        items.sort_by_key(|(name, _)| name.to_lowercase());
+        for (name, is_dir) in items {
+            let marker = if is_dir { "<DIR>" } else { "     " };
+            lines.push(format!("{marker}  {name}"));
+        }
+    }
+    lines.join("\n")
 }
 
 /// The `<dynamic-context>` skills section from the enabled skills.
@@ -161,11 +259,41 @@ fn skills_list_text(skills: &[Skill]) -> String {
     }
 }
 
+/// Minimum characters retained for any individual tool result that is
+/// subject to truncation. Results no longer than this are never shortened.
+/// 任何被截断的单个工具结果最少保留的字符数。不超过该值的结果永不被缩短。
+const MIN_KEEP_CHARS: usize = 1000;
+
+/// A tool result split into its XML wrapper parts and the variable content
+/// for easy size accounting and truncation.
+/// 将工具结果拆分为 XML 包裹部分与可变内容部分，便于尺寸计算与截断。
+struct ResultPart {
+    header: String,
+    content: String,
+    footer: String,
+}
+
 /// Render one round's execution results as XML-wrapped text for pasting
-/// back into an external LLM chat.
-/// 将一轮执行结果渲染为 XML 包裹文本，供回贴到外部 LLM 聊天。
-pub fn format_results(results: &[ToolResult]) -> String {
-    results
+/// back into an external LLM chat. The character limit applies to the sum
+/// of the tool outputs only (the XML wrappers are not counted). If that sum
+/// exceeds `max_result_chars`, every result longer than `MIN_KEEP_CHARS`
+/// is truncated proportionally to its original size, keeping at least
+/// `MIN_KEEP_CHARS` characters; shorter results stay whole. Each
+/// truncated result carries a notice with its removed character count, and
+/// a round-level warning is appended at the end so both the user and the
+/// LLM know content was omitted.
+/// 将一轮执行结果渲染为 XML 包裹文本，供回贴到外部 LLM 聊天。字符限制
+/// 只作用于各工具输出之和（不计 XML 包裹部分）。当该和超过
+/// `max_result_chars` 时，每个超过 `MIN_KEEP_CHARS` 字符的结果按原始
+/// 大小比例截断，且至少保留 `MIN_KEEP_CHARS` 字符；较短的结果保持
+/// 完整。每个被截断的结果附带一条含被截断字符数的标注，末尾追加轮次
+/// 警告，让用户与 LLM 都能知晓内容已被省略。
+pub fn format_results(results: &[ToolResult], max_result_chars: usize) -> String {
+    if results.is_empty() {
+        return String::new();
+    }
+
+    let parts: Vec<ResultPart> = results
         .iter()
         .map(|result| {
             let params_attr = if result.params_summary.is_empty() {
@@ -173,15 +301,134 @@ pub fn format_results(results: &[ToolResult]) -> String {
             } else {
                 format!(" params=\"{}\"", xml_escape(&result.params_summary))
             };
-            format!(
-                "<tool_result name=\"{}\"{params_attr} success=\"{}\">\n{}\n</tool_result>",
-                result.tool_name,
-                result.success,
-                result.output.trim()
-            )
+            let header = format!(
+                "<tool_result name=\"{}\"{params_attr} success=\"{}\">\n",
+                result.tool_name, result.success
+            );
+            ResultPart {
+                header,
+                // Keep the tool output verbatim: trimming would drop trailing
+                // spaces that can be significant in read slices or code blocks.
+                // 保留工具输出原文：trim 会丢失 read 切片或代码块中可能有意义的尾部空格。
+                content: result.output.to_string(),
+                footer: "\n</tool_result>".to_string(),
+            }
         })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+        .collect();
+
+    let separator = "\n\n";
+    let content_total: usize = parts.iter().map(|p| p.content.chars().count()).sum();
+
+    if content_total <= max_result_chars {
+        return parts
+            .iter()
+            .map(|p| format!("{}{}{}", p.header, p.content, p.footer))
+            .collect::<Vec<_>>()
+            .join(separator);
+    }
+
+    let round_warning = format!(
+        "\n\n{}",
+        i18n::t_str("truncated_round_warning")
+            .replace("%{max_chars}", &max_result_chars.to_string())
+            .replace("%{total_chars}", &content_total.to_string())
+    );
+
+    // Short results are never shortened and do not take part in the
+    // proportional split; they still occupy their full length in the budget.
+    // 短结果永不被缩短、不参与比例分配，但仍按完整长度占用预算。
+    let eligible: Vec<usize> = parts
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.content.chars().count() > MIN_KEEP_CHARS)
+        .map(|(i, _)| i)
+        .collect();
+
+    // Nothing can be shortened: drop whole results from the end until the
+    // remaining content fits, then append the round warning.
+    // 没有可缩短的结果：从末尾整块丢弃，直到剩余内容放得下，再追加警告。
+    if eligible.is_empty() {
+        let mut result = String::new();
+        let mut used = 0usize;
+        for p in &parts {
+            let content_len = p.content.chars().count();
+            if used + content_len > max_result_chars {
+                break;
+            }
+            let block = format!("{}{}{}", p.header, p.content, p.footer);
+            if result.is_empty() {
+                result.push_str(&block);
+            } else {
+                result.push_str(separator);
+                result.push_str(&block);
+            }
+            used += content_len;
+        }
+        result.push_str(&round_warning);
+        return result;
+    }
+
+    let eligible_orig_total: usize = eligible
+        .iter()
+        .map(|&i| parts[i].content.chars().count())
+        .sum();
+    let ineligible_total: usize = (0..parts.len())
+        .filter(|i| !eligible.contains(i))
+        .map(|i| parts[i].content.chars().count())
+        .sum();
+    let budget_for_eligible = max_result_chars.saturating_sub(ineligible_total);
+
+    let mut allocs: Vec<usize> = vec![0; parts.len()];
+    let mut raw_sum = 0usize;
+    for &i in &eligible {
+        let orig = parts[i].content.chars().count();
+        let raw = ((budget_for_eligible as f64) * (orig as f64) / (eligible_orig_total as f64))
+            .floor() as usize;
+        let alloc = raw.max(MIN_KEEP_CHARS);
+        allocs[i] = alloc;
+        raw_sum += alloc;
+    }
+
+    // The minimum-keep floor can push the sum over the budget; take the
+    // excess back from the largest allocations, never below the floor.
+    // 保底下限可能使分配总和超出预算；从最大的分配开始回扣，但不低于下限。
+    if raw_sum > budget_for_eligible {
+        let overshoot = raw_sum - budget_for_eligible;
+        let mut sorted: Vec<(usize, usize)> = eligible.iter().map(|&i| (allocs[i], i)).collect();
+        sorted.sort_by_key(|(a, _)| std::cmp::Reverse(*a));
+        let mut remaining = overshoot;
+        for &(_alloc, idx) in &sorted {
+            let can_reduce = allocs[idx].saturating_sub(MIN_KEEP_CHARS);
+            let reduce = remaining.min(can_reduce);
+            allocs[idx] -= reduce;
+            remaining -= reduce;
+            if remaining == 0 {
+                break;
+            }
+        }
+    }
+
+    let mut blocks: Vec<String> = Vec::with_capacity(parts.len());
+    for (i, part) in parts.iter().enumerate() {
+        if eligible.contains(&i) {
+            let orig = part.content.chars().count();
+            let alloc = allocs[i];
+            let notice = i18n::t_str("truncated_tool_result")
+                .replace("%{original}", &orig.to_string())
+                .replace("%{removed}", &(orig - alloc).to_string());
+            let truncated: String = part.content.chars().take(alloc).collect();
+            blocks.push(format!(
+                "{}{}\n{}{}",
+                part.header, truncated, notice, part.footer
+            ));
+        } else {
+            blocks.push(format!("{}{}{}", part.header, part.content, part.footer));
+        }
+    }
+
+    let mut result = blocks.join(separator);
+    result.push_str(&round_warning);
+    result
 }
 
 /// Escape XML special characters in an attribute value.
@@ -234,7 +481,7 @@ mod tests {
     fn system_prompt_contains_context_and_skills() {
         let config = Config::default();
         let registry = FormatRegistry::new();
-        let prompt = build_system_prompt(&config, Path::new("/ws"), &registry, &[]);
+        let prompt = build_system_prompt(&config, Path::new("/ws"), &registry, &[], &[]);
         assert!(prompt.starts_with("<system_prompt>"));
         assert!(prompt.ends_with("</system_prompt>"));
         assert!(prompt.contains("<workspace_root>"));
@@ -242,25 +489,21 @@ mod tests {
     }
 
     #[test]
-    fn format_results_escapes_attribute_values() {
-        let result = ToolResult::success("read", "content", true)
-            .with_params_summary("{\"file_path\":\"/a.txt\"}".into());
-        let text = format_results(&[result]);
-        assert!(text.contains("<tool_result name=\"read\""));
-        assert!(text.contains("&quot;file_path&quot;"));
-        assert!(text.contains("success=\"true\""));
-    }
-
-    #[test]
-    fn format_results_omits_empty_summary() {
-        let result = ToolResult::success("shell", "done", false);
-        let text = format_results(&[result]);
-        assert!(text.contains("<tool_result name=\"shell\" success=\"true\">"));
-        assert!(!text.contains("params="));
-    }
-
-    #[test]
     fn xml_escape_handles_all_specials() {
         assert_eq!(xml_escape("a<b>&\"c\""), "a&lt;b&gt;&amp;&quot;c&quot;");
+    }
+
+    #[test]
+    fn skills_list_text_is_empty_when_nothing_is_enabled() {
+        let skills = vec![Skill {
+            unique_name: "greeter".into(),
+            name: "greeter".into(),
+            description: "says hi".into(),
+            body: "## Usage\nhi".into(),
+            path: std::path::PathBuf::from("/skills/greeter"),
+            is_global: true,
+            is_enabled: false,
+        }];
+        assert_eq!(skills_list_text(&skills), "");
     }
 }

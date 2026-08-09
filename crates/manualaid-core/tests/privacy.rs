@@ -58,6 +58,32 @@ Name = "Bob"
 }
 
 #[test]
+fn test_load_and_from_config_resolve_real_home() {
+    // `load`/`from_config` read the real user home only (never write), so
+    // they are safe to call from tests.
+    // `load`/`from_config` 只读取真实用户主目录（绝不写入），测试中可安全调用。
+    let tmp = common::TempDir::new("privacy-real-home");
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join(".ManualAid")).unwrap();
+    fs::write(
+        project.join(".ManualAid").join("config.toml"),
+        r#"
+[privacy_mask_extension.literal]
+Name = "Carol"
+"#,
+    )
+    .unwrap();
+    let extensions = PrivacyMaskExtension::load(&project).unwrap();
+    assert_eq!(
+        extensions.literal.get("Name").map(String::as_str),
+        Some("Carol")
+    );
+    let masker = PrivacyMasker::from_config(&project).unwrap();
+    let (masked, _) = masker.sanitize("hello Carol").unwrap();
+    assert!(!masked.contains("Carol"));
+}
+
+#[test]
 fn test_sanitize_restore_roundtrip_from_config() {
     let tmp = common::TempDir::new("privacy-roundtrip");
     let home = tmp.path().join("home");

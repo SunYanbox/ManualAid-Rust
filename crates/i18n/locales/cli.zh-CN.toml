@@ -19,8 +19,15 @@ init = "初始化失败：%{error}"
 dir_view = "目录查看失败：%{error}"
 dir_clean = "目录清理失败：%{error}"
 clean_confirm = "缺少确认，拒绝清理：请添加 --yes 或在交互终端中运行"
+clipboard_read = "读取剪贴板失败：%{error}"
+clipboard_write = "写入剪贴板失败：%{error}"
+invalid_index = "无效的批次号（1 = 最新，共 %{count} 批）"
+no_calls = "输入中未识别到任何工具调用"
+parse = "解析工具调用失败：%{error}"
+config_write = "写入配置文件失败：%{error}"
 
 [cli.output]
+empty_output = "工具 `%{tool_name}` 执行成功且无输出"
 masked_text = "掩码文本"
 snapshot_json = "快照 JSON"
 restored_text = "还原文本"
@@ -44,3 +51,85 @@ aborted = "已中止。"
 
 [cli.pager]
 more = "（按 q 退出，按其他键继续）"
+
+[cli.approval]
+denied_result = "操作已被用户拒绝：%{reason}"
+description = "描述：%{description}"
+item = "[%{tool}] 参数 `%{param}` 需要批准：%{reason}"
+
+[cli.audit]
+header = "本轮有 %{count} 个操作需要批准："
+prompt = "批准该操作？（y=同意，n=拒绝，t=拒绝并输入文本）[n]："
+
+[cli.config]
+auto_copy = "8. 自动复制工具调用结果（当前：%{state}）"
+back = "0. 返回"
+clear_screen = "9. 清屏（当前：%{state}）"
+context_auto_load = "12. 切换上下文文件自动加载（当前：%{state}）"
+disabled = "已禁用"
+edit = "6. Edit 工具（当前：%{state}）"
+enabled = "已启用"
+format = "2. 切换工具调用格式（当前：%{format}）"
+format_switched = "工具调用格式已切换为 %{format}"
+lang = "1. 切换语言（当前：%{lang}）"
+lang_switched = "语言已切换为 %{lang}"
+mode = "11. 切换审批模式（当前：%{mode}）"
+mode_accept_edit = "接受编辑"
+mode_manual = "手动"
+mode_switched = "审批模式已切换为 %{mode}"
+read = "4. Read 工具（当前：%{state}）"
+saved = "配置已保存"
+shell = "3. Shell 工具（当前：%{state}）"
+skill = "7. SKILL 工具（当前：%{state}）"
+skill_list = "10. SKILL 启用/禁用列表"
+title = "配置"
+write = "5. Write 工具（当前：%{state}）"
+
+[cli.context]
+duplicate_note = "（与 %{name} 内容重复）"
+found_multiple = "发现多个上下文文件："
+item = "%{index}. %{name}（%{size}）%{duplicate_note}"
+loaded = "已加载上下文文件：%{names}"
+prompt = "请选择要加载的上下文文件 [如 1 或 1,2，回车跳过]："
+
+[cli.loop]
+copied = "已复制到剪贴板"
+header = "工作区：%{path} | 时间：%{time} | Shell：%{shell}"
+menu_config = "5. 配置"
+menu_copy = "4. 复制第 i 批（1 = 最新）工具调用结果"
+menu_exit = "0. 退出"
+menu_generate = "1. 生成工作区系统提示词"
+menu_input = "3. 输入工具调用文本"
+menu_invalid = "无效选项，请重试"
+menu_paste = "2. 粘贴并提交工具调用文本"
+menu_prompt = "请选择："
+menu_summary = "6. 生成会话摘要"
+menu_title = "ManualAid CLI Agent Copy-Paste Loop"
+timing_prompt = "系统提示词生成：%{elapsed}"
+timing_round = "轮次执行：%{elapsed}"
+
+[cli.message]
+approval_needed = "需要批准"
+ask_copy = "是否将本轮工具调用结果复制到剪贴板？（y/N）："
+clipboard_empty = "剪贴板为空或不包含文本"
+copy_index_prompt = "输入批次号（直接回车取最新）："
+failure = "失败"
+input_prompt = "请输入工具调用文本（以只含 /end 的一行或 EOF 结束）："
+no_rounds = "没有可复制的解析批次"
+prompt_copied = "系统提示词已复制到剪贴板"
+result_copied = "第 %{index} 批工具调用结果已复制到剪贴板"
+round_count = "共有 %{count} 个解析批次（1 = 最新）"
+success = "成功"
+summary_enabled_tools = "已启用工具：%{tools}"
+summary_rounds = "批次：%{count}"
+summary_title = "会话摘要"
+summary_tool_calls = "工具调用：%{count}"
+global_config_changed = "已通过配置文件 %{path} 更改默认配置：%{key} = %{value}（默认：%{default}）"
+
+[cli.skill_config]
+item = "- [%{state}] %{index}. %{name}（%{unique_name}）"
+prompt = "输入技能索引以切换（a=全部启用，n=全部禁用，回车=返回）："
+title = "SKILL 配置"
+
+[cli.warning]
+invalid_config_value = "警告：配置文件 %{path} 中 `%{key}` 的值 '%{value}' 无效。可用值：%{available}。将使用默认值。"
