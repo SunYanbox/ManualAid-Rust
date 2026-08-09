@@ -29,9 +29,18 @@ fn read_inside_workspace_is_allowed() {
 #[test]
 fn read_outside_workspace_needs_approval() {
     let root = std::env::temp_dir().join("manualaid-ws");
+    // An absolute path next to the workspace root stays outside the
+    // workspace on both Windows and Linux (`C:/outside/a.txt` is relative
+    // on Linux and would resolve inside the workspace instead).
+    // 工作区根目录旁的绝对路径在 Windows 与 Linux 上都位于工作区之外
+    // （`C:/outside/a.txt` 在 Linux 上是相对路径，会被解析进工作区）。
+    let outside = root
+        .parent()
+        .expect("temp dir has a parent")
+        .join("outside.txt");
     let auditor = Auditor::new(root);
     let decisions = auditor.check(
-        &params(&[("file_path", "C:/outside/a.txt")]),
+        &params(&[("file_path", outside.to_str().unwrap())]),
         ToolKind::Read,
     );
     assert_eq!(decisions.len(), 1);

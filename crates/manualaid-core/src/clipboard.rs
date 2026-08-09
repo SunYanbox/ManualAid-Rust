@@ -5,6 +5,40 @@
 //! 测试（包括 `self_check` 的剪贴板检查）写入的样例内容会直接保留在系统剪贴板上，
 //! 内容格式为 `ManualAid Test Clipboard at {yyyy-mm-dd hh:mm:ss}`，便于识别测试数据。
 
+use std::sync::Mutex;
+
+/// The single persistent clipboard handle for the process lifetime.
+/// 进程存活期间唯一的剪贴板句柄。
+///
+/// # Description
+/// On Linux/X11, `arboard` destroys its window and hands the selection over to
+/// the clipboard manager only when the last `Clipboard` handle is dropped;
+/// creating a fresh handle per operation can lose contents written just before
+/// the drop. Worse, creating a temporary handle while a persistent handle is
+/// alive makes the temporary handle's drop push the reference count back to
+/// `MIN_OWNERS`, triggering that same teardown and invalidating the persistent
+/// handle, so every read and write must share this single handle.
+/// # 描述
+/// Linux/X11 的 `arboard` 在最后一个 `Clipboard` 句柄 Drop 时才会销毁窗口并
+/// 把选择权交给剪贴板管理器；若每次读写都新建句柄，刚写入就 Drop 会让剪贴板
+/// 管理器来不及取走内容。更重要的是，在持有一个长期句柄的同时新建临时句柄，
+/// 临时句柄 Drop 时会让引用计数回落到 `MIN_OWNERS`，触发同一销毁流程，使长期
+/// 句柄失效。因此所有读写必须共用这一个句柄。
+static KEEPER: Mutex<Option<arboard::Clipboard>> = Mutex::new(None);
+
+/// Return the persistent clipboard handle, creating it on first use.
+/// 返回进程级剪贴板句柄，首次使用时惰性创建。
+fn keeper() -> Result<std::sync::MutexGuard<'static, Option<arboard::Clipboard>>, String> {
+    let mut guard = KEEPER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if guard.is_none() {
+        *guard =
+            Some(arboard::Clipboard::new().map_err(|e| format!("Read Clipboard Failed: {e}"))?);
+    }
+    Ok(guard)
+}
+
 /// Read the current text content from the system clipboard.
 /// 从系统剪贴板读取当前文本内容。
 ///
@@ -27,8 +61,8 @@
 /// 留下图片等非文本数据。为避免在用户剪贴板上产生多余的"垃圾"内容，
 /// 这些分支不要求高测试覆盖率。
 pub fn read_clipboard() -> Result<String, String> {
-    let mut clipboard =
-        arboard::Clipboard::new().map_err(|e| format!("Read Clipboard Failed: {e}"))?;
+    let mut guard = keeper()?;
+    let clipboard = guard.as_mut().expect("keeper must be initialized");
     match clipboard.get_text() {
         Ok(text) => Ok(text),
         Err(arboard::Error::ContentNotAvailable) => Ok(String::new()),
@@ -74,8 +108,8 @@ pub enum ClipboardContent {
 /// 需要在剪贴板上留下图片等非文本数据。为避免在用户剪贴板上产生多余的
 /// "垃圾"内容，这些分支不要求高测试覆盖率。
 pub fn inspect_clipboard() -> Result<ClipboardContent, String> {
-    let mut clipboard =
-        arboard::Clipboard::new().map_err(|e| format!("Read Clipboard Failed: {e}"))?;
+    let mut guard = keeper()?;
+    let clipboard = guard.as_mut().expect("keeper must be initialized");
     match clipboard.get_text() {
         Ok(text) => Ok(ClipboardContent::Text(text)),
         Err(arboard::Error::ContentNotAvailable) => match clipboard.get_image() {
@@ -103,11 +137,13 @@ pub fn inspect_clipboard() -> Result<ClipboardContent, String> {
 /// required to have high test coverage.
 /// # 描述
 /// 空字符串也可以写入（用于清空剪贴板）。写入失败时以人类可读的错误信息返回。
+/// 写入成功后句柄保留在进程内，Linux 上不会因句柄过早 Drop 而丢失内容。
 /// # 测试说明
 /// 系统剪贴板无法在测试中被 Mock 或还原，调用本函数的测试会有意把文本留在剪贴板上。
 /// 为避免产生多余的剪贴板写入，本函数不要求高测试覆盖率。
 pub fn write_clipboard(text: impl AsRef<str>) -> Result<(), String> {
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("写入剪贴板失败：{e}"))?;
+    let mut guard = keeper()?;
+    let clipboard = guard.as_mut().expect("keeper must be initialized");
     clipboard
         .set_text(text.as_ref())
         .map_err(|e| format!("写入剪贴板失败：{e}"))

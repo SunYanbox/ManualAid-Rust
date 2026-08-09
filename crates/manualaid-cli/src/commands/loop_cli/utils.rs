@@ -66,6 +66,14 @@ pub(super) fn push_test_input(lines: &[&str]) {
 /// 通过平台命令清屏；失败时静默忽略。测试捕获期间或 stdout 非真实终端时
 /// 绝不执行命令，`cargo test` 因此永远不会清掉用户的控制台。
 pub(super) fn clear_screen() {
+    // Test builds link the test crate, where the real terminal is visible
+    // to the process; never run the platform clear command there, so
+    // `cargo test` cannot clear the user's console even without a capture.
+    // 测试构建链接的是 test crate，真实终端对进程可见；此时绝不执行平台
+    // 清屏命令，`cargo test` 即使没有捕获守卫也不会清掉用户的控制台。
+    if cfg!(test) {
+        return;
+    }
     if crate::console::is_capturing() || !std::io::stdout().is_terminal() {
         return;
     }
@@ -313,6 +321,16 @@ mod tests {
         let capture = crate::console::capture();
         clear_screen();
         assert_eq!(capture.text(), "");
+    }
+
+    #[test]
+    fn clear_screen_is_a_noop_in_test_builds() {
+        // Without a capture guard the command must still never run: unit
+        // tests can see the real terminal, and spawning `clear` there would
+        // clear the user's console during `cargo test`.
+        // 没有捕获守卫时命令仍然绝不执行：单元测试能看到真实终端，在测试
+        // 期间 spawn `clear` 会清掉用户控制台。
+        clear_screen();
     }
 
     #[cfg(target_os = "windows")]

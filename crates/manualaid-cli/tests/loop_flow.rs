@@ -63,6 +63,28 @@ fn with_clipboard_restored(run: impl FnOnce()) {
     }
 }
 
+/// Poll the system clipboard until it contains `needle` or a timeout
+/// elapses. The caller keeps the child binary alive during the poll, so the
+/// X11 selection stays owned by the child and no clipboard manager is
+/// needed to keep the content readable.
+/// 轮询系统剪贴板直到包含 `needle` 或超时。调用方在轮询期间保持子进程
+/// 存活，X11 选择权一直由子进程持有，无需剪贴板管理器也能读到内容。
+fn wait_for_clipboard_content(needle: &str) -> String {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let last = match manualaid_core::clipboard::read_clipboard() {
+            Ok(text) if text.contains(needle) => return text,
+            Ok(text) => text,
+            Err(error) => format!("<clipboard read error: {error}>"),
+        };
+        assert!(
+            std::time::Instant::now() < deadline,
+            "clipboard never contained {needle:?}; last read: {last:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
 fn read_call(path: &Path) -> String {
     format!("<read><file_path>{}</file_path></read>", path.display())
 }
@@ -183,12 +205,17 @@ fn loop_binary_copies_single_context_file_to_clipboard() {
     std::fs::write(dir.path().join("AGENTS.md"), "# rules").unwrap();
     let _clipboard_lock = ClipboardLock::acquire();
     with_clipboard_restored(|| {
-        let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["1", "0"]);
-        assert!(output.status.success());
-        let clipboard =
-            manualaid_core::clipboard::read_clipboard().expect("read clipboard for context check");
+        let mut child = common::ScriptedChild::spawn(dir.path(), Some(home.path()), &[]);
+        child.send_line("1");
+        // Read while the child still owns the X11 selection: the content
+        // written by the short-lived binary would be lost once it exits.
+        // 在子进程仍持有 X11 选择权时读取：短命二进制退出后内容可能丢失。
+        let clipboard = wait_for_clipboard_content("<context_files path=\"AGENTS.md\">");
         assert!(clipboard.contains("<context_files path=\"AGENTS.md\">"));
         assert!(clipboard.contains("# rules"));
+        child.send_line("0");
+        let output = child.wait_with_output();
+        assert!(output.status.success());
     });
 }
 
@@ -200,13 +227,17 @@ fn loop_binary_asks_selection_when_multiple_context_files_exist() {
     std::fs::write(dir.path().join("CLAUDE.md"), "same").unwrap();
     let _clipboard_lock = ClipboardLock::acquire();
     with_clipboard_restored(|| {
-        let output =
-            common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["1", "1", "0"]);
-        assert!(output.status.success());
-        let clipboard =
-            manualaid_core::clipboard::read_clipboard().expect("read clipboard for context check");
+        let mut child = common::ScriptedChild::spawn(dir.path(), Some(home.path()), &[]);
+        child.send_line("1");
+        // Pick the first context file from the selection prompt.
+        // 在上下文选择提示中选择第一个文件。
+        child.send_line("1");
+        let clipboard = wait_for_clipboard_content("<context_files path=\"AGENTS.md\">");
         assert!(clipboard.contains("<context_files path=\"AGENTS.md\">"));
         assert!(!clipboard.contains("<context_files path=\"CLAUDE.md\">"));
+        child.send_line("0");
+        let output = child.wait_with_output();
+        assert!(output.status.success());
     });
 }
 

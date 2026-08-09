@@ -393,7 +393,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn submit_text_with_auto_copy_asks_and_skips_copy_on_no() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let _lock = lock_clipboard();
         let root = crate::test_support::temp_dir("submit-autocopy");
         let mut session = SessionLog::new();
         let mut options = LoopOptions::default();
@@ -415,6 +415,17 @@ mod tests {
     // concurrent clipboard access within this process.
     // 以下剪贴板测试先保存用户剪贴板文本，结束后恢复；进程内锁保证与同进程
     // 的并发剪贴板访问串行。
+    fn lock_clipboard() -> std::sync::MutexGuard<'static, ()> {
+        // A failed clipboard test must not poison the shared lock for the
+        // remaining tests, so a poisoned guard is recovered like the shell
+        // tests do.
+        // 某个剪贴板测试失败时不能毒化共享锁拖垮其余测试，因此与 shell
+        // 测试一样对毒化守卫做恢复。
+        crate::test_support::CLIPBOARD_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     fn with_clipboard_restored(run: impl FnOnce()) {
         let saved = manualaid_core::clipboard::read_clipboard().ok();
         run();
@@ -427,7 +438,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn paste_and_submit_pastes_clipboard_text_as_a_round() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let _lock = lock_clipboard();
         let root = crate::test_support::temp_dir("paste-round");
         let saved = manualaid_core::clipboard::read_clipboard().ok();
         manualaid_core::clipboard::write_clipboard(read_call(&root))
@@ -453,7 +464,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn paste_and_submit_with_empty_clipboard_is_noop() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let _lock = lock_clipboard();
         let root = crate::test_support::temp_dir("paste-empty");
         let saved = manualaid_core::clipboard::read_clipboard().ok();
         manualaid_core::clipboard::write_clipboard("").expect("clear clipboard");
@@ -476,7 +487,7 @@ mod tests {
     #[test]
     fn copy_system_prompt_writes_prompt_to_clipboard() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let _lock = lock_clipboard();
         let root = crate::test_support::temp_dir("copy-prompt");
         with_clipboard_restored(|| {
             copy_system_prompt(&Config::default(), &root, &FormatRegistry::new());
@@ -488,7 +499,7 @@ mod tests {
     #[test]
     fn copy_system_prompt_includes_selected_context_files() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let _lock = lock_clipboard();
         let root = crate::test_support::temp_dir("copy-prompt-context");
         std::fs::write(root.join("AGENTS.md"), "# project rules").unwrap();
         with_clipboard_restored(|| {
@@ -508,7 +519,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn copy_round_result_copies_selected_round() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::CLIPBOARD_LOCK.lock().unwrap();
+        let _lock = lock_clipboard();
         let root = crate::test_support::temp_dir("copy-valid");
         let session = session_with_round(&root).await;
         let saved = manualaid_core::clipboard::read_clipboard().ok();

@@ -24,10 +24,25 @@ pub(crate) fn write_text(text: &str) {
     let mut sink = SINK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     match sink.as_mut() {
         Some(buf) => buf.extend_from_slice(text.as_bytes()),
-        None => {
-            let _ = io::stdout().lock().write_all(text.as_bytes());
-        }
+        None => write_real_stdout(text),
     }
+}
+
+/// Write `text` to the real stdout through the `print!` machinery, so the
+/// Rust test harness captures it even when no explicit capture guard is
+/// active; failures (e.g. a closed pipe) are ignored, matching the previous
+/// direct-write behaviour of never panicking the process.
+/// 通过 `print!` 宏的底层路径写入真实 stdout，使 Rust 测试框架在无显式捕获
+/// 守卫时也能捕获输出；写入失败（如管道关闭）被忽略，与原先直接写入时
+/// “进程不 panic”的行为保持一致。
+fn write_real_stdout(text: &str) {
+    // `print!` panics when the underlying write fails; the panic is caught
+    // so console output stays best-effort.
+    // `print!` 在底层写入失败时会 panic；捕获该 panic，让控制台输出保持
+    // 尽力而为。
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        print!("{text}");
+    }));
 }
 
 /// Flush pending console output; nothing to flush while capturing, because
@@ -60,7 +75,7 @@ impl Write for ConsoleWriter {
         let mut sink = SINK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         match sink.as_mut() {
             Some(capture) => capture.extend_from_slice(buf),
-            None => io::stdout().lock().write_all(buf)?,
+            None => write_real_stdout(&String::from_utf8_lossy(buf)),
         }
         Ok(buf.len())
     }
@@ -194,5 +209,18 @@ mod tests {
         crate::console::out_print!("{}{}", "x", "y");
         crate::console::out_println!("{count}", count = 3);
         assert_eq!(capture.text(), "xy3\n");
+    }
+
+    #[test]
+    fn writes_without_capture_are_routed_through_stdout() {
+        // No capture guard: output must still go through the harness-
+        // capturable stdout path instead of a direct terminal write, so
+        // `cargo test` never shows it on a real Linux terminal.
+        // 无捕获守卫：输出仍必须走测试框架可捕获的 stdout 路径，而不是
+        // 直接写终端，`cargo test` 因此不会在真实 Linux 终端上显示它。
+        write_text("no-capture text\n");
+        let mut writer = ConsoleWriter;
+        writer.write_all(b"no-capture writer\n").unwrap();
+        writer.flush().unwrap();
     }
 }
