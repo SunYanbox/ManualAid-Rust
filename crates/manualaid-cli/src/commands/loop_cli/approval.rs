@@ -1,7 +1,6 @@
 //! Per-round approval flow: parse, audit, ask and execute.
 //! 单轮审批流程：解析、审计、询问并执行。
 
-use std::io::Write;
 use std::time::Duration;
 
 use manualaid_core::audit::{AuditDecision, AuditQueueItem};
@@ -76,7 +75,7 @@ pub async fn execute_round_with_approval(
     let mut approved = vec![true; audited.len()];
     let mut denied_texts = vec![None; audited.len()];
     if queue_len > 0 {
-        println!(
+        crate::console::out_println!(
             "{}",
             t_fmt("cli.audit.header", &[("count", &queue_len.to_string())])
         );
@@ -176,14 +175,14 @@ pub(super) fn denied_result(
 /// Ask the user whether to approve one operation (`y` / `n` / `t`).
 /// 询问用户是否批准某一操作（`y` / `n` / `t`）。
 pub(super) fn ask_approval(item: &AuditQueueItem) -> Approval {
-    print!(
+    crate::console::out_print!(
         "{}",
         t_fmt(
             "cli.audit.prompt",
             &[("tool", &item.tool_name), ("param", &item.param_name),],
         )
     );
-    let _ = std::io::stdout().flush();
+    crate::console::flush();
     match read_line().map(|line| line.trim().to_ascii_lowercase()) {
         Some(line) if line == "y" => Approval::Approve,
         Some(line) if line == "t" => {
@@ -210,6 +209,7 @@ mod tests {
 
     #[test]
     fn ask_approval_maps_answers() {
+        let _capture = crate::console::capture();
         let item = queue_item();
         push_test_input(&["y"]);
         assert_eq!(ask_approval(&item), Approval::Approve);

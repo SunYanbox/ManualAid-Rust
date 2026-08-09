@@ -66,6 +66,7 @@ fn run_main_returns_failure_for_invalid_restore() {
 
 #[test]
 fn run_restore_command_dispatches() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-restore");
     let masked = dir.path().join("masked.txt");
     let snapshot = dir.path().join("snapshot.json");
@@ -85,6 +86,7 @@ fn run_restore_command_dispatches() {
 
 #[test]
 fn run_mask_command_dispatches_with_explicit_home() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-mask-dispatch");
     let cli = parse(&["manualaid-cli", "mask", "hello"]);
     assert!(run(cli, Some(dir.path())).is_ok());
@@ -92,6 +94,7 @@ fn run_mask_command_dispatches_with_explicit_home() {
 
 #[test]
 fn run_skill_command_dispatches_with_explicit_home() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-skill-dispatch");
     let cli = parse(&["manualaid-cli", "skill", "--global", "--project"]);
     assert!(run(cli, Some(dir.path())).is_ok());
@@ -99,6 +102,7 @@ fn run_skill_command_dispatches_with_explicit_home() {
 
 #[test]
 fn run_init_global_creates_home_dir() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-init-global");
     let cli = parse(&["manualaid-cli", "init", "--global"]);
     assert!(run(cli, Some(dir.path())).is_ok());
@@ -107,6 +111,7 @@ fn run_init_global_creates_home_dir() {
 
 #[test]
 fn run_dir_init_matches_init() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-dir-init");
     let cli = parse(&["manualaid-cli", "dir", "--init", "--global"]);
     assert!(run(cli, Some(dir.path())).is_ok());
@@ -115,6 +120,7 @@ fn run_dir_init_matches_init() {
 
 #[test]
 fn run_dir_view_missing_dir_is_ok() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-dir-view-missing");
     let cli = parse(&["manualaid-cli", "dir", "--view", "--global"]);
     assert!(run(cli, Some(dir.path())).is_ok());
@@ -122,6 +128,7 @@ fn run_dir_view_missing_dir_is_ok() {
 
 #[test]
 fn run_dir_view_project_scope_with_explicit_values_is_ok() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-dir-view-project");
     let cli = parse(&[
         "manualaid-cli",
@@ -149,6 +156,7 @@ fn run_dir_view_errors_when_manualaid_is_a_file() {
 
 #[test]
 fn run_dir_clean_with_yes_removes_dir() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-dir-clean");
     fs::create_dir_all(dir.path().join(".ManualAid")).unwrap();
     fs::write(dir.path().join(".ManualAid").join("config.toml"), "[skill]").unwrap();
@@ -159,6 +167,7 @@ fn run_dir_clean_with_yes_removes_dir() {
 
 #[test]
 fn run_dir_clean_with_yes_when_missing_is_ok() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-dir-clean-missing");
     let cli = parse(&["manualaid-cli", "dir", "--clean", "--global", "--yes"]);
     assert!(run(cli, Some(dir.path())).is_ok());

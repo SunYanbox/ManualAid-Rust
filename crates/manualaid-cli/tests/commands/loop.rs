@@ -55,6 +55,7 @@ async fn approved_round_executes_tools() {
 
 #[tokio::test]
 async fn denied_round_returns_failure_with_reason() {
+    let _capture = manualaid_cli::console::capture();
     let root = std::env::temp_dir().join("manualaid-loop-ws");
     let registry = FormatRegistry::new();
     let (_, results) = execute_round_with_approval(
@@ -74,6 +75,7 @@ async fn denied_round_returns_failure_with_reason() {
 
 #[tokio::test]
 async fn deny_with_text_becomes_the_tool_result() {
+    let _capture = manualaid_cli::console::capture();
     let root = std::env::temp_dir().join("manualaid-loop-ws");
     let registry = FormatRegistry::new();
     let (_, results) = execute_round_with_approval(
@@ -90,6 +92,7 @@ async fn deny_with_text_becomes_the_tool_result() {
 
 #[tokio::test]
 async fn mixed_approve_and_deny_in_one_round() {
+    let _capture = manualaid_cli::console::capture();
     let ws = std::env::temp_dir().join(format!("manualaid-loop-mixed-{}", std::process::id()));
     std::fs::create_dir_all(&ws).unwrap();
     let registry = FormatRegistry::new();
@@ -127,6 +130,7 @@ async fn mixed_approve_and_deny_in_one_round() {
 
 #[tokio::test]
 async fn pre_failed_call_skips_approval_while_others_are_asked() {
+    let _capture = manualaid_cli::console::capture();
     let ws = std::env::temp_dir().join(format!("manualaid-loop-prefail-{}", std::process::id()));
     std::fs::create_dir_all(&ws).unwrap();
     let registry = FormatRegistry::new();
@@ -187,6 +191,7 @@ async fn pre_failed_calls_never_ask_for_approval() {
 
 #[tokio::test]
 async fn accept_edit_auto_approves_workspace_write() {
+    let _capture = manualaid_cli::console::capture();
     let ws =
         std::env::temp_dir().join(format!("manualaid-loop-accept-edit-{}", std::process::id()));
     std::fs::create_dir_all(&ws).unwrap();
@@ -209,6 +214,7 @@ async fn accept_edit_auto_approves_workspace_write() {
 
 #[tokio::test]
 async fn manual_mode_asks_before_workspace_write() {
+    let _capture = manualaid_cli::console::capture();
     let ws = std::env::temp_dir().join(format!("manualaid-loop-manual-{}", std::process::id()));
     std::fs::create_dir_all(&ws).unwrap();
     let registry = FormatRegistry::new();

@@ -7,6 +7,7 @@ mod common;
 
 #[test]
 fn run_skill_with_explicit_home_returns_ok() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-skill-home");
     assert!(run_skill_with_home(false, false, dir.path()).is_ok());
     assert!(run_skill_with_home(true, false, dir.path()).is_ok());
@@ -16,5 +17,6 @@ fn run_skill_with_explicit_home_returns_ok() {
 
 #[test]
 fn run_skill_without_home_falls_back_to_real_home() {
+    let _capture = manualaid_cli::console::capture();
     assert!(run_skill(false, true, None).is_ok());
 }

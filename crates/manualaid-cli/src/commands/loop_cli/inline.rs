@@ -44,7 +44,7 @@ pub(super) fn handle_inline_command(
                     Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
                 }
             } else {
-                println!(
+                crate::console::out_println!(
                     "{}",
                     t_fmt(
                         "cli.error.invalid_index",
@@ -65,7 +65,7 @@ pub(super) fn handle_inline_command(
                     Err(e) => eprintln!("{e}"),
                 }
             } else {
-                println!("Unknown tool `{tool_name}`");
+                crate::console::out_println!("Unknown tool `{tool_name}`");
             }
         }
         ["/lang"] => {
@@ -82,7 +82,7 @@ pub(super) fn handle_inline_command(
                 i18n::set_locale(&config.lang);
                 persist_and_confirm(config, root, "cli.config.lang_switched", &config.lang);
             } else {
-                println!(
+                crate::console::out_println!(
                     "{}",
                     t_fmt(
                         "cli.error.invalid_index",
@@ -115,7 +115,7 @@ pub(super) fn handle_inline_command(
                     &config.tool_call_format,
                 );
             } else {
-                println!(
+                crate::console::out_println!(
                     "{}",
                     t_fmt(
                         "cli.error.invalid_index",
@@ -124,7 +124,7 @@ pub(super) fn handle_inline_command(
                 );
             }
         }
-        _ => println!("{}", i18n::t_str("cli.loop.menu_invalid")),
+        _ => crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid")),
     }
 }
 
@@ -145,6 +145,7 @@ mod tests {
 
     #[test]
     fn inline_tools_renders_tool_list() {
+        let _capture = crate::console::capture();
         let (config, registry, root, mut session) = setup();
         let mut config = config;
         handle_inline_command(&mut config, &registry, &root, &mut session, "/tools");
@@ -152,6 +153,7 @@ mod tests {
 
     #[test]
     fn inline_lang_cycles_and_persists() {
+        let _capture = crate::console::capture();
         let (mut config, registry, root, mut session) = setup();
         handle_inline_command(&mut config, &registry, &root, &mut session, "/lang");
         assert_eq!(config.lang, "zh-CN");
@@ -161,6 +163,7 @@ mod tests {
 
     #[test]
     fn inline_lang_with_index_and_out_of_range() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session) = setup();
@@ -172,6 +175,7 @@ mod tests {
 
     #[test]
     fn inline_format_cycles_and_applies_index() {
+        let _capture = crate::console::capture();
         let (mut config, registry, root, mut session) = setup();
         handle_inline_command(&mut config, &registry, &root, &mut session, "/format");
         assert_eq!(config.tool_call_format, "xml");
@@ -181,6 +185,7 @@ mod tests {
 
     #[test]
     fn inline_format_out_of_range_is_rejected() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session) = setup();
@@ -190,6 +195,7 @@ mod tests {
 
     #[test]
     fn inline_copy_rejects_invalid_index_and_unknown_tool() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session) = setup();
@@ -200,6 +206,7 @@ mod tests {
 
     #[test]
     fn inline_copy_without_rounds_prints_notice() {
+        let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session) = setup();
@@ -211,6 +218,7 @@ mod tests {
 
     #[test]
     fn inline_unknown_command_prints_invalid() {
+        let _capture = crate::console::capture();
         let (mut config, registry, root, mut session) = setup();
         handle_inline_command(&mut config, &registry, &root, &mut session, "/xyz");
     }

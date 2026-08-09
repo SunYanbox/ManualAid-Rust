@@ -6,6 +6,8 @@
 
 pub mod cli;
 pub mod commands;
+#[doc(hidden)]
+pub mod console;
 pub mod dir_tree;
 mod env;
 pub mod pager;

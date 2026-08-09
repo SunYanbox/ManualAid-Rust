@@ -8,14 +8,34 @@
 //! 折叠变体先固定显示 3 行预览，避免工具结果一次刷过整屏。
 
 use std::io::{self, IsTerminal, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 
 use crate::style;
 
+/// Whether interactive paging is allowed. Disabled in test builds so tests
+/// never enter raw mode or block on key presses; the switch stays available
+/// for integration tests that link the non-test library.
+/// 是否允许交互分页。测试构建下关闭，测试永不进入 raw mode 或阻塞等按键；
+/// 集成测试链接的是非 test 库，因此保留显式开关。
+static INTERACTIVE_ENABLED: AtomicBool = AtomicBool::new(!cfg!(test));
+
+/// Turn interactive paging on or off for the whole process.
+/// 开关整个进程的交互分页。
+pub fn set_enabled(enabled: bool) {
+    INTERACTIVE_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
 /// Print `output`, paging it when it is longer than the terminal height.
 /// 输出 `output`，当内容超过终端高度时分页显示。
 pub fn print_paged(output: &str) -> io::Result<()> {
+    if crate::console::is_capturing() {
+        return print_all_to(output, &mut crate::console::ConsoleWriter);
+    }
+    if !INTERACTIVE_ENABLED.load(Ordering::Relaxed) {
+        return print_all(output);
+    }
     print_paged_with(
         output,
         None,
@@ -23,7 +43,7 @@ pub fn print_paged(output: &str) -> io::Result<()> {
         io::stdin().is_terminal(),
         terminal_height(),
         |lines, first_page_size, page_size| {
-            interactive_paged(lines, first_page_size, page_size, read_key)
+            interactive_paged(io::stdout(), lines, first_page_size, page_size, read_key)
         },
     )
 }
@@ -37,6 +57,12 @@ const COLLAPSED_FIRST_PAGE_LINES: usize = 3;
 /// 输出 `output`：超过 3 行时先显示固定预览，之后每按一次键显示一整屏，
 /// `q`/Ctrl+C 可提前退出。
 pub fn print_paged_collapsed(output: &str) -> io::Result<()> {
+    if crate::console::is_capturing() {
+        return print_all_to(output, &mut crate::console::ConsoleWriter);
+    }
+    if !INTERACTIVE_ENABLED.load(Ordering::Relaxed) {
+        return print_all(output);
+    }
     print_paged_with(
         output,
         Some(COLLAPSED_FIRST_PAGE_LINES),
@@ -44,7 +70,7 @@ pub fn print_paged_collapsed(output: &str) -> io::Result<()> {
         io::stdin().is_terminal(),
         terminal_height(),
         |lines, first_page_size, page_size| {
-            interactive_paged(lines, first_page_size, page_size, read_key)
+            interactive_paged(io::stdout(), lines, first_page_size, page_size, read_key)
         },
     )
 }
@@ -61,11 +87,13 @@ fn print_all_to(output: &str, writer: &mut impl Write) -> io::Result<()> {
     writer.flush()
 }
 
-/// Write the whole output without paging.
-/// 不分页地写入完整输出。
+/// Write the whole output without paging; the sink honors an active test
+/// capture, so non-interactive output never reaches the real terminal in
+/// tests.
+/// 不分页地写入完整输出；出口尊重测试捕获状态，非交互输出在测试中不会
+/// 到达真实终端。
 fn print_all(output: &str) -> io::Result<()> {
-    let mut stdout = io::stdout().lock();
-    print_all_to(output, &mut stdout)
+    print_all_to(output, &mut crate::console::ConsoleWriter)
 }
 
 /// Decide whether to print everything or start paging, based on injectable
@@ -97,34 +125,37 @@ where
 
 /// Enable raw mode and page the lines to the real stdout.
 /// 启用 raw mode 并把内容分页输出到真实 stdout。
-fn interactive_paged<F>(
+fn interactive_paged<W, F>(
+    writer: W,
     lines: &[&str],
     first_page_size: usize,
     page_size: usize,
     read_key: F,
 ) -> io::Result<()>
 where
+    W: Write,
     F: FnMut() -> io::Result<bool>,
 {
     let _raw = RawModeGuard::enable()?;
-    write_pages(lines, first_page_size, page_size, read_key)
+    write_pages_with(writer, lines, first_page_size, page_size, read_key)
 }
 
-/// Write the paged lines to the real stdout; `read_key` decides between
-/// quitting early and showing the next page.
-/// 把分页内容写入真实 stdout；`read_key` 决定提前退出还是显示下一页。
-fn write_pages<F>(
+/// Write the paged lines to an injectable writer; the writer is flushed
+/// after the final page so callers see the output immediately.
+/// 把分页内容写入可注入的 writer；最后一页写完后 flush，调用方立即可见。
+fn write_pages_with<W, F>(
+    mut writer: W,
     lines: &[&str],
     first_page_size: usize,
     page_size: usize,
     read_key: F,
 ) -> io::Result<()>
 where
+    W: Write,
     F: FnMut() -> io::Result<bool>,
 {
-    let mut stdout = io::stdout().lock();
-    run_pages_collapsed(&mut stdout, lines, first_page_size, page_size, read_key)?;
-    stdout.flush()
+    run_pages_collapsed(&mut writer, lines, first_page_size, page_size, read_key)?;
+    writer.flush()
 }
 
 /// Read one key and decide between quitting early and continuing.
@@ -268,6 +299,10 @@ fn terminal_height() -> Option<usize> {
 mod tests {
     use super::*;
 
+    /// Serializes tests that flip the process-wide interactive-pager switch.
+    /// 串行化切换进程级交互分页开关的测试。
+    static PAGER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// Interactive runner that must never be invoked by the branch under
     /// test; kept as one shared function so it is not duplicated per test.
     /// 被测分支不应触发的交互运行器；定义为共享函数避免在每个测试里重复。
@@ -301,6 +336,7 @@ mod tests {
 
     #[test]
     fn print_paged_with_prints_all_without_a_terminal() {
+        let _capture = crate::console::capture();
         assert!(
             print_paged_with(
                 "a\nb\n",
@@ -323,6 +359,28 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    #[test]
+    fn print_paged_prints_all_when_interactive_is_disabled() {
+        let _lock = PAGER_LOCK.lock().unwrap();
+        let capture = crate::console::capture();
+        set_enabled(false);
+        assert!(print_paged("a\nb\nc\n").is_ok());
+        assert!(print_paged_collapsed("a\nb\nc\nd\n").is_ok());
+        set_enabled(!cfg!(test));
+        assert_eq!(capture.text(), "a\nb\nc\na\nb\nc\nd\n");
+    }
+
+    #[test]
+    fn print_paged_prints_with_interactive_enabled_when_output_fits() {
+        let _lock = PAGER_LOCK.lock().unwrap();
+        let capture = crate::console::capture();
+        set_enabled(true);
+        assert!(print_paged("a\nb\n").is_ok());
+        assert!(print_paged_collapsed("a\nb\nc\n").is_ok());
+        set_enabled(!cfg!(test));
+        assert_eq!(capture.text(), "a\nb\na\nb\nc\n");
     }
 
     #[test]
@@ -337,6 +395,7 @@ mod tests {
 
     #[test]
     fn print_paged_with_prints_all_when_output_fits_the_first_page() {
+        let _capture = crate::console::capture();
         assert!(
             print_paged_with(
                 "a\nb\nc\n",
@@ -375,17 +434,26 @@ mod tests {
     }
 
     #[test]
-    fn write_pages_quits_after_the_first_page() {
-        assert!(write_pages(&["a", "b", "c", "d"], 3, 4, || Ok(true)).is_ok());
+    fn collapsed_pages_quit_after_the_first_page_without_stdout_pollution() {
+        let mut out = Vec::new();
+        run_pages_collapsed(&mut out, &["a", "b", "c", "d"], 3, 4, || Ok(true)).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.starts_with("a\nb\nc\n"));
     }
 
     #[test]
     fn interactive_paged_quits_immediately_when_raw_mode_is_available() {
-        // The injected key reader quits at once, so the test never blocks;
-        // without a console raw mode fails and the pager returns an error.
-        // 注入的按键读取器立即退出，测试不会阻塞；无控制台时 raw mode 失败，
-        // 分页器返回错误。
-        let _ = interactive_paged(&["a", "b", "c", "d"], 3, 4, || Ok(true));
+        // The injected key reader quits at once and the writer is an
+        // in-memory buffer, so the test never blocks and never writes to
+        // the real console; without a console raw mode fails and the pager
+        // returns an error.
+        // 注入的按键读取器立即退出且 writer 是内存缓冲，测试不会阻塞也不会
+        // 写真实控制台；无控制台时 raw mode 失败，分页器返回错误。
+        let mut out = Vec::new();
+        if let Ok(()) = interactive_paged(&mut out, &["a", "b", "c", "d"], 3, 4, || Ok(true)) {
+            let text = String::from_utf8(out).unwrap();
+            assert!(text.starts_with("a\nb\nc\n"));
+        }
     }
 
     #[test]

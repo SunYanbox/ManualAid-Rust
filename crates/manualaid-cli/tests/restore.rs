@@ -14,6 +14,7 @@ static LOCALE_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn restore_roundtrip_returns_ok() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("restore-ok");
     let masked = dir.path().join("masked.txt");
     let snapshot = dir.path().join("snapshot.json");
@@ -24,6 +25,7 @@ fn restore_roundtrip_returns_ok() {
 
 #[test]
 fn restore_empty_input_returns_ok() {
+    let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("restore-empty");
     let snapshot = dir.path().join("snapshot.json");
     fs::write(&snapshot, r#"{"[PRV_EMAIL_1]":"jane@example.com"}"#).unwrap();

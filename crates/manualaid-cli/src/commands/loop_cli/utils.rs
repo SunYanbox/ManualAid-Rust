@@ -1,6 +1,7 @@
 //! Small utilities for the loop: formatting, input and cycling helpers.
 //! loop 的小工具函数：格式化、输入与循环切换辅助。
 
+use std::io::IsTerminal;
 use std::path::Path;
 
 use manualaid_core::parser::{FormatRegistry, RegistryMode};
@@ -59,26 +60,47 @@ pub(super) fn push_test_input(lines: &[&str]) {
     });
 }
 
-/// Clear the screen via the platform command; failures are ignored.
-/// 通过平台命令清屏；失败时静默忽略。
+/// Clear the screen via the platform command; failures are ignored. The
+/// command never runs while a test capture is active or when stdout is not
+/// a real terminal, so `cargo test` can never clear the user's console.
+/// 通过平台命令清屏；失败时静默忽略。测试捕获期间或 stdout 非真实终端时
+/// 绝不执行命令，`cargo test` 因此永远不会清掉用户的控制台。
 pub(super) fn clear_screen() {
-    #[cfg(target_os = "windows")]
-    {
-        let _ = std::process::Command::new("cmd")
-            .args(["/C", "cls"])
-            .stdin(std::process::Stdio::inherit())
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .status();
+    if crate::console::is_capturing() || !std::io::stdout().is_terminal() {
+        return;
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = std::process::Command::new("clear")
-            .stdin(std::process::Stdio::inherit())
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .status();
-    }
+    let _ = clear_command_status(
+        std::process::Stdio::inherit(),
+        std::process::Stdio::inherit(),
+    );
+}
+
+/// Run the platform clear command and return its status; failures are
+/// surfaced so callers can decide whether clearing actually happened.
+/// 运行平台清屏命令并返回其状态；失败时由调用方决定如何处理。
+#[cfg(target_os = "windows")]
+fn clear_command_status(
+    stdin: std::process::Stdio,
+    stdout: std::process::Stdio,
+) -> std::io::Result<std::process::ExitStatus> {
+    std::process::Command::new("cmd")
+        .args(["/C", "cls"])
+        .stdin(stdin)
+        .stdout(stdout)
+        .stderr(std::process::Stdio::null())
+        .status()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn clear_command_status(
+    stdin: std::process::Stdio,
+    stdout: std::process::Stdio,
+) -> std::io::Result<std::process::ExitStatus> {
+    std::process::Command::new("clear")
+        .stdin(stdin)
+        .stdout(stdout)
+        .stderr(std::process::Stdio::null())
+        .status()
 }
 
 /// Apply an explicit `-l/--lang` override to the session config. Invalid
@@ -262,11 +284,11 @@ pub fn format_round_summary(results: &[ToolResult]) -> String {
 /// 把 `lines` 以弱化样式打印为上下各带一个空行的区块，让短状态消息与
 /// 周边输出分开，同时不喧宾夺主。
 pub(super) fn print_muted_block(lines: &[String]) {
-    println!();
+    crate::console::out_println!();
     for line in lines {
-        println!("{}", crate::style::muted(line));
+        crate::console::out_println!("{}", crate::style::muted(line));
     }
-    println!();
+    crate::console::out_println!();
 }
 
 #[cfg(test)]
@@ -282,8 +304,24 @@ mod tests {
     }
 
     #[test]
-    fn clear_screen_runs_platform_command() {
+    fn clear_screen_skips_while_capturing() {
+        // With a capture active the platform clear command never runs, so
+        // the user's console stays untouched no matter how cargo test is
+        // launched.
+        // 捕获状态下平台清屏命令绝不执行，无论 cargo test 如何启动，
+        // 用户的控制台都不会被清空。
+        let capture = crate::console::capture();
         clear_screen();
+        assert_eq!(capture.text(), "");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn clear_command_status_runs_the_platform_command() {
+        let status =
+            clear_command_status(std::process::Stdio::piped(), std::process::Stdio::piped())
+                .expect("run cls");
+        assert!(status.success());
     }
 
     #[test]

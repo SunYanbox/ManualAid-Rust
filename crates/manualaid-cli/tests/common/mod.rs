@@ -45,6 +45,43 @@ impl Drop for TempDir {
     }
 }
 
+/// Run the compiled binary in `cwd` with a scripted stdin and captured
+/// output. `home` is forwarded to the child when set so the loop never
+/// touches the real user home. The child's stdio is redirected, so the
+/// interactive pager and clear-screen paths stay quiet and assertions can
+/// inspect the real console output.
+/// 在 `cwd` 中以脚本化 stdin 运行编译后的二进制并捕获输出。设置 `home` 时转发
+/// 给子进程，避免 loop 触碰真实用户主目录。子进程 stdio 被重定向，交互分页与
+/// 清屏路径保持安静，断言可以直接检查真实控制台输出。
+pub fn run_binary_scripted(
+    cwd: &Path,
+    home: Option<&Path>,
+    args: &[&str],
+    lines: &[&str],
+) -> std::process::Output {
+    use std::io::Write;
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_manualaid-cli"));
+    command
+        .args(args)
+        .current_dir(cwd)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(home) = home {
+        command.env("HOME", home).env("USERPROFILE", home);
+    }
+    let mut child = command.spawn().expect("spawn manualaid-cli binary");
+    {
+        let mut stdin = child.stdin.take().expect("child stdin handle");
+        for line in lines {
+            writeln!(stdin, "{line}").expect("write scripted input");
+        }
+    }
+    child
+        .wait_with_output()
+        .expect("wait for manualaid-cli binary")
+}
+
 /// Write a skill folder `root/agent_dir/skills/{folder}/SKILL.md` with the
 /// given frontmatter fields, returning the skill folder path. `name` is
 /// omitted from the frontmatter when `None`.
