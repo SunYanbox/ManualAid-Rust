@@ -3,7 +3,10 @@
 中文 / [English](README.md)
 
 ![Rust](https://img.shields.io/badge/rust-1.97.0+-blue.svg)
-![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)
+![GitHub top language](https://img.shields.io/github/languages/top/SunYanbox/ManualAid-Rust)
+![GitHub License](https://img.shields.io/github/license/SunYanbox/ManualAid-Rust)
+![Codecov](https://img.shields.io/codecov/c/github/SunYanbox/ManualAid-Rust)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/SunYanbox/ManualAid-Rust/.github%2Fworkflows%2Fci.yml)
 
 一款**纯本地、需人工介入**的复制粘贴助手，专为 LLM 工作流设计。
 

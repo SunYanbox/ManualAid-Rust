@@ -3,7 +3,10 @@
 [中文](README_ZH_CN.md) / English
 
 ![Rust](https://img.shields.io/badge/rust-1.97.0+-blue.svg)
-![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)
+![GitHub top language](https://img.shields.io/github/languages/top/SunYanbox/ManualAid-Rust)
+![GitHub License](https://img.shields.io/github/license/SunYanbox/ManualAid-Rust)
+![Codecov](https://img.shields.io/codecov/c/github/SunYanbox/ManualAid-Rust)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/SunYanbox/ManualAid-Rust/.github%2Fworkflows%2Fci.yml)
 
 A **local-only, human-in-the-loop** copypaste assistant for LLM workflows.
 
