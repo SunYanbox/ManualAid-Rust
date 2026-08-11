@@ -1,5 +1,7 @@
 //! Read tool execution: reads a file with encoding detection and optional
-//! `offset` / `limit` line slicing.
+//! `offset` / `limit` line slicing. The pre-check shares its readability
+//! validation with the execution path so calls that are guaranteed to fail
+//! never reach the approval queue.
 //! Read 工具执行：读取文件（带编码检测），支持 `offset` / `limit` 行切片。
 
 use indexmap::IndexMap;
@@ -36,6 +38,21 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
         Err(message) => return ToolResult::failure("read", message),
     };
     ToolResult::success("read", output, true)
+}
+
+/// Pre-check one read call for guaranteed failure before it reaches the
+/// approval queue. A directory is rejected with an explicit message; other
+/// unreadable paths report the underlying I/O error.
+pub(crate) async fn pre_check(params: &IndexMap<String, Value>) -> Result<(), String> {
+    let file_path = get_string(params, "file_path")
+        .ok_or_else(|| "Missing required parameter `file_path`".to_string())?;
+    if std::path::Path::new(&file_path).is_dir() {
+        return Err("`file_path` is a directory; cannot read it as a file".to_string());
+    }
+    read_file(&file_path)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Slice `content` by 1-based `offset` and optional `limit`.

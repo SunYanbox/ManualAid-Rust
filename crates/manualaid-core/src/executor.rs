@@ -154,9 +154,13 @@ impl Executor {
         }
 
         let restored_params = restore_params(&coerced_params, &self.prompt_mapping);
-        if tool == ToolKind::Edit
-            && let Err(message) = crate::tools::edit::plan_edit(&restored_params).await
-        {
+        if let Err(message) = match tool {
+            ToolKind::Edit => crate::tools::edit::plan_edit(&restored_params)
+                .await
+                .map(|_| ()),
+            ToolKind::Read => crate::tools::read::pre_check(&restored_params).await,
+            _ => Ok(()),
+        } {
             return Some(
                 ToolResult::failure(&call.tool_name, message)
                     .with_params_summary(params_summary_of(&call.params)),

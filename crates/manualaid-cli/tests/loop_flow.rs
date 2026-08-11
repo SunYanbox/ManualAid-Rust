@@ -8,6 +8,13 @@
 mod common;
 
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use manualaid_cli::commands::loop_cli::{Approval, execute_round_with_approval};
+use manualaid_core::audit::{Auditor, SessionMode};
+use manualaid_core::executor::Executor;
+use manualaid_core::parser::FormatRegistry;
 
 /// Serialize clipboard-touching subprocess tests across processes: each test
 /// binary runs its threads concurrently, and the system clipboard is a
@@ -91,6 +98,34 @@ fn read_call(path: &Path) -> String {
 
 fn config_path(cwd: &Path) -> std::path::PathBuf {
     cwd.join(".ManualAid").join("config.toml")
+}
+
+#[tokio::test]
+async fn approval_flow_skips_read_of_directory() {
+    let root = common::TempDir::new("loop-flow-read-dir");
+    let dir = root.path().join("subdir");
+    std::fs::create_dir_all(&dir).unwrap();
+    let executor = Executor::new(
+        Auditor::new(root.path().to_path_buf()).with_mode(SessionMode::AcceptEdit),
+        Arc::new(None),
+    );
+    let registry = FormatRegistry::new();
+    let read_call = read_call(&dir);
+    let calls = registry.parse(&read_call).unwrap();
+    let decide_calls = AtomicUsize::new(0);
+    let (_, results) = execute_round_with_approval(&executor, &registry, &read_call, |_| {
+        decide_calls.fetch_add(1, Ordering::SeqCst);
+        Approval::Approve
+    })
+    .await
+    .unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(results.len(), 1);
+    let result = &results[0];
+    assert!(!result.success);
+    assert!(result.output.contains("file_path"));
+    assert!(result.output.contains("directory"));
+    assert_eq!(decide_calls.load(Ordering::SeqCst), 0);
 }
 
 #[test]
