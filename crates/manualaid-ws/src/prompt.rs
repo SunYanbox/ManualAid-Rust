@@ -60,11 +60,7 @@ pub fn build_system_prompt(
         out.push('\n');
         out.push_str(&i18n::t_str("prompt.system.skill-rule"));
     }
-    let platform_notes = platform_notes_text();
-    if !platform_notes.is_empty() {
-        out.push('\n');
-        out.push_str(&platform_notes);
-    }
+    push_section(&mut out, &platform_notes_text());
     out.push('\n');
 
     let workspace_info = workspace_info_text(workspace_root);
@@ -147,10 +143,29 @@ fn is_enabled(config: &Config, tool: &ToolKind) -> bool {
 /// Windows; empty on other platforms.
 /// 仅在 Windows 平台上构建提示词时渲染的 Windows 专属提示；其他平台为空。
 fn platform_notes_text() -> String {
-    if cfg!(windows) {
+    platform_notes_text_for(cfg!(windows))
+}
+
+/// The Windows guidance for an explicit platform decision, split out so
+/// tests can exercise both branches on any host platform.
+/// 按显式平台决策返回 Windows 提示文本；拆出独立函数以便测试在任意
+/// 宿主平台上显式覆盖两个分支。
+fn platform_notes_text_for(is_windows: bool) -> String {
+    if is_windows {
         i18n::t_str("prompt.system.platform-notes")
     } else {
         String::new()
+    }
+}
+
+/// Append a blank line followed by `section` to `out` when `section` is
+/// non-empty; a no-op otherwise.
+/// 当 `section` 非空时，在 `out` 末尾先补一个空行再追加 `section`；
+/// `section` 为空时不做任何事。
+fn push_section(out: &mut String, section: &str) {
+    if !section.is_empty() {
+        out.push('\n');
+        out.push_str(section);
     }
 }
 
@@ -509,6 +524,14 @@ mod tests {
     }
 
     #[test]
+    fn platform_notes_text_for_covers_both_platform_decisions() {
+        let windows_notes = platform_notes_text_for(true);
+        assert!(windows_notes.starts_with("<platform-notes>"));
+        assert!(windows_notes.contains("Windows"));
+        assert!(platform_notes_text_for(false).is_empty());
+    }
+
+    #[test]
     fn platform_notes_follow_the_running_platform() {
         let notes = platform_notes_text();
         if cfg!(windows) {
@@ -517,6 +540,16 @@ mod tests {
         } else {
             assert!(notes.is_empty());
         }
+    }
+
+    #[test]
+    fn push_section_appends_only_non_empty_sections() {
+        let mut out = String::from("head");
+        push_section(&mut out, "body");
+        assert_eq!(out, "head\nbody");
+        let mut out = String::from("head");
+        push_section(&mut out, "");
+        assert_eq!(out, "head");
     }
 
     #[test]
