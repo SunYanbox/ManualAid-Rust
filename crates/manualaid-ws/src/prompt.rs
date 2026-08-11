@@ -150,6 +150,10 @@ fn workspace_info_text(workspace_root: &Path) -> String {
     );
     if !git_info.is_empty() {
         result.push_str("<git_information>\n");
+        // The git block opens with a localized snapshot note.
+        // git 块开头附本地化快照备注。
+        result.push_str(&i18n::t_str("prompt.system.git-status-note"));
+        result.push_str("\n\n");
         result.push_str(&git_info);
         result.push_str("</git_information>\n");
     }
