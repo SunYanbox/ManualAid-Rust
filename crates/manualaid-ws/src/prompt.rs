@@ -35,7 +35,7 @@ pub fn build_system_prompt(
     };
     let tools_list = render_tools_list(&effective, registry);
     let format_desc = format!(
-        "{}\n```\n{}```\n",
+        "{}\n```\n{}\n```\n",
         t_fmt(
             "cli.prompt.format_desc",
             &[("format", &config.tool_call_format)]
