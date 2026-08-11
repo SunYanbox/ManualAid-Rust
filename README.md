@@ -25,6 +25,24 @@ For detailed design and usage, see the [documentation](./doc/zh-cn/README.md).
 
 ### Windows
 
+**Option 1: Use the automated setup script (recommended)**
+
+To bypass PowerShell execution policy restrictions, use one of the following methods:
+
+- Pipe the script content to PowerShell (local clone):
+  ```powershell
+  Get-Content .\scripts\setup-cli.ps1 -Raw | iex
+  ```
+
+- Remote one-liner:
+  ```powershell
+  irm https://raw.githubusercontent.com/SunYanbox/ManualAid-Rust/main/scripts/setup-cli.ps1 | iex
+  ```
+
+To uninstall, replace `setup-cli.ps1` with `uninstall-cli.ps1` using the same method.
+
+**Option 2: Manual installation**
+
 1. Build locally via `cargo build --release` or download the executable from [Github Release](https://github.com/SunYanbox/ManualAid-Rust/releases)
 2. Copy it to `%LOCALAPPDATA%\Programs\ManualAid\` (user-level installation) or to `C:\Program Files\ManualAid\` (system-wide installation)
 3. Add the above path to the environment variable (user-level Path for user installation, system-level Path for system-wide installation)

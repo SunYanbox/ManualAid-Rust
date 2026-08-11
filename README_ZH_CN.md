@@ -27,6 +27,24 @@
 
 ### Windows
 
+**方式一：使用自动化安装脚本（推荐）**
+
+为绕过 PowerShell 执行策略限制，请使用以下方式之一：
+
+- 通过管道将脚本内容传递给 PowerShell（本地克隆）：
+  ```powershell
+  Get-Content .\scripts\setup-cli.ps1 -Raw | iex
+  ```
+
+- 远程一键安装：
+  ```powershell
+  irm https://raw.githubusercontent.com/SunYanbox/ManualAid-Rust/main/scripts/setup-cli.ps1 | iex
+  ```
+
+卸载时使用同样的方式，将 `setup-cli.ps1` 替换为 `uninstall-cli.ps1` 即可。
+
+**方式二：手动安装**
+
 1. 本地通过 `cargo build --release` 编译 / 从 [Github Release](https://github.com/SunYanbox/ManualAid-Rust/releases) 下载可执行文件
 2. 复制到 `%LOCALAPPDATA%\Programs\ManualAid\` 目录下（用户级安装）或复制到 `C:\Program Files\ManualAid\` 目录下（全局安装）
 3. 将上述路径添加到环境变量（用户级添加到用户的 Path 环境变量，全局级添加到全局 Path 环境变量）
