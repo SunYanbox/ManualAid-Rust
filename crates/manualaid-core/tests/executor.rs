@@ -142,6 +142,65 @@ async fn pre_check_returns_none_for_valid_call() {
 }
 
 #[tokio::test]
+async fn pre_check_rejects_read_of_directory_before_approval_queue() {
+    let dir = std::env::temp_dir().join(format!(
+        "manualaid-core-exec-read-dir-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let result = executor(&std::env::temp_dir())
+        .pre_check(&call("read", &[("file_path", dir.to_str().unwrap())]))
+        .await;
+    let result = result.expect("directory read is a guaranteed failure");
+    assert!(!result.success);
+    assert!(result.output.contains("file_path"));
+    assert!(result.output.contains("directory"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn pre_check_rejects_unreadable_read_path() {
+    let result = executor(&std::env::temp_dir())
+        .pre_check(&call("read", &[("file_path", "Z:/definitely/missing.txt")]))
+        .await;
+    let result = result.expect("missing read path is a guaranteed failure");
+    assert!(!result.success);
+    assert!(result.output.contains("cannot read file"));
+}
+
+#[tokio::test]
+async fn pre_check_passes_for_readable_read_path() {
+    let file = temp_file("exec-read-precheck");
+    std::fs::write(&file, "readable").unwrap();
+    let result = executor(&std::env::temp_dir())
+        .pre_check(&call("read", &[("file_path", file.to_str().unwrap())]))
+        .await;
+    assert!(result.is_none());
+    let _ = std::fs::remove_file(&file);
+}
+
+#[tokio::test]
+async fn pre_check_reports_missing_read_file_path() {
+    let executor = executor(&std::env::temp_dir());
+    let result = executor.pre_check(&call("read", &[])).await;
+    let result = result.expect("missing read path is a guaranteed failure");
+    assert!(!result.success);
+    assert!(result.output.contains("Missing required parameter"));
+}
+
+#[tokio::test]
+async fn pre_check_skips_tools_without_readability_validation() {
+    let executor = executor(&std::env::temp_dir());
+    let result = executor
+        .pre_check(&call(
+            "shell",
+            &[("command", "echo hi"), ("description", "x")],
+        ))
+        .await;
+    assert!(result.is_none());
+}
+
+#[tokio::test]
 async fn audit_reports_needs_approval_without_executing() {
     let root = std::env::temp_dir().join("manualaid-exec-ws");
     let auditor = Auditor::new(root);
