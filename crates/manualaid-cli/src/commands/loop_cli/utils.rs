@@ -378,6 +378,7 @@ mod tests {
     #[test]
     fn format_round_summary_keeps_slice_whitespace() {
         let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         crate::style::set_enabled(false);
         i18n::set_locale("en");
         let summary = format_round_summary(&[ToolResult::success(

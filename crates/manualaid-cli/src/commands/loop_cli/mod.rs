@@ -350,6 +350,7 @@ mod tests {
     #[test]
     fn format_round_summary_shows_state_and_output() {
         let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         crate::style::set_enabled(false);
         i18n::set_locale("en");
         let results = vec![
@@ -368,6 +369,7 @@ mod tests {
     #[test]
     fn format_round_summary_shows_approval_reasons() {
         let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         crate::style::set_enabled(false);
         i18n::set_locale("en");
         let mut result = ToolResult::success("shell", "done", true);
@@ -382,6 +384,8 @@ mod tests {
     #[test]
     fn format_round_summary_styles_blocks_when_enabled() {
         let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
         crate::style::set_enabled(true);
         let summary = format_round_summary(&[
             ToolResult::success("read", "hello", true),
