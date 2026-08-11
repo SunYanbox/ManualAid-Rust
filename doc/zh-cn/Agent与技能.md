@@ -35,3 +35,4 @@
   - 项目范围（`<项目根>/<agent_dir>/skills/`）的技能默认**启用**（`is_enabled = true`）
   - 全局范围（`<home>/<agent_dir>/skills/`）的技能默认**禁用**（`is_enabled = false`）
   - 用户可通过配置文件 `.ManualAid/config.toml` 中的 `[skill]` 表覆盖默认状态
+  - 配置格式详见 `项目概述.md` 中「技能去重与启用/禁用」一节
