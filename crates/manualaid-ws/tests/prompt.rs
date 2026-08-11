@@ -46,6 +46,18 @@ fn tools_list_uses_localized_descriptions() {
 }
 
 #[test]
+fn system_prompt_renders_format_description_phrase() {
+    // The format description is i18n text, not a literal key name.
+    // 格式描述是 i18n 文案，而非字面键名。
+    with_locale("en", || {
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(&Config::default(), Path::new("C:/ws"), &registry, &[], &[]);
+        assert!(!prompt.contains("cli.prompt.format_desc"));
+        assert!(prompt.contains("The current tool-calling format is"));
+    });
+}
+
+#[test]
 fn system_prompt_reflects_config_switches() {
     with_locale("en", || {
         let config = Config {
