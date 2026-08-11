@@ -71,3 +71,5 @@ dynamic-context = """
 %{skills_list}
 </dynamic-context>
 """
+
+git-status-note = "这是对话开始时的git状态。注意此状态是时间点快照，在对话期间不会更新。"

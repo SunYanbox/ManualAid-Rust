@@ -70,3 +70,5 @@ dynamic-context = """
 %{skills_list}
 </dynamic-context>
 """
+
+git-status-note = "This is the git status at the start of the conversation. Note: this status is a point-in-time snapshot and will not update during the conversation."

@@ -182,6 +182,51 @@ fn system_prompt_omits_context_when_auto_load_is_disabled() {
 }
 
 #[test]
+fn system_prompt_includes_git_status_snapshot_note() {
+    // A real git repository is needed so `<git_information>` renders.
+    // 需要真实 git 仓库才会输出 `<git_information>` 块。
+    let root = std::env::temp_dir().join(format!("manualaid-ws-prompt-git-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let init = std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(&root)
+        .status()
+        .expect("failed to run git init");
+    assert!(init.success(), "git init failed");
+    with_locale("en", || {
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(&Config::default(), &root, &registry, &[], &[]);
+        assert!(prompt.contains("<git_information>"));
+        assert!(prompt.contains(
+            "<git_information>\nThis is the git status at the start of the conversation."
+        ));
+        assert!(
+            prompt.contains(
+                "point-in-time snapshot and will not update during the conversation.\n\n"
+            )
+        );
+    });
+    with_locale("zh-CN", || {
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(&Config::default(), &root, &registry, &[], &[]);
+        assert!(prompt.contains("<git_information>"));
+        assert!(prompt.contains(
+            "<git_information>\n这是对话开始时的git状态。注意此状态是时间点快照，在对话期间不会更新。"
+        ));
+    });
+    // Outside a git repository the block and the note are omitted.
+    // 非 git 仓库时 git 块与备注均不输出。
+    with_locale("en", || {
+        let registry = FormatRegistry::new();
+        let prompt =
+            build_system_prompt(&Config::default(), Path::new("C:/ws"), &registry, &[], &[]);
+        assert!(!prompt.contains("<git_information>"));
+        assert!(!prompt.contains("point-in-time snapshot"));
+    });
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn format_results_joins_multiple_results() {
     let results = vec![
         ToolResult::success("read", "a", true),
