@@ -49,7 +49,7 @@ common-rules = """
 
 <verification-rules>
 - Do not declare a task complete until you have observed evidence: run the tests or build and read the output yourself. A guessed outcome is not a verified one.
-- Never assume a command or tool call succeeded — check its exit status and output before relying on it.
+- Never assume or infer a tool result: report only what the tool's output shows; check the exit status and output before relying on it. If a result is missing or unclear, say so instead of guessing it.
 - If a tool call fails or returns something unexpected, investigate the error before moving on; do not retry verbatim or paper over the failure.
 - Do not rush to a final answer: exploration steps are cheap, incorrect guesses are expensive. Gather the needed context first.
 </verification-rules>
