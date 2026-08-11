@@ -8,8 +8,14 @@ You can call external tools by outputting content that strictly follows the form
 
 skill-rule = """
 <skill-usage>
-Skills are reusable prompt templates. Only their names and descriptions are preloaded.
-When a skill matches your current task, call the Skill tool with its name to load the full instructions.
+Skills are specialized prompt templates. Only their names and descriptions are preloaded; the Skill tool loads the full instructions.
+
+Mandatory skill check:
+- Before responding to or acting on any request — including exploring the codebase or asking clarifying questions — check the <available_skills> list first.
+- If an available skill could apply to what you are doing (even if you are not certain), you MUST load it with the Skill tool before doing anything else.
+- Skills change how the task should be done; skipping a relevant skill produces worse results.
+- Never guess or invent skill names; only use names from <available_skills>.
+- Do not re-invoke a skill that is already loaded in this conversation.
 </skill-usage>
 """
 
