@@ -46,6 +46,33 @@ fn tools_list_uses_localized_descriptions() {
 }
 
 #[test]
+fn system_prompt_renders_format_description_phrase() {
+    // The format description is i18n text, not a literal key name.
+    // 格式描述是 i18n 文案，而非字面键名。
+    with_locale("en", || {
+        let registry = FormatRegistry::new();
+        let prompt =
+            build_system_prompt(&Config::default(), Path::new("C:/ws"), &registry, &[], &[]);
+        assert!(!prompt.contains("cli.prompt.format_desc"));
+        assert!(prompt.contains("The current tool-calling format is"));
+    });
+}
+
+#[test]
+fn system_prompt_renders_platform_notes_only_on_windows() {
+    with_locale("en", || {
+        let registry = FormatRegistry::new();
+        let prompt =
+            build_system_prompt(&Config::default(), Path::new("C:/ws"), &registry, &[], &[]);
+        if cfg!(windows) {
+            assert!(prompt.contains("<platform-notes>"));
+        } else {
+            assert!(!prompt.contains("<platform-notes>"));
+        }
+    });
+}
+
+#[test]
 fn system_prompt_reflects_config_switches() {
     with_locale("en", || {
         let config = Config {
@@ -175,7 +202,11 @@ fn system_prompt_omits_context_when_auto_load_is_disabled() {
             &[],
             &[root.join("AGENTS.md")],
         );
-        assert!(!prompt.contains("<context_files"));
+        // The rules text references the <context_files> tag name as a path
+        // source, so the assertion targets the rendered block form only.
+        // 规则文本会把 <context_files> 标签名作为路径来源引用，因此断言
+        // 只针对渲染出的区块形式。
+        assert!(!prompt.contains("<context_files path="));
         assert!(!prompt.contains("secret rules"));
         let _ = std::fs::remove_dir_all(&root);
     });

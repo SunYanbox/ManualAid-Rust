@@ -301,7 +301,11 @@ fn loop_binary_skips_context_selection_when_auto_load_is_disabled() {
         // 内容满足等待条件。
         let workspace_marker = dir.path().display().to_string();
         let clipboard = wait_for_clipboard_content(&workspace_marker);
-        assert!(!clipboard.contains("<context_files"));
+        // The rules text references the <context_files> tag name as a path
+        // source, so the assertion targets the rendered block form only.
+        // 规则文本会把 <context_files> 标签名作为路径来源引用，因此断言
+        // 只针对渲染出的区块形式。
+        assert!(!clipboard.contains("<context_files path="));
         child.send_line("0");
         let output = child.wait_with_output();
         assert!(output.status.success());

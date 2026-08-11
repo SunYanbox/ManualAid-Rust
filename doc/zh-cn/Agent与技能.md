@@ -28,6 +28,7 @@
 - 技能文件使用 YAML + 提示词格式，位于用户目录的 `.agents`、`.claude`、`.codex`、`.agent`、`.cc-switch`、`.iflow`、`.ManualAid`、`.opencode` 等文件夹的 `skills` 目录下。
 - 技能主文件（SKILL.md）定义开头的Yaml部分由两个`---`括出来，最少需要包含name和description(支持以`>`开头的多行描述)字段。在第二个`---`之后为SKILL的正文Markdown文本。
 - 默认只将技能名称和描述加载到系统提示词中。Agent 需要时调用 Skill 工具，系统才会把技能完整提示词注入到当前工具调用链路的上下文（不影响后续会话，除非再次调用）。
+- 系统提示词要求 Agent 在回复或行动之前先检查 `<available_skills>` 列表；存在可能适用的技能时，必须先调用 Skill 工具加载，再执行其他操作。
 - 技能无参数。
 - 支持热加载，不支持版本管理。
 - 技能与 Agent 无强制绑定关系。
