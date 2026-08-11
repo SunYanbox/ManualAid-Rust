@@ -51,7 +51,8 @@ fn system_prompt_renders_format_description_phrase() {
     // 格式描述是 i18n 文案，而非字面键名。
     with_locale("en", || {
         let registry = FormatRegistry::new();
-        let prompt = build_system_prompt(&Config::default(), Path::new("C:/ws"), &registry, &[], &[]);
+        let prompt =
+            build_system_prompt(&Config::default(), Path::new("C:/ws"), &registry, &[], &[]);
         assert!(!prompt.contains("cli.prompt.format_desc"));
         assert!(prompt.contains("The current tool-calling format is"));
     });
@@ -61,7 +62,8 @@ fn system_prompt_renders_format_description_phrase() {
 fn system_prompt_renders_platform_notes_only_on_windows() {
     with_locale("en", || {
         let registry = FormatRegistry::new();
-        let prompt = build_system_prompt(&Config::default(), Path::new("C:/ws"), &registry, &[], &[]);
+        let prompt =
+            build_system_prompt(&Config::default(), Path::new("C:/ws"), &registry, &[], &[]);
         if cfg!(windows) {
             assert!(prompt.contains("<platform-notes>"));
         } else {
