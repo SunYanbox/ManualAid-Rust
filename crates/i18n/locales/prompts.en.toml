@@ -95,5 +95,14 @@ dynamic-context = """
 
 git-status-note = "This is the git status at the start of the conversation. Note: this status is a point-in-time snapshot and will not update during the conversation."
 
+platform-notes = """
+<platform-notes>
+You are running on Windows:
+- Use forward slashes in paths (e.g. `crates/foo/src/lib.rs`); quote paths containing spaces.
+- Build and test commands are slower to start; prefer a few combined commands over many small ones.
+- Windows-specific failures are common: file locks, case-insensitive paths, cmd-vs-bash quoting differences. Always check the exit status and output of every command.
+</platform-notes>
+"""
+
 [cli.prompt]
 format_desc = "The current tool-calling format is `%{format}`. Tool calls must follow this format exactly:"

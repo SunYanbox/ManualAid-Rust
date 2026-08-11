@@ -58,6 +58,19 @@ fn system_prompt_renders_format_description_phrase() {
 }
 
 #[test]
+fn system_prompt_renders_platform_notes_only_on_windows() {
+    with_locale("en", || {
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(&Config::default(), Path::new("C:/ws"), &registry, &[], &[]);
+        if cfg!(windows) {
+            assert!(prompt.contains("<platform-notes>"));
+        } else {
+            assert!(!prompt.contains("<platform-notes>"));
+        }
+    });
+}
+
+#[test]
 fn system_prompt_reflects_config_switches() {
     with_locale("en", || {
         let config = Config {

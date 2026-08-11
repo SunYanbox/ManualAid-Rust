@@ -60,6 +60,11 @@ pub fn build_system_prompt(
         out.push('\n');
         out.push_str(&i18n::t_str("prompt.system.skill-rule"));
     }
+    let platform_notes = platform_notes_text();
+    if !platform_notes.is_empty() {
+        out.push('\n');
+        out.push_str(&platform_notes);
+    }
     out.push('\n');
 
     let workspace_info = workspace_info_text(workspace_root);
@@ -135,6 +140,17 @@ fn is_enabled(config: &Config, tool: &ToolKind) -> bool {
         ToolKind::Edit => config.edit,
         ToolKind::Write => config.write,
         ToolKind::Skill => config.skill,
+    }
+}
+
+/// Windows-specific guidance rendered only when the prompt is built on
+/// Windows; empty on other platforms.
+/// 仅在 Windows 平台上构建提示词时渲染的 Windows 专属提示；其他平台为空。
+fn platform_notes_text() -> String {
+    if cfg!(windows) {
+        i18n::t_str("prompt.system.platform-notes")
+    } else {
+        String::new()
     }
 }
 
@@ -490,6 +506,17 @@ mod tests {
         assert!(prompt.ends_with("</system_prompt>"));
         assert!(prompt.contains("<workspace_root>"));
         assert!(prompt.contains("<shell_environment>"));
+    }
+
+    #[test]
+    fn platform_notes_follow_the_running_platform() {
+        let notes = platform_notes_text();
+        if cfg!(windows) {
+            assert!(notes.starts_with("<platform-notes>"));
+            assert!(notes.contains("Windows"));
+        } else {
+            assert!(notes.is_empty());
+        }
     }
 
     #[test]

@@ -96,5 +96,14 @@ dynamic-context = """
 
 git-status-note = "这是对话开始时的git状态。注意此状态是时间点快照，在对话期间不会更新。"
 
+platform-notes = """
+<platform-notes>
+你当前运行在 Windows 上：
+- 路径中使用正斜杠（如 `crates/foo/src/lib.rs`）；包含空格的路径要加引号。
+- 构建和测试命令启动较慢；优先用少数几条组合命令，而不是大量小命令。
+- Windows 上常见各类失败：文件占用、路径大小写不敏感、cmd 与 bash 引号差异。必须检查每条命令的退出状态和输出。
+</platform-notes>
+"""
+
 [cli.prompt]
 format_desc = "当前工具调用格式为 `%{format}`。工具调用必须严格遵循此格式："
