@@ -187,7 +187,11 @@ fn system_prompt_omits_context_when_auto_load_is_disabled() {
             &[],
             &[root.join("AGENTS.md")],
         );
-        assert!(!prompt.contains("<context_files"));
+        // The rules text references the <context_files> tag name as a path
+        // source, so the assertion targets the rendered block form only.
+        // 规则文本会把 <context_files> 标签名作为路径来源引用，因此断言
+        // 只针对渲染出的区块形式。
+        assert!(!prompt.contains("<context_files path="));
         assert!(!prompt.contains("secret rules"));
         let _ = std::fs::remove_dir_all(&root);
     });

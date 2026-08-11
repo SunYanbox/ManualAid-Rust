@@ -29,14 +29,30 @@ common-rules = """
 %{tools_list}
 </available-tools>
 
-<tool-calling-rules>
-- Prefer the dedicated file tools over shell commands when appropriate.
+<path-rules>
+- Never guess or invent file paths. Only use paths that appear in <workspace_root>, <directory_listing>, <context_files>, or were confirmed by an earlier tool result.
+- To learn what is inside a directory, list its contents first (shell `ls`); do not assume a file exists until you have seen it.
+- When a tool call fails because of a wrong path, correct the path from the error message — do not retry the same guess.
+- Prefer absolute paths under the workspace root; on Windows use forward slashes (e.g. `crates/foo/src/lib.rs`).
+</path-rules>
+
+<tool-selection-rules>
+- Use the dedicated tools instead of shell commands whenever they can accomplish the task: read a file with read, modify a file with edit or write, load a skill with skill — never cat, sed, echo-redirection or grep for these.
+- The shell tool is only for what the dedicated tools cannot do: builds, tests, git, process management, and listing directory contents.
+- The shell tool does not parse quotes and pipe characters reliably; prefer the dedicated tools, and keep unavoidable shell commands simple.
 - Independent tool calls may be issued in parallel in a single reply.
 - A rejected tool call means the user denied that operation — adjust your approach instead of retrying verbatim.
 - For operations that are hard to undo or have external impact, confirm first unless explicitly authorized or instructed to proceed.
 - Sending content to an external service means publishing it; it may be cached or indexed even after deletion.
 - Inspect target content before deleting or overwriting. If the content contradicts its description, or you did not create it, raise concerns instead of acting blindly.
-</tool-calling-rules>
+</tool-selection-rules>
+
+<verification-rules>
+- Do not declare a task complete until you have observed evidence: run the tests or build and read the output yourself. A guessed outcome is not a verified one.
+- Never assume a command or tool call succeeded — check its exit status and output before relying on it.
+- If a tool call fails or returns something unexpected, investigate the error before moving on; do not retry verbatim or paper over the failure.
+- Do not rush to a final answer: exploration steps are cheap, incorrect guesses are expensive. Gather the needed context first.
+</verification-rules>
 
 <permissions>
 - Read operations execute immediately.
