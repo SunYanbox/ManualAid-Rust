@@ -52,6 +52,22 @@
 
 ### Linux
 
+**方式一：使用自动化安装脚本（推荐）**
+
+- 直接运行脚本文件（需本地克隆仓库）：
+  ```bash
+  bash ./scripts/setup-cli.sh
+  ```
+
+- 远程一键安装：
+  ```bash
+  bash <(curl -fsSL https://raw.githubusercontent.com/SunYanbox/ManualAid-Rust/main/scripts/setup-cli.sh)
+  ```
+
+卸载时使用同样的方式，将 `setup-cli.sh` 替换为 `uninstall-cli.sh` 即可。
+
+**方式二：手动安装**
+
 1. 本地通过 `cargo build --release` 编译 / 从 [Github Release](https://github.com/SunYanbox/ManualAid-Rust/releases) 下载可执行文件
 2. 复制到 `/usr/local/bin` 目录下 / 如果是本地编译，还可以在项目根目录通过 `sudo install -m 755 target/release/manualaid-cli /usr/local/bin/` 快速安装
 3. 通过 `manualaid-cli` 运行（一般只需要输入 `manu` + Tab 即可自动补全）

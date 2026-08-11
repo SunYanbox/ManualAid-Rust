@@ -50,6 +50,22 @@ To uninstall, replace `setup-cli.ps1` with `uninstall-cli.ps1` using the same me
 
 ### Linux
 
+**Option 1: Use the automated setup script (recommended)**
+
+- Run the script directly (requires local clone):
+  ```bash
+  bash ./scripts/setup-cli.sh
+  ```
+
+- Remote one-liner:
+  ```bash
+  bash <(curl -fsSL https://raw.githubusercontent.com/SunYanbox/ManualAid-Rust/main/scripts/setup-cli.sh)
+  ```
+
+To uninstall, replace `setup-cli.sh` with `uninstall-cli.sh` using the same method.
+
+**Option 2: Manual installation**
+
 1. Build locally via `cargo build --release` or download the executable from [Github Release](https://github.com/SunYanbox/ManualAid-Rust/releases)
 2. Copy it to `/usr/local/bin`; if built locally, you can also run `sudo install -m 755 target/release/manualaid-cli /usr/local/bin/` from the project root
 3. Run with `manualaid-cli` (usually type `manu` + Tab for auto-completion)
