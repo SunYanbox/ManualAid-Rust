@@ -531,15 +531,18 @@ mod tests {
         assert!(platform_notes_text_for(false).is_empty());
     }
 
+    #[cfg(windows)]
     #[test]
-    fn platform_notes_follow_the_running_platform() {
+    fn platform_notes_are_non_empty_on_windows() {
         let notes = platform_notes_text();
-        if cfg!(windows) {
-            assert!(notes.starts_with("<platform-notes>"));
-            assert!(notes.contains("Windows"));
-        } else {
-            assert!(notes.is_empty());
-        }
+        assert!(notes.starts_with("<platform-notes>"));
+        assert!(notes.contains("Windows"));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn platform_notes_are_empty_elsewhere() {
+        assert!(platform_notes_text().is_empty());
     }
 
     #[test]
