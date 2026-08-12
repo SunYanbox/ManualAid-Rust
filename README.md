@@ -10,7 +10,7 @@
 
 A **local-only, human-in-the-loop** copypaste assistant for LLM workflows.
 
-> **Version**: 0.1.0
+> **Version**: 0.2.0
 
 ## Features
 
