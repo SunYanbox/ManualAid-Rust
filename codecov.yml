@@ -1,0 +1,9 @@
+codecov:
+  branch: main
+  strict_yaml_branch: main
+
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
