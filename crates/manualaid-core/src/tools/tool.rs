@@ -325,6 +325,16 @@ pub struct ToolResult {
     /// 参数摘要（JSON，至多 75 字符），用于区分一轮中的工具调用。
     #[serde(default)]
     pub params_summary: String,
+    /// Execution duration in milliseconds (excluding audit/approval time).
+    /// 执行耗时（毫秒，不含审计/审批耗时）。
+    #[serde(default)]
+    pub execution_duration_ms: u64,
+    /// Estimated token consumption of this call (input share + wrapped
+    /// output), for cost tracking. 0 when estimation is unavailable.
+    /// 该调用的估算 Token 消耗（输入分摊 + 带 XML 包裹的输出），用于成本
+    /// 统计。无法估算时为 0。
+    #[serde(default)]
+    pub estimated_tokens: u64,
 }
 
 impl ToolResult {
@@ -343,6 +353,8 @@ impl ToolResult {
             is_fallback: false,
             audit_decisions: Vec::new(),
             params_summary: String::new(),
+            execution_duration_ms: 0,
+            estimated_tokens: 0,
         }
     }
 
@@ -357,6 +369,8 @@ impl ToolResult {
             is_fallback: true,
             audit_decisions: Vec::new(),
             params_summary: String::new(),
+            execution_duration_ms: 0,
+            estimated_tokens: 0,
         }
     }
 
