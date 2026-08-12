@@ -15,6 +15,7 @@
 
 use chardetng::{Iso2022JpDetection, Utf8Detection};
 use serde::{Deserialize, Serialize};
+#[cfg(windows)]
 use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -434,13 +435,22 @@ mod tests {
     /// is_cmd_shell 按文件名识别 cmd.exe 与 command.com。
     #[test]
     fn is_cmd_shell_detects_cmd_and_command_com() {
-        for shell in [
+        // Absolute Windows paths only split on Windows; on Unix the
+        // backslash is a regular filename character and the whole string
+        // becomes the file name.
+        // 绝对 Windows 路径仅在 Windows 上拆分；Unix 上反斜杠是普通字符，
+        // 整个字符串成为文件名。
+        #[cfg(windows)]
+        let shells = [
             "cmd.exe",
             "C:\\Windows\\System32\\cmd.exe",
             "cmd",
             "command.com",
             "C:\\WINDOWS\\command.com",
-        ] {
+        ];
+        #[cfg(not(windows))]
+        let shells = ["cmd.exe", "cmd", "command.com"];
+        for shell in shells {
             assert!(is_cmd_shell(Path::new(shell)), "{shell}");
         }
     }

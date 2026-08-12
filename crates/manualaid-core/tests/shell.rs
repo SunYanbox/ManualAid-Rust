@@ -3,7 +3,9 @@
 // 测试用 std Mutex 跨 await 串行化互斥；守卫不会被重入，此 lint 不适用。
 #![allow(clippy::await_holding_lock)]
 
-use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
