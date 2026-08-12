@@ -15,6 +15,8 @@
 
 use chardetng::{Iso2022JpDetection, Utf8Detection};
 use serde::{Deserialize, Serialize};
+#[cfg(windows)]
+use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -114,19 +116,36 @@ static SHELL_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 /// pipes are drained for at most 500 ms after the process exits and the tail
 /// of their output may be lost. Spawn failures and pipe errors are returned
 /// as `CoreError`; a non-zero exit code is a normal result.
+///
+/// On Windows with a cmd shell the command is appended to the command line
+/// verbatim (`raw_arg`): the standard argv escaping (`"` → `\"`) conflicts
+/// with cmd's own `/C` quote parsing, which would pass literal quotes to
+/// child programs. A command whose first non-whitespace character is `"` and
+/// that also carries quoted arguments is wrapped in an extra quote pair so
+/// cmd does not strip the outer quotes of a quoted executable path (with
+/// exactly two quotes cmd preserves them itself). Non-cmd shells
+/// (PowerShell) and non-Windows platforms keep standard argument escaping.
+/// Like a real terminal, cmd splits multi-line commands into separate lines.
 /// # 描述
 /// Windows 上用 `/C`调用 Shell，其他平台用 `-c`。超时会用 `kill()` 中止进程，
 /// 并仍返回已收集的全部 stdout 和 stderr；超时通过 `CommandResult::timed_out`
 /// 报告而非错误。注意 `kill()` 只终止直接子进程——孙进程（例如 `cmd` 启动的 `ping`）
 /// 可能短暂存活，kill 后最多再排空 500 ms。spawn 失败和管道错误返回 `CoreError`；
 /// 非零退出码是正常结果。
+///
+/// Windows 下使用 cmd Shell 时，命令原样拼入命令行（`raw_arg`）：标准参数转义
+/// （`"` → `\"`）与 cmd 自身的 `/C` 引号解析冲突，会把字面引号传给子进程。
+/// 首个非空白字符为 `"` 且同时带引号参数的命令会额外包裹一对引号，避免 cmd
+/// 剥离带引号可执行路径的外层引号（恰好两个引号时 cmd 会自己保留）。非 cmd
+/// Shell（PowerShell）与非 Windows 平台保持标准参数转义。与真实终端一致，
+/// cmd 会将多行命令按行拆分执行。
 pub async fn run_shell(command: &str, timeout: Option<Duration>) -> CoreResult<CommandResult> {
     let shell = resolve_shell_path();
     let mut cmd = TokioCommand::new(&shell);
     cmd.args(shell_args(&shell))
-        .arg(command)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    append_command_arg(&mut cmd, &shell, command);
     let mut child = cmd.spawn().map_err(CoreError::from)?;
     collect(&mut child, timeout).await
 }
@@ -221,6 +240,16 @@ fn resolve_shell_path() -> PathBuf {
     }
 }
 
+/// Whether the shell is Windows `cmd.exe` (or `command.com`), which is
+/// invoked with `/C` and does not understand the standard `\"` argument
+/// escaping.
+/// 是否为 Windows 的 `cmd.exe`（或 `command.com`）Shell：以 `/C` 调用，
+/// 且不理解标准的 `\"` 参数转义。
+fn is_cmd_shell(shell: &Path) -> bool {
+    let name = shell.file_name().and_then(OsStr::to_str).unwrap_or("");
+    name.contains("cmd") || name == "command.com"
+}
+
 /// The argument used to run a command in the given shell: `/C` for cmd-like
 /// shells, `-Command` for PowerShell, `-c` for everything else (sh, bash,
 /// zsh, ...).
@@ -228,13 +257,63 @@ fn resolve_shell_path() -> PathBuf {
 /// `-Command`，其余（sh、bash、zsh 等）用 `-c`。
 fn shell_args(shell: &Path) -> &'static [&'static str] {
     let name = shell.file_name().and_then(OsStr::to_str).unwrap_or("");
-    if name.contains("cmd") || name == "command.com" {
+    if is_cmd_shell(shell) {
         &["/C"]
     } else if name.contains("powershell") || name.contains("pwsh") {
         &["-Command"]
     } else {
         &["-c"]
     }
+}
+
+/// Raw command-line text to append after the shell args: `Some` for cmd
+/// shells (verbatim, since cmd `/C` does not understand `\"` escaping),
+/// `None` for others (standard escaping is correct for shells that consume
+/// arguments via `CommandLineToArgvW`, like PowerShell).
+/// 追加到 Shell 参数之后的原始命令行文本：cmd Shell 返回 `Some`（原样传入，
+/// 因为 cmd `/C` 不理解 `\"` 转义），其余返回 `None`（标准转义对通过
+/// `CommandLineToArgvW` 接收参数的 Shell 如 PowerShell 是正确的）。
+#[cfg(windows)]
+fn cmd_raw_command<'a>(shell: &Path, command: &'a str) -> Option<Cow<'a, str>> {
+    if !is_cmd_shell(shell) {
+        return None;
+    }
+    if command.trim_start().starts_with('"') && command.matches('"').count() > 2 {
+        // Wrap in an extra quote pair so cmd /C does not strip the outer
+        // quotes of a quoted executable path (KB 830473). With exactly two
+        // quotes cmd preserves them (KB rule 1), so only commands that also
+        // carry quoted arguments need the wrap.
+        // 额外包裹一对引号，避免 cmd /C 剥离带引号可执行路径的外层引号（KB 830473）。
+        // 恰好两个引号时 cmd 会保留它们（KB 规则 1），因此只有同时带
+        // 引号参数的命令需要包裹。
+        Some(Cow::Owned(format!("\"\"{command}\"\"")))
+    } else {
+        Some(Cow::Borrowed(command))
+    }
+}
+
+/// Append the command string to the shell invocation. On Windows with a cmd
+/// shell the command is appended verbatim via `raw_arg` (cmd parses quotes
+/// with its own rules, like a real terminal); everywhere else it is passed
+/// as a normal argument with standard escaping.
+/// 将命令字符串追加到 Shell 调用中。Windows 下使用 cmd Shell 时通过
+/// `raw_arg` 原样追加（cmd 按自身规则解析引号，如同真实终端）；其余情况
+/// 作为普通参数传入（标准转义）。
+#[cfg(windows)]
+fn append_command_arg(cmd: &mut TokioCommand, shell: &Path, command: &str) {
+    match cmd_raw_command(shell, command) {
+        Some(raw) => {
+            cmd.raw_arg(raw.as_ref());
+        }
+        None => {
+            cmd.arg(command);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn append_command_arg(cmd: &mut TokioCommand, _shell: &Path, command: &str) {
+    cmd.arg(command);
 }
 
 /// How long to keep draining stdout/stderr after the child exits. A killed
@@ -346,4 +425,118 @@ async fn collect(child: &mut Child, timeout: Option<Duration>) -> CoreResult<Com
         signal,
         timed_out,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// is_cmd_shell recognizes cmd.exe and command.com by file name.
+    /// is_cmd_shell 按文件名识别 cmd.exe 与 command.com。
+    #[test]
+    fn is_cmd_shell_detects_cmd_and_command_com() {
+        // Absolute Windows paths only split on Windows; on Unix the
+        // backslash is a regular filename character and the whole string
+        // becomes the file name.
+        // 绝对 Windows 路径仅在 Windows 上拆分；Unix 上反斜杠是普通字符，
+        // 整个字符串成为文件名。
+        #[cfg(windows)]
+        let shells = [
+            "cmd.exe",
+            "C:\\Windows\\System32\\cmd.exe",
+            "cmd",
+            "command.com",
+            "C:\\WINDOWS\\command.com",
+        ];
+        #[cfg(not(windows))]
+        let shells = ["cmd.exe", "cmd", "command.com"];
+        for shell in shells {
+            assert!(is_cmd_shell(Path::new(shell)), "{shell}");
+        }
+    }
+
+    /// is_cmd_shell rejects other shells.
+    /// is_cmd_shell 拒绝其他 Shell。
+    #[test]
+    fn is_cmd_shell_rejects_other_shells() {
+        for shell in [
+            "powershell.exe",
+            "pwsh.exe",
+            "bash",
+            "sh",
+            "/bin/sh",
+            "/usr/bin/zsh",
+        ] {
+            assert!(!is_cmd_shell(Path::new(shell)), "{shell}");
+        }
+    }
+
+    /// A command run through a cmd shell is passed verbatim (no escaping).
+    /// 经 cmd Shell 运行的命令原样传递（不做转义）。
+    #[cfg(windows)]
+    #[test]
+    fn cmd_raw_command_passes_cmd_commands_verbatim() {
+        let shell = Path::new("cmd.exe");
+        assert_eq!(
+            cmd_raw_command(shell, "echo hello").as_deref(),
+            Some("echo hello")
+        );
+        assert_eq!(
+            cmd_raw_command(shell, "echo one && echo \"two\"").as_deref(),
+            Some("echo one && echo \"two\"")
+        );
+    }
+
+    /// A command whose first non-whitespace character is a quote and that
+    /// also carries quoted arguments is wrapped in an extra quote pair, so
+    /// cmd /C keeps the quoted executable intact. With exactly two quotes
+    /// cmd preserves them itself (KB 830473 rule 1), so the command is
+    /// passed verbatim.
+    /// 首个非空白字符为引号、且同时带引号参数的命令额外包裹一对引号，
+    /// 避免 cmd /C 剥离带引号可执行路径的外层引号。恰好两个引号时 cmd
+    /// 会自己保留它们（KB 830473 规则 1），命令原样传递。
+    #[cfg(windows)]
+    #[test]
+    fn cmd_raw_command_wraps_quoted_first_token() {
+        let shell = Path::new("cmd.exe");
+        assert_eq!(
+            cmd_raw_command(shell, r#""C:\Windows\System32\where.exe" where "a b""#).as_deref(),
+            Some(r#""""C:\Windows\System32\where.exe" where "a b""""#)
+        );
+        assert_eq!(
+            cmd_raw_command(shell, r#""C:\Windows\System32\where.exe" where.exe"#).as_deref(),
+            Some(r#""C:\Windows\System32\where.exe" where.exe"#)
+        );
+        assert_eq!(
+            cmd_raw_command(shell, r#"  "quoted" arg"#).as_deref(),
+            Some(r#"  "quoted" arg"#)
+        );
+        assert_eq!(
+            cmd_raw_command(shell, r#"echo "hi""#).as_deref(),
+            Some(r#"echo "hi""#)
+        );
+    }
+
+    /// Non-cmd shells keep standard argument escaping.
+    /// 非 cmd Shell 保持标准参数转义。
+    #[cfg(windows)]
+    #[test]
+    fn cmd_raw_command_is_none_for_non_cmd_shells() {
+        assert_eq!(
+            cmd_raw_command(Path::new("powershell.exe"), "echo hi"),
+            None
+        );
+        assert_eq!(cmd_raw_command(Path::new("sh"), "echo hi"), None);
+        assert_eq!(cmd_raw_command(Path::new("bash"), "echo hi"), None);
+    }
+
+    /// The non-Windows arm appends the command as a regular argument.
+    /// 非 Windows 分支将命令作为普通参数追加。
+    #[cfg(not(windows))]
+    #[test]
+    fn append_command_arg_non_windows_passthrough() {
+        let mut cmd = TokioCommand::new("sh");
+        append_command_arg(&mut cmd, Path::new("sh"), "echo hi");
+        assert_eq!(cmd.as_std().get_program(), Path::new("sh"));
+    }
 }

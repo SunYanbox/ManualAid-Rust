@@ -3,6 +3,8 @@
 // 测试用 std Mutex 跨 await 串行化互斥；守卫不会被重入，此 lint 不适用。
 #![allow(clippy::await_holding_lock)]
 
+#[cfg(windows)]
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
@@ -361,4 +363,123 @@ async fn run_shell_decodes_gbk_output() {
         "GBK output should decode to UTF-8, got: {:?}",
         result.stdout
     );
+}
+
+/// Quoted paths reach git without literal quotes (issue #26 case 1).
+/// 带引号的路径原样传给 git，不带字面引号（issue #26 案例 1）。
+#[cfg(windows)]
+#[tokio::test]
+async fn run_shell_passes_quoted_paths_verbatim_to_git() {
+    let _guard = lock_shell();
+    let probe = run_program("git", &["--version"], None)
+        .await
+        .expect("git probe should run");
+    if probe.exit_code != Some(0) {
+        return;
+    }
+    let result = run_shell("git add \"definitely-not-a-file-中文-路径.txt\"", None)
+        .await
+        .expect("git add should run");
+    assert_eq!(result.exit_code, Some(128));
+    assert!(
+        result
+            .stderr
+            .contains("pathspec 'definitely-not-a-file-中文-路径.txt' did not match any files"),
+        "pathspec should be clean, got: {:?}",
+        result.stderr
+    );
+    assert!(
+        !result.stderr.contains("pathspec '\""),
+        "pathspec must not carry literal quotes, got: {:?}",
+        result.stderr
+    );
+}
+
+/// A flag value wrapped in quotes is not word-split (issue #26 case 2).
+/// 带引号的 flag 值不会被按词拆分（issue #26 案例 2）。
+#[cfg(windows)]
+#[tokio::test]
+async fn run_shell_passes_flag_with_quoted_value_to_git() {
+    let _guard = lock_shell();
+    let probe = run_program("git", &["--version"], None)
+        .await
+        .expect("git probe should run");
+    if probe.exit_code != Some(0) {
+        return;
+    }
+    let result = run_shell("git log --format=\"%h\" -1", None)
+        .await
+        .expect("git log should run");
+    assert_eq!(result.exit_code, Some(0));
+    let hash = result.stdout.trim();
+    assert!(
+        hash.len() >= 7 && hash.chars().all(|c| c.is_ascii_hexdigit()),
+        "short hash expected, got: {:?}",
+        result.stdout
+    );
+    assert!(
+        !result.stdout.contains('"'),
+        "format value must not carry quotes, got: {:?}",
+        result.stdout
+    );
+}
+
+/// An `&&` chain with quoted messages is not truncated (issue #26 case 3).
+/// 含带引号消息的 `&&` 链不会被截断（issue #26 案例 3）。
+#[cfg(windows)]
+#[tokio::test]
+async fn run_shell_preserves_ampersand_chain_with_quoted_messages() {
+    let _guard = lock_shell();
+    let result = run_shell("echo \"first part\" && echo \"second part\"", None)
+        .await
+        .expect("chain should run");
+    assert_eq!(result.exit_code, Some(0));
+    assert!(
+        result.stdout.contains("first part"),
+        "got: {:?}",
+        result.stdout
+    );
+    assert!(
+        result.stdout.contains("second part"),
+        "got: {:?}",
+        result.stdout
+    );
+    assert!(
+        !result.stdout.contains('\\'),
+        "no backslash escapes expected, got: {:?}",
+        result.stdout
+    );
+}
+
+/// A quoted executable path as the first token keeps working: the extra
+/// quote pair protects it from cmd /C's outer-quote stripping.
+/// 首个 token 为带引号的可执行路径时仍可运行：额外引号对保护它不被
+/// cmd /C 的外层引号剥离破坏。
+#[cfg(windows)]
+#[tokio::test]
+async fn run_shell_quoted_executable_first_token() {
+    let _guard = lock_shell();
+    if !Path::new(r"C:\Windows\System32\where.exe").exists() {
+        return;
+    }
+    let result = run_shell("\"C:\\Windows\\System32\\where.exe\" where.exe", None)
+        .await
+        .expect("where should run");
+    assert_eq!(result.exit_code, Some(0), "got: {:?}", result.stderr);
+    assert!(
+        result.stdout.to_lowercase().contains("where.exe"),
+        "where should find itself, got: {:?}",
+        result.stdout
+    );
+}
+
+/// An empty command is a no-op: cmd /C with nothing exits 0 immediately.
+/// 空命令是无操作：cmd /C 无参数时立即以 0 退出。
+#[cfg(windows)]
+#[tokio::test]
+async fn run_shell_empty_command_is_a_noop() {
+    let _guard = lock_shell();
+    let result = run_shell("", None).await.expect("empty command should run");
+    assert_eq!(result.exit_code, Some(0));
+    assert!(!result.timed_out);
 }

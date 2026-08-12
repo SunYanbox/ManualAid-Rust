@@ -38,7 +38,7 @@ common-rules = """
 
 <tool-selection-rules>
 - Prefer dedicated tools from <available-tools>. Consider using the Shell tool (if available) only when dedicated tools cannot cover the requirement or are not enabled; choose the most suitable tool based on actual needs.
-- The shell tool does not parse quotes and pipe characters reliably; complex shell commands should be split into multiple steps or replaced with alternatives.
+- The shell tool executes commands through the active shell (see <shell_environment>); quotes and pipes follow that shell's own rules. Complex commands may be split into multiple steps to ease debugging.
 - Independent tool calls may be issued in parallel in a single reply.
 - A rejected tool call means the user denied that operation — adjust your approach instead of retrying verbatim.
 - For operations that are hard to undo or have external impact (including sending content to external services, deleting or overwriting files), confirm first and inspect the target content unless explicitly authorized; if the content contradicts its description or you did not create it, raise concerns instead of acting blindly.
