@@ -1032,6 +1032,7 @@ dependencies = [
  "manualaid-ws",
  "serde_json",
  "similar",
+ "tokenx-rs",
  "tokio",
 ]
 
@@ -1774,6 +1775,12 @@ dependencies = [
  "weezl",
  "zune-jpeg",
 ]
+
+[[package]]
+name = "tokenx-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbbbc43d8b92c18a53092e2195836a3c5c5125e6b477f0bcadb9cea34e48c5b9"
 
 [[package]]
 name = "tokio"

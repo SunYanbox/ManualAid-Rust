@@ -38,7 +38,7 @@ async fn round_with_no_calls_is_an_error() {
 #[tokio::test]
 async fn approved_round_executes_tools() {
     let registry = FormatRegistry::new();
-    let (calls, results) = execute_round_with_approval(
+    let (calls, results, stats) = execute_round_with_approval(
         &executor(&std::env::temp_dir()),
         &registry,
         "<read><file_path>C:/windows/win.ini</file_path></read>",
@@ -48,6 +48,9 @@ async fn approved_round_executes_tools() {
     .unwrap();
     assert_eq!(calls.len(), 1);
     assert_eq!(results.len(), 1);
+    // Non-empty input text always yields a positive token estimate.
+    // 非空输入文本的 Token 估算恒大于 0。
+    assert!(stats.total_tokens > 0);
     // On Windows win.ini exists; on other platforms the tool still returns
     // a structured result either way.
     assert_eq!(results[0].tool_name, "read");
@@ -69,7 +72,7 @@ async fn denied_round_returns_failure_with_reason() {
     let outside = outside.to_string_lossy();
     let registry = FormatRegistry::new();
     let call = format!("<write><file_path>{outside}</file_path><content>y</content></write>");
-    let (_, results) =
+    let (_, results, _) =
         execute_round_with_approval(&executor(&root), &registry, &call, |_| Approval::Deny)
             .await
             .unwrap();
@@ -91,7 +94,7 @@ async fn deny_with_text_becomes_the_tool_result() {
     let outside = outside.to_string_lossy();
     let registry = FormatRegistry::new();
     let call = format!("<write><file_path>{outside}</file_path><content>y</content></write>");
-    let (_, results) = execute_round_with_approval(&executor(&root), &registry, &call, |_| {
+    let (_, results, _) = execute_round_with_approval(&executor(&root), &registry, &call, |_| {
         Approval::DenyWithText("use the read tool instead".to_string())
     })
     .await
@@ -117,7 +120,7 @@ async fn mixed_approve_and_deny_in_one_round() {
         Arc::new(None),
     );
     let mut decisions = 0;
-    let (_, results) = execute_round_with_approval(&executor, &registry, &calls, |_| {
+    let (_, results, _) = execute_round_with_approval(&executor, &registry, &calls, |_| {
         decisions += 1;
         if decisions == 1 {
             Approval::Approve
@@ -155,7 +158,7 @@ async fn pre_failed_call_skips_approval_while_others_are_asked() {
         Arc::new(None),
     );
     let mut decisions = 0;
-    let (_, results) = execute_round_with_approval(&executor, &registry, &calls, |_| {
+    let (_, results, _) = execute_round_with_approval(&executor, &registry, &calls, |_| {
         decisions += 1;
         Approval::Approve
     })
@@ -184,7 +187,7 @@ async fn malformed_call_is_a_parse_error() {
 async fn pre_failed_calls_never_ask_for_approval() {
     let registry = FormatRegistry::new();
     let mut decisions = 0;
-    let (_, results) = execute_round_with_approval(
+    let (_, results, _) = execute_round_with_approval(
         &executor(&std::env::temp_dir()),
         &registry,
         "<edit><file_path>Z:/missing/file.txt</file_path><old_string>a</old_string><new_string>b</new_string></edit>",
@@ -211,7 +214,7 @@ async fn accept_edit_auto_approves_workspace_write() {
         ws.display()
     );
     let mut decisions = 0;
-    let (_, results) = execute_round_with_approval(&executor(&ws), &registry, &calls, |_| {
+    let (_, results, _) = execute_round_with_approval(&executor(&ws), &registry, &calls, |_| {
         decisions += 1;
         Approval::Deny
     })
@@ -237,7 +240,7 @@ async fn manual_mode_asks_before_workspace_write() {
         Arc::new(None),
     );
     let mut decisions = 0;
-    let (_, results) = execute_round_with_approval(&executor, &registry, &calls, |_| {
+    let (_, results, _) = execute_round_with_approval(&executor, &registry, &calls, |_| {
         decisions += 1;
         Approval::Approve
     })
@@ -256,6 +259,7 @@ fn menu_contains_all_options() {
         "cli.loop.menu_generate",
         "cli.loop.menu_paste",
         "cli.loop.menu_copy",
+        "cli.loop.menu_history",
         "cli.loop.menu_exit",
     ] {
         assert!(menu.contains(&i18n::t_str(label)));

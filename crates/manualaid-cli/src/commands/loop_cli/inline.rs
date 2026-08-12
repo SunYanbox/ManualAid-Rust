@@ -9,7 +9,7 @@ use manualaid_ws::config::Config;
 use manualaid_ws::session::SessionLog;
 
 use super::config::persist_and_confirm;
-use super::handlers::{copy_round_result, copy_system_prompt};
+use super::handlers::{copy_round_index, copy_round_result, copy_system_prompt};
 use super::utils::{
     apply_format_mode, cycle_format, cycle_lang, parse_round_index, print_muted_block, t_fmt,
 };
@@ -33,16 +33,7 @@ pub(super) fn handle_inline_command(
         ["/c"] => copy_round_result(session, config.max_result_chars),
         ["/c", index] => {
             if let Some(index) = parse_round_index(index, session.len()) {
-                let results = &session.latest(index).expect("validated index").results;
-                match manualaid_core::clipboard::write_clipboard(
-                    manualaid_ws::prompt::format_results(results, config.max_result_chars),
-                ) {
-                    Ok(()) => print_muted_block(&[t_fmt(
-                        "cli.message.result_copied",
-                        &[("index", &index.to_string())],
-                    )]),
-                    Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
-                }
+                copy_round_index(session, index, config.max_result_chars);
             } else {
                 crate::console::out_println!(
                     "{}",
