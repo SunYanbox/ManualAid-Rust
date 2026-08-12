@@ -102,6 +102,7 @@ empty = "No rounds recorded yet"
 round = "Round %{index} of %{count}"
 timing_line = "  parse %{parse} | audit %{audit} | exec %{execution} | ~%{tokens} tokens total"
 title = "Tool history (newest first)"
+totals = "| ~%{tokens} tokens, %{duration}"
 tool_line = "  [%{tool}] %{status}  exec %{duration}  ~%{tokens} tokens"
 
 [cli.loop]

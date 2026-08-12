@@ -67,31 +67,33 @@ pub(super) fn config_menu(
             }
             "13" => {
                 let usage = session.memory_usage();
-                crate::console::out_println!(
-                    "{}",
-                    [
-                        t_fmt(
-                            "cli.config.memory_total",
-                            &[
-                                ("total", &crate::format_bytes(usage.total_bytes)),
-                                ("rounds", &session.len().to_string()),
-                            ],
-                        ),
-                        t_fmt(
-                            "cli.config.memory_calls",
-                            &[("bytes", &crate::format_bytes(usage.calls_bytes))],
-                        ),
-                        t_fmt(
-                            "cli.config.memory_results",
-                            &[("bytes", &crate::format_bytes(usage.results_bytes))],
-                        ),
-                        t_fmt(
-                            "cli.config.memory_metadata",
-                            &[("bytes", &crate::format_bytes(usage.metadata_bytes))],
-                        ),
-                    ]
-                    .join("\n")
-                );
+                let lines = [
+                    t_fmt(
+                        "cli.config.memory_total",
+                        &[
+                            ("total", &crate::format_bytes(usage.total_bytes)),
+                            ("rounds", &session.len().to_string()),
+                        ],
+                    ),
+                    t_fmt(
+                        "cli.config.memory_calls",
+                        &[("bytes", &crate::format_bytes(usage.calls_bytes))],
+                    ),
+                    t_fmt(
+                        "cli.config.memory_results",
+                        &[("bytes", &crate::format_bytes(usage.results_bytes))],
+                    ),
+                    t_fmt(
+                        "cli.config.memory_metadata",
+                        &[("bytes", &crate::format_bytes(usage.metadata_bytes))],
+                    ),
+                ];
+                // Accent (cyan) styling so the numbers stand out from the
+                // plain menu lines around them.
+                // 用青色强调样式，让数字在周边纯文本菜单行中更醒目。
+                for line in lines {
+                    crate::console::out_println!("{}", crate::style::accent(&line));
+                }
             }
             "0" | "" => break,
             _ => crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid")),
@@ -439,6 +441,26 @@ mod tests {
         assert_eq!(registry.mode().unwrap().label(), "xml");
         let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
         assert!(content.contains("tool_call_format = \"xml\""));
+    }
+
+    #[test]
+    fn config_menu_shows_memory_usage() {
+        let _capture = crate::console::capture();
+        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("config-menu-memory");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        let session = SessionLog::new();
+        push_test_input(&["13", "0"]);
+        config_menu(&mut config, &registry, &root, &mut options, &session);
+        let output = _capture.text();
+        assert!(output.contains("In-memory session footprint"));
+        assert!(output.contains("Metadata:"));
+        crate::style::set_enabled(false);
     }
 
     #[test]

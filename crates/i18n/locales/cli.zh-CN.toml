@@ -102,6 +102,7 @@ empty = "尚未记录任何轮次"
 round = "第 %{index} 轮（共 %{count} 轮）"
 timing_line = "  解析 %{parse} | 审批 %{audit} | 执行 %{execution} | 共约 %{tokens} tokens"
 title = "工具历史（最新的在前）"
+totals = "| 共约 %{tokens} tokens，总耗时 %{duration}"
 tool_line = "  [%{tool}] %{status}  执行 %{duration}  ~%{tokens} tokens"
 
 [cli.loop]

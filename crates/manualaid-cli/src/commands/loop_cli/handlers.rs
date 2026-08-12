@@ -227,7 +227,10 @@ pub(super) fn copy_round_index(session: &SessionLog, index: usize, max_result_ch
             ],
         ),
     ];
-    let previewed = truncate_preview_lines(&content, COPY_PREVIEW_MAX_LINES);
+    // The content preview is display-only: faint gray so the copyable
+    // details stand out and the content stays in the background.
+    // 内容预览仅用于展示：用浅灰样式，让详情信息突出、内容退居背景。
+    let previewed = crate::style::gray(&truncate_preview_lines(&content, COPY_PREVIEW_MAX_LINES));
     let text = indent_each_line(&(preview.join("\n") + "\n" + &previewed));
     let _ = crate::pager::print_paged_collapsed(&text);
     match manualaid_core::clipboard::write_clipboard(content) {
@@ -266,14 +269,43 @@ fn truncate_preview_lines(text: &str, max_lines: usize) -> String {
 }
 
 /// Show the recorded rounds, newest first, with per-round tools, timing
-/// and token statistics.
-/// 展示已记录轮次（最新在前），含每轮工具、耗时与 Token 统计。
+/// and token statistics, plus the session totals in the title line.
+/// 展示已记录轮次（最新在前），含每轮工具、耗时与 Token 统计，并在标题
+/// 行显示会话总计。
 pub(super) fn show_tool_history(session: &SessionLog) {
     if session.is_empty() {
         crate::console::out_println!("{}", i18n::t_str("cli.history.empty"));
         return;
     }
-    let mut lines = vec![crate::style::header(&i18n::t_str("cli.history.title"))];
+    let tokens: u64 = session
+        .rounds()
+        .iter()
+        .map(|round| round.stats.total_tokens)
+        .sum();
+    let duration_ms: u64 = session
+        .rounds()
+        .iter()
+        .map(|round| {
+            round.stats.parse_duration_ms
+                + round.stats.audit_duration_ms
+                + round.stats.total_execution_duration_ms
+        })
+        .sum();
+    let totals = t_fmt(
+        "cli.history.totals",
+        &[
+            ("tokens", &tokens.to_string()),
+            (
+                "duration",
+                &crate::format_duration(std::time::Duration::from_millis(duration_ms)),
+            ),
+        ],
+    );
+    let mut lines = vec![crate::style::header(&format!(
+        "{}  {}",
+        i18n::t_str("cli.history.title"),
+        totals
+    ))];
     for (i, record) in session.rounds().iter().rev().enumerate() {
         lines.push(format_round_header(i + 1, session.len()));
         lines.push(format_round_detail(record));
@@ -326,11 +358,11 @@ mod tests {
 
     async fn session_with_round(root: &Path) -> SessionLog {
         let mut session = SessionLog::new();
-        add_round(root, &mut session).await;
+        add_round(root, &mut session, RoundStats::default()).await;
         session
     }
 
-    async fn add_round(root: &Path, session: &mut SessionLog) {
+    async fn add_round(root: &Path, session: &mut SessionLog, stats: RoundStats) {
         let registry = FormatRegistry::new();
         let calls = registry.parse(&read_call(root)).unwrap();
         let exec = executor(root);
@@ -338,7 +370,7 @@ mod tests {
         for call in &calls {
             results.push(exec.execute(call.clone()).await);
         }
-        session.push(calls, results, RoundStats::default());
+        session.push(calls, results, stats);
     }
 
     #[test]
@@ -703,8 +735,14 @@ mod tests {
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("history");
         let mut session = SessionLog::new();
-        add_round(&root, &mut session).await;
-        add_round(&root, &mut session).await;
+        let stats = RoundStats {
+            total_tokens: 100,
+            parse_duration_ms: 10,
+            audit_duration_ms: 20,
+            total_execution_duration_ms: 30,
+        };
+        add_round(&root, &mut session, stats).await;
+        add_round(&root, &mut session, stats).await;
         show_tool_history(&session);
         let output = _capture.text();
         let newest = output.find("Round 1 of 2").expect("newest header");
@@ -712,6 +750,10 @@ mod tests {
         assert!(newest < oldest);
         assert!(output.contains("[read]"));
         assert!(output.contains("success"));
+        // Title line shows the session totals: 2 rounds of 100 tokens and
+        // 60 ms each. 标题行显示会话总计：2 轮 × 100 tokens、60 ms。
+        assert!(output.contains("200 tokens"));
+        assert!(output.contains("120.000000 ms"));
         crate::style::set_enabled(false);
     }
 }
