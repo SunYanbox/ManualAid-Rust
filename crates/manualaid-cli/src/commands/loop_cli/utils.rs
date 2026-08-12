@@ -316,10 +316,23 @@ pub fn format_round_summary(results: &[ToolResult]) -> String {
 /// drawing attention.
 /// 把 `lines` 以弱化样式打印为上下各带一个空行的区块，让短状态消息与
 /// 周边输出分开，同时不喧宾夺主。
-/// Render the header line of one round (its index and the total count).
-/// 渲染一轮的标题行（序号与总轮数）。
+/// Render the header line of one round with the full header styling.
+/// 用完整标题样式渲染一轮的标题行（序号与总轮数）。
 pub fn format_round_header(index: usize, total: usize) -> String {
-    crate::style::header(&t_fmt(
+    format_round_header_styled(index, total, crate::style::header)
+}
+
+/// Render the header line of one round with muted styling, for dense
+/// displays such as the copy preview.
+/// 用弱化（灰）样式渲染一轮的标题行，用于复制预览等紧凑展示。
+pub fn format_round_header_muted(index: usize, total: usize) -> String {
+    format_round_header_styled(index, total, crate::style::muted)
+}
+
+/// Shared header rendering with an injectable style function.
+/// 带可注入样式函数的共享标题渲染。
+fn format_round_header_styled(index: usize, total: usize, style: fn(&str) -> String) -> String {
+    style(&t_fmt(
         "cli.history.round",
         &[("index", &index.to_string()), ("count", &total.to_string())],
     ))
@@ -345,8 +358,10 @@ pub fn format_round_detail(record: &BatchRecord) -> String {
                 "cli.history.tool_line",
                 &[
                     (
+                        // The i18n template wraps `%{tool}` in brackets.
+                        // i18n 模板已为 `%{tool}` 加方括号。
                         "tool",
-                        &crate::style::accent(&format!("[{}]", result.tool_name)),
+                        &crate::style::accent(&result.tool_name),
                     ),
                     ("status", &status),
                     (
@@ -421,6 +436,7 @@ mod tests {
         i18n::set_locale("en");
         let detail = format_round_detail(&record_with_stats());
         assert!(detail.contains("[read]"));
+        assert!(!detail.contains("[[read]]"));
         assert!(detail.contains("success"));
         assert!(detail.contains("[edit]"));
         assert!(detail.contains("failure"));

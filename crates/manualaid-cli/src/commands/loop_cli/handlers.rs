@@ -13,8 +13,8 @@ use super::LoopOptions;
 use super::approval::{ask_approval, execute_round_with_approval};
 use super::context::select_context_files;
 use super::utils::{
-    format_round_detail, format_round_header, format_round_summary, parse_round_index,
-    print_muted_block, read_line, t_fmt,
+    format_round_detail, format_round_header, format_round_header_muted, format_round_summary,
+    parse_round_index, print_muted_block, read_line, t_fmt,
 };
 
 /// Generate the system prompt with the selected context files and copy it
@@ -199,14 +199,17 @@ pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
 
 /// Show the detailed preview of the `index`-th latest round (tools,
 /// durations, tokens and the exact content to be copied) and copy its
-/// results to the clipboard.
+/// results to the clipboard. The preview is display-only: it is
+/// indented, styled down and collapsed-paged so a long round does not
+/// flood the console; the clipboard content stays unmodified.
 /// 显示从最新算起的第 `index` 轮的详细预览（工具、耗时、Token 与待复制
-/// 内容）并把其结果复制到剪贴板。
+/// 内容）并把其结果复制到剪贴板。预览仅用于展示：缩进、弱化样式并以
+/// 折叠方式分页，避免长轮次刷屏；剪贴板内容不受影响。
 pub(super) fn copy_round_index(session: &SessionLog, index: usize, max_result_chars: usize) {
     let record = session.latest(index).expect("validated index");
     let content = manualaid_ws::prompt::format_results(&record.results, max_result_chars);
     let preview = [
-        format_round_header(index, session.len()),
+        format_round_header_muted(index, session.len()),
         format_round_detail(record),
         String::new(),
         t_fmt(
@@ -217,8 +220,8 @@ pub(super) fn copy_round_index(session: &SessionLog, index: usize, max_result_ch
             ],
         ),
     ];
-    let text = preview.join("\n") + "\n" + &content;
-    let _ = crate::pager::print_paged(&text);
+    let text = indent_each_line(&(preview.join("\n") + "\n" + &content));
+    let _ = crate::pager::print_paged_collapsed(&text);
     match manualaid_core::clipboard::write_clipboard(content) {
         Ok(()) => print_muted_block(&[t_fmt(
             "cli.message.result_copied",
@@ -226,6 +229,15 @@ pub(super) fn copy_round_index(session: &SessionLog, index: usize, max_result_ch
         )]),
         Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
     }
+}
+
+/// Indent every line of `text` by two spaces for display purposes.
+/// 显示用途：给 `text` 的每一行加两个空格的缩进。
+fn indent_each_line(text: &str) -> String {
+    text.lines()
+        .map(|line| format!("  {line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Show the recorded rounds, newest first, with per-round tools, timing
@@ -574,6 +586,37 @@ mod tests {
         if let Some(saved) = saved {
             let _ = manualaid_core::clipboard::write_clipboard(saved);
         }
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn copy_preview_is_indented_and_collapsed() {
+        let _capture = crate::console::capture();
+        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _clip = lock_clipboard();
+        crate::style::set_enabled(false);
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("copy-preview-indent");
+        let session = session_with_round(&root).await;
+        let saved = manualaid_core::clipboard::read_clipboard().ok();
+        push_test_input(&["1"]);
+        copy_round_result(&session, 100);
+        let output = _capture.text();
+        // Every preview line is indented by two spaces (the tool line
+        // template already carries its own two leading spaces), and the
+        // tool name is bracketed exactly once by the template.
+        // 预览每行缩进两个空格（工具行模板本身已带两个前导空格），工具名
+        // 只由模板加一次方括号。
+        assert!(output.contains("  Round 1 of 1"));
+        assert!(output.contains("    [read]"));
+        assert!(!output.contains("[[read]]"));
+        assert!(output.contains("success  exec"));
+        assert!(output.contains("  hello"));
+        if let Some(saved) = saved {
+            let _ = manualaid_core::clipboard::write_clipboard(saved);
+        }
+        crate::style::set_enabled(false);
     }
 
     #[tokio::test]
