@@ -205,6 +205,13 @@ pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
 /// 显示从最新算起的第 `index` 轮的详细预览（工具、耗时、Token 与待复制
 /// 内容）并把其结果复制到剪贴板。预览仅用于展示：缩进、弱化样式并以
 /// 折叠方式分页，避免长轮次刷屏；剪贴板内容不受影响。
+/// Maximum content lines shown in the copy preview; the clipboard keeps
+/// the full content. Capped so the console never floods even when the
+/// pager cannot run (e.g. non-console terminals).
+/// 复制预览中显示的最大内容行数；剪贴板保留完整内容。截断保证在分页器
+/// 无法工作（如非控制台终端）时控制台也不会被刷屏。
+const COPY_PREVIEW_MAX_LINES: usize = 10;
+
 pub(super) fn copy_round_index(session: &SessionLog, index: usize, max_result_chars: usize) {
     let record = session.latest(index).expect("validated index");
     let content = manualaid_ws::prompt::format_results(&record.results, max_result_chars);
@@ -220,7 +227,8 @@ pub(super) fn copy_round_index(session: &SessionLog, index: usize, max_result_ch
             ],
         ),
     ];
-    let text = indent_each_line(&(preview.join("\n") + "\n" + &content));
+    let previewed = truncate_preview_lines(&content, COPY_PREVIEW_MAX_LINES);
+    let text = indent_each_line(&(preview.join("\n") + "\n" + &previewed));
     let _ = crate::pager::print_paged_collapsed(&text);
     match manualaid_core::clipboard::write_clipboard(content) {
         Ok(()) => print_muted_block(&[t_fmt(
@@ -238,6 +246,23 @@ fn indent_each_line(text: &str) -> String {
         .map(|line| format!("  {line}"))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Cap `text` at `max_lines` lines, appending a note about how many were
+/// omitted. Returns the text unchanged when it already fits.
+/// 把 `text` 截断到 `max_lines` 行并追加省略说明；未超出时原样返回。
+fn truncate_preview_lines(text: &str, max_lines: usize) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.len() <= max_lines {
+        return text.to_string();
+    }
+    let omitted = lines.len() - max_lines;
+    lines[..max_lines].join("\n")
+        + "\n"
+        + &t_fmt(
+            "cli.message.copy_preview_truncated",
+            &[("omitted", &omitted.to_string())],
+        )
 }
 
 /// Show the recorded rounds, newest first, with per-round tools, timing
@@ -586,6 +611,27 @@ mod tests {
         if let Some(saved) = saved {
             let _ = manualaid_core::clipboard::write_clipboard(saved);
         }
+    }
+
+    #[test]
+    fn truncate_preview_lines_keeps_short_text() {
+        let text = "a\nb\nc";
+        assert_eq!(truncate_preview_lines(text, 10), text);
+    }
+
+    #[test]
+    fn truncate_preview_lines_caps_long_text() {
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let text = (1..=15)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let capped = truncate_preview_lines(&text, 10);
+        // 10 kept lines plus the omission note.
+        // 保留 10 行加上省略说明。
+        assert_eq!(capped.lines().count(), 11);
+        assert!(capped.contains("5 lines omitted"));
     }
 
     #[tokio::test]
