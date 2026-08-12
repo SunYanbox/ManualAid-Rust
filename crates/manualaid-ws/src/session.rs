@@ -250,7 +250,7 @@ mod tests {
         for i in 0..SessionLog::MAX_ROUNDS + 5 {
             log.push(
                 Vec::new(),
-                vec![ToolResult::success("read", &i.to_string(), true)],
+                vec![ToolResult::success("read", i.to_string(), true)],
                 RoundStats::default(),
             );
         }
@@ -294,8 +294,10 @@ mod tests {
         assert_eq!(empty.total_bytes, empty.metadata_bytes);
         assert!(empty.metadata_bytes > 0);
         let mut log = SessionLog::new();
-        let mut stats = RoundStats::default();
-        stats.total_tokens = 42;
+        let stats = RoundStats {
+            total_tokens: 42,
+            ..RoundStats::default()
+        };
         let calls = manualaid_core::parser::FormatRegistry::new()
             .parse("<read><file_path>/tmp/a.txt</file_path></read>")
             .unwrap();

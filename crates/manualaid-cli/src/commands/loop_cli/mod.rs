@@ -29,12 +29,15 @@ mod utils;
 pub use approval::execute_round_with_approval;
 pub use config::render_config_menu;
 pub use preview::approval_preview;
-pub use utils::{cycle_format, cycle_lang, format_round_summary, parse_round_index, render_menu};
+pub use utils::{
+    cycle_format, cycle_lang, format_round_detail, format_round_header, format_round_summary,
+    parse_round_index, render_menu,
+};
 
 use config::config_menu;
 use handlers::{
     copy_round_result, copy_system_prompt, input_and_submit, paste_and_submit,
-    print_session_summary,
+    print_session_summary, show_tool_history,
 };
 use inline::handle_inline_command;
 use utils::{
@@ -226,12 +229,13 @@ async fn loop_main_at(
             "4" => copy_round_result(&session, config.max_result_chars),
             "5" => {
                 let mode_before = options.mode;
-                config_menu(&mut config, &registry, current_dir, &mut options);
+                config_menu(&mut config, &registry, current_dir, &mut options, &session);
                 if options.mode != mode_before {
                     executor = build_executor(current_dir, &config, options.mode);
                 }
             }
             "6" => print_session_summary(&config, &session),
+            "7" => show_tool_history(&session),
             "0" => should_exit = true,
             _ => crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid")),
         }

@@ -7,6 +7,7 @@ use std::path::Path;
 use manualaid_core::parser::{FormatRegistry, RegistryMode};
 use manualaid_core::tools::ToolResult;
 use manualaid_ws::config::{Config, ConfigIssue, ConfigIssueKind};
+use manualaid_ws::session::BatchRecord;
 
 /// Translate `key` and replace `%{name}` placeholders.
 /// 翻译 `key` 并替换 `%{name}` 占位符。
@@ -235,6 +236,7 @@ pub fn render_menu() -> String {
         "cli.loop.menu_copy",
         "cli.loop.menu_config",
         "cli.loop.menu_summary",
+        "cli.loop.menu_history",
         "cli.loop.menu_exit",
     ];
     let mut lines: Vec<String> = keys.iter().map(|key| i18n::t_str(key)).collect();
@@ -314,6 +316,74 @@ pub fn format_round_summary(results: &[ToolResult]) -> String {
 /// drawing attention.
 /// 把 `lines` 以弱化样式打印为上下各带一个空行的区块，让短状态消息与
 /// 周边输出分开，同时不喧宾夺主。
+/// Render the header line of one round (its index and the total count).
+/// 渲染一轮的标题行（序号与总轮数）。
+pub fn format_round_header(index: usize, total: usize) -> String {
+    crate::style::header(&t_fmt(
+        "cli.history.round",
+        &[("index", &index.to_string()), ("count", &total.to_string())],
+    ))
+}
+
+/// Render one round's detail: a line per tool with its status, execution
+/// duration and token estimate, followed by a footer with the parse/audit/
+/// execution durations and the round token total. Shared by the history
+/// list and the copy preview.
+/// 渲染一轮的详情：每个工具一行（状态、执行耗时与 Token 估算），末尾
+/// 一行显示解析/审批/执行耗时与轮 Token 总量。历史列表与复制预览共用。
+pub fn format_round_detail(record: &BatchRecord) -> String {
+    let mut lines: Vec<String> = record
+        .results
+        .iter()
+        .map(|result| {
+            let status = if result.success {
+                crate::style::success(&i18n::t_str("cli.message.success"))
+            } else {
+                crate::style::error(&i18n::t_str("cli.message.failure"))
+            };
+            t_fmt(
+                "cli.history.tool_line",
+                &[
+                    (
+                        "tool",
+                        &crate::style::accent(&format!("[{}]", result.tool_name)),
+                    ),
+                    ("status", &status),
+                    (
+                        "duration",
+                        &crate::format_duration(std::time::Duration::from_millis(
+                            result.execution_duration_ms,
+                        )),
+                    ),
+                    ("tokens", &result.estimated_tokens.to_string()),
+                ],
+            )
+        })
+        .collect();
+    let stats = &record.stats;
+    lines.push(crate::style::muted(&t_fmt(
+        "cli.history.timing_line",
+        &[
+            (
+                "parse",
+                &crate::format_duration(std::time::Duration::from_millis(stats.parse_duration_ms)),
+            ),
+            (
+                "audit",
+                &crate::format_duration(std::time::Duration::from_millis(stats.audit_duration_ms)),
+            ),
+            (
+                "execution",
+                &crate::format_duration(std::time::Duration::from_millis(
+                    stats.total_execution_duration_ms,
+                )),
+            ),
+            ("tokens", &stats.total_tokens.to_string()),
+        ],
+    )));
+    lines.join("\n")
+}
+
 pub(super) fn print_muted_block(lines: &[String]) {
     crate::console::out_println!();
     for line in lines {
@@ -325,6 +395,41 @@ pub(super) fn print_muted_block(lines: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use manualaid_ws::session::RoundStats;
+
+    fn record_with_stats() -> BatchRecord {
+        BatchRecord {
+            calls: Vec::new(),
+            results: vec![
+                ToolResult::success("read", "hello", true),
+                ToolResult::failure("edit", "boom"),
+            ],
+            stats: RoundStats {
+                parse_duration_ms: 12,
+                audit_duration_ms: 34,
+                total_execution_duration_ms: 56,
+                total_tokens: 789,
+            },
+        }
+    }
+
+    #[test]
+    fn format_round_detail_shows_tools_and_totals() {
+        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
+        i18n::set_locale("en");
+        let detail = format_round_detail(&record_with_stats());
+        assert!(detail.contains("[read]"));
+        assert!(detail.contains("success"));
+        assert!(detail.contains("[edit]"));
+        assert!(detail.contains("failure"));
+        assert!(detail.contains("parse"));
+        assert!(detail.contains("audit"));
+        assert!(detail.contains("exec"));
+        assert!(detail.contains("789"));
+        crate::style::set_enabled(false);
+    }
 
     #[test]
     fn read_line_consumes_scripted_input_then_eof() {

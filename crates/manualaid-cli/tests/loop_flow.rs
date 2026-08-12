@@ -113,7 +113,7 @@ async fn approval_flow_skips_read_of_directory() {
     let read_call = read_call(&dir);
     let calls = registry.parse(&read_call).unwrap();
     let decide_calls = AtomicUsize::new(0);
-    let (_, results) = execute_round_with_approval(&executor, &registry, &read_call, |_| {
+    let (_, results, _) = execute_round_with_approval(&executor, &registry, &read_call, |_| {
         decide_calls.fetch_add(1, Ordering::SeqCst);
         Approval::Approve
     })

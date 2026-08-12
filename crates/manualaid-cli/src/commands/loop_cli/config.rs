@@ -7,6 +7,7 @@ use manualaid_core::audit::SessionMode;
 use manualaid_core::parser::FormatRegistry;
 use manualaid_core::skill::{all_skills, set_enabled};
 use manualaid_ws::config::{Config, save_project};
+use manualaid_ws::session::SessionLog;
 
 use super::LoopOptions;
 use super::utils::{apply_format_mode, cycle_format, cycle_lang, read_line, t_fmt};
@@ -18,6 +19,7 @@ pub(super) fn config_menu(
     registry: &FormatRegistry,
     root: &Path,
     options: &mut LoopOptions,
+    session: &SessionLog,
 ) {
     loop {
         crate::console::out_println!("{}", render_config_menu(config, options));
@@ -62,6 +64,34 @@ pub(super) fn config_menu(
             "12" => {
                 config.context_auto_load = !config.context_auto_load;
                 persist_and_confirm(config, root, "cli.config.saved", "");
+            }
+            "13" => {
+                let usage = session.memory_usage();
+                crate::console::out_println!(
+                    "{}",
+                    [
+                        t_fmt(
+                            "cli.config.memory_total",
+                            &[
+                                ("total", &crate::format_bytes(usage.total_bytes)),
+                                ("rounds", &session.len().to_string()),
+                            ],
+                        ),
+                        t_fmt(
+                            "cli.config.memory_calls",
+                            &[("bytes", &crate::format_bytes(usage.calls_bytes))],
+                        ),
+                        t_fmt(
+                            "cli.config.memory_results",
+                            &[("bytes", &crate::format_bytes(usage.results_bytes))],
+                        ),
+                        t_fmt(
+                            "cli.config.memory_metadata",
+                            &[("bytes", &crate::format_bytes(usage.metadata_bytes))],
+                        ),
+                    ]
+                    .join("\n")
+                );
             }
             "0" | "" => break,
             _ => crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid")),
@@ -136,6 +166,7 @@ pub fn render_config_menu(config: &Config, options: &LoopOptions) -> String {
             "cli.config.context_auto_load",
             &[("state", &state(config.context_auto_load))],
         ),
+        i18n::t_str("cli.config.memory"),
         i18n::t_str("cli.config.back"),
     ]
     .join("\n")
@@ -311,7 +342,13 @@ mod tests {
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
         push_test_input(&["1", "0"]);
-        config_menu(&mut config, &registry, &root, &mut options);
+        config_menu(
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &SessionLog::new(),
+        );
         assert_eq!(config.lang, "zh-CN");
         let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
         assert!(content.contains("lang = \"zh-CN\""));
@@ -327,7 +364,13 @@ mod tests {
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
         push_test_input(&["8", "9", "_", "0"]);
-        config_menu(&mut config, &registry, &root, &mut options);
+        config_menu(
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &SessionLog::new(),
+        );
         assert!(!options.auto_copy);
         assert!(options.clear_screen);
     }
@@ -342,7 +385,13 @@ mod tests {
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
         push_test_input(&["11", "0"]);
-        config_menu(&mut config, &registry, &root, &mut options);
+        config_menu(
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &SessionLog::new(),
+        );
         assert_eq!(options.mode, SessionMode::AcceptEdit);
         assert!(!root.join(".ManualAid").join("config.toml").exists());
     }
@@ -357,7 +406,13 @@ mod tests {
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
         push_test_input(&["12", "0"]);
-        config_menu(&mut config, &registry, &root, &mut options);
+        config_menu(
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &SessionLog::new(),
+        );
         assert!(!config.context_auto_load);
         let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
         assert!(content.contains("context_auto_load = false"));
@@ -373,7 +428,13 @@ mod tests {
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
         push_test_input(&["2", "0"]);
-        config_menu(&mut config, &registry, &root, &mut options);
+        config_menu(
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &SessionLog::new(),
+        );
         assert_eq!(config.tool_call_format, "xml");
         assert_eq!(registry.mode().unwrap().label(), "xml");
         let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();

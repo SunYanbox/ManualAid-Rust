@@ -7,6 +7,7 @@ use manualaid_core::audit::{AuditDecision, AuditQueueItem};
 use manualaid_core::executor::Executor;
 use manualaid_core::parser::{FormatRegistry, ParsedToolCall};
 use manualaid_core::tools::{ToolResult, params_summary_of};
+use manualaid_ws::session::RoundStats;
 
 use super::Approval;
 use super::preview::{approval_preview, edit_diff_preview, write_preview};
@@ -24,26 +25,35 @@ const APPROVAL_PAUSE: Duration = Duration::from_millis(500);
 /// needing approval are presented one by one; `decide` returns the user's
 /// answer for each item. Each preview is paged, followed by a short pause
 /// before the approval question. Approved calls execute, denied calls
-/// become failure results. Returns the parsed calls and results of the round.
+/// become failure results. Returns the parsed calls, results and round
+/// statistics (parse/audit/execution durations and estimated tokens).
 /// 解析并执行一轮带用户审批的工具调用。
 ///
 /// 每个调用都会先经过预检：必然失败的调用直接产生失败结果。其余调用
 /// 进入审计，需要批准的项目逐条分页展示，随后短暂停顿再询问；`decide`
 /// 返回用户对每一项的答复。已批准的调用正常执行，被拒绝的调用生成失败
-/// 结果。返回本轮解析出的调用与结果。
+/// 结果。返回本轮解析出的调用、结果与统计信息（解析/审计/执行耗时与
+/// 估算 Token）。
 pub async fn execute_round_with_approval(
     executor: &Executor,
     registry: &FormatRegistry,
     input: &str,
     mut decide: impl FnMut(&AuditQueueItem) -> Approval,
-) -> Result<(Vec<ParsedToolCall>, Vec<ToolResult>), String> {
+) -> Result<(Vec<ParsedToolCall>, Vec<ToolResult>, RoundStats), String> {
+    let parse_start = std::time::Instant::now();
     let calls = registry
         .parse(input)
         .map_err(|e| t_fmt("cli.error.parse", &[("error", &e.to_string())]))?;
+    let parse_duration = parse_start.elapsed();
     if calls.is_empty() {
         return Err(i18n::t_str("cli.error.no_calls"));
     }
     let parsed_calls = calls.clone();
+
+    // Audit duration spans pre-checks and the approval queue; execution
+    // time is measured separately per tool by the executor.
+    // 审计耗时覆盖预检与审批队列；执行时间由执行器按工具单独测量。
+    let audit_start = std::time::Instant::now();
 
     struct AuditedCall {
         call: ParsedToolCall,
@@ -104,6 +114,8 @@ pub async fn execute_round_with_approval(
         }
     }
 
+    let audit_duration = audit_start.elapsed();
+
     let mut results = Vec::with_capacity(audited.len());
     for (index, item) in audited.into_iter().enumerate() {
         if let Some(pre_failed) = item.pre_failed {
@@ -148,7 +160,39 @@ pub async fn execute_round_with_approval(
         }
         results.push(result);
     }
-    Ok((parsed_calls, results))
+
+    let total_tokens = estimate_round_tokens(input, &mut results);
+    let stats = RoundStats {
+        parse_duration_ms: parse_duration.as_millis() as u64,
+        audit_duration_ms: audit_duration.as_millis() as u64,
+        total_execution_duration_ms: results.iter().map(|r| r.execution_duration_ms).sum(),
+        total_tokens,
+    };
+    Ok((parsed_calls, results, stats))
+}
+
+/// Estimate the token consumption of one round and attach the per-call
+/// share to each result. The input text (as the model produced it) is
+/// counted once; each result's XML-wrapped output (as the model will
+/// receive it) is counted individually. The per-call estimate apportions
+/// the input tokens equally across calls, plus the call's own output.
+/// 估算一轮的 Token 消耗并把每次调用的分摊额写入结果。输入文本（模型
+/// 产出原文）计一次；每个结果的 XML 包裹输出（模型将收到的形式）单独
+/// 计数。单调用估算 = 输入 Token 均摊到各调用 + 该调用自身输出。
+fn estimate_round_tokens(input: &str, results: &mut [ToolResult]) -> u64 {
+    let input_tokens = tokenx_rs::estimate_token_count(input);
+    let num_calls = results.len().max(1);
+    let mut total = input_tokens as u64;
+    for result in results {
+        // usize::MAX never truncates and skips the i18n truncation branch.
+        // usize::MAX 永不截断，且不会进入 i18n 截断分支。
+        let wrapped =
+            manualaid_ws::prompt::format_results(std::slice::from_ref(result), usize::MAX);
+        let output_tokens = tokenx_rs::estimate_token_count(&wrapped) as u64;
+        result.estimated_tokens = input_tokens as u64 / num_calls as u64 + output_tokens;
+        total += output_tokens;
+    }
+    total
 }
 
 /// Build the failure result of a denied call.
@@ -264,5 +308,38 @@ mod tests {
         i18n::set_locale("en");
         let result = denied_result(&parsed_call(), None, None);
         assert!(result.output.contains("denied"));
+    }
+
+    #[test]
+    fn estimate_round_tokens_apportions_input_and_sums_outputs() {
+        let input =
+            "<read><file_path>a.txt</file_path></read>\n<read><file_path>b.txt</file_path></read>";
+        let mut results = vec![
+            ToolResult::success("read", "hello world", true),
+            ToolResult::success("read", "another output", true),
+        ];
+        let input_tokens = tokenx_rs::estimate_token_count(input) as u64;
+        let expected_total = input_tokens
+            + results
+                .iter()
+                .map(|r| {
+                    tokenx_rs::estimate_token_count(&manualaid_ws::prompt::format_results(
+                        std::slice::from_ref(r),
+                        usize::MAX,
+                    )) as u64
+                })
+                .sum::<u64>();
+        let total = estimate_round_tokens(input, &mut results);
+        assert_eq!(total, expected_total);
+        // The round total counts the input text exactly once.
+        // 轮总数中输入文本恰好计一次。
+        assert!(total >= input_tokens);
+        for result in &results {
+            let own_output = tokenx_rs::estimate_token_count(&manualaid_ws::prompt::format_results(
+                std::slice::from_ref(result),
+                usize::MAX,
+            )) as u64;
+            assert_eq!(result.estimated_tokens, input_tokens / 2 + own_output);
+        }
     }
 }

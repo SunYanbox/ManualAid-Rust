@@ -13,4 +13,5 @@ manualaid-core = { version = "0.1.0", path = "../manualaid-core" }
 manualaid-ws = { version = "0.1.0", path = "../manualaid-ws" }
 serde_json = "1.0.151"
 similar = "3.1.2"
+tokenx-rs = "0.1.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time"] }

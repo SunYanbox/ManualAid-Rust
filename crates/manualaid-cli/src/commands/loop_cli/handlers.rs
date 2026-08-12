@@ -12,7 +12,10 @@ use manualaid_ws::session::SessionLog;
 use super::LoopOptions;
 use super::approval::{ask_approval, execute_round_with_approval};
 use super::context::select_context_files;
-use super::utils::{format_round_summary, parse_round_index, print_muted_block, read_line, t_fmt};
+use super::utils::{
+    format_round_detail, format_round_header, format_round_summary, parse_round_index,
+    print_muted_block, read_line, t_fmt,
+};
 
 /// Generate the system prompt with the selected context files and copy it
 /// to the clipboard. Context files are resolved at this point so the
@@ -127,9 +130,9 @@ pub(super) async fn submit_text(
 ) {
     let round_start = std::time::Instant::now();
     match execute_round_with_approval(executor, registry, text, ask_approval).await {
-        Ok((calls, results)) => {
+        Ok((calls, results, stats)) => {
             let _ = crate::pager::print_paged_collapsed(&format_round_summary(&results));
-            session.push(calls, results.clone());
+            session.push(calls, results.clone(), stats);
             let round_index = session.len();
             let copy = options.auto_copy || ask_copy();
             let mut block = vec![t_fmt(
@@ -183,19 +186,7 @@ pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
     crate::console::flush();
     let input = read_line().unwrap_or_default();
     match parse_round_index(&input, session.len()) {
-        Some(index) => {
-            let results = &session.latest(index).expect("validated index").results;
-            match manualaid_core::clipboard::write_clipboard(manualaid_ws::prompt::format_results(
-                results,
-                max_result_chars,
-            )) {
-                Ok(()) => print_muted_block(&[t_fmt(
-                    "cli.message.result_copied",
-                    &[("index", &index.to_string())],
-                )]),
-                Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
-            }
-        }
+        Some(index) => copy_round_index(session, index, max_result_chars),
         None => crate::console::out_println!(
             "{}",
             t_fmt(
@@ -204,6 +195,54 @@ pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
             )
         ),
     }
+}
+
+/// Show the detailed preview of the `index`-th latest round (tools,
+/// durations, tokens and the exact content to be copied) and copy its
+/// results to the clipboard.
+/// 显示从最新算起的第 `index` 轮的详细预览（工具、耗时、Token 与待复制
+/// 内容）并把其结果复制到剪贴板。
+pub(super) fn copy_round_index(session: &SessionLog, index: usize, max_result_chars: usize) {
+    let record = session.latest(index).expect("validated index");
+    let content = manualaid_ws::prompt::format_results(&record.results, max_result_chars);
+    let preview = [
+        format_round_header(index, session.len()),
+        format_round_detail(record),
+        String::new(),
+        t_fmt(
+            "cli.message.copy_preview",
+            &[
+                ("index", &index.to_string()),
+                ("max_chars", &max_result_chars.to_string()),
+            ],
+        ),
+    ];
+    let text = preview.join("\n") + "\n" + &content;
+    let _ = crate::pager::print_paged(&text);
+    match manualaid_core::clipboard::write_clipboard(content) {
+        Ok(()) => print_muted_block(&[t_fmt(
+            "cli.message.result_copied",
+            &[("index", &index.to_string())],
+        )]),
+        Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
+    }
+}
+
+/// Show the recorded rounds, newest first, with per-round tools, timing
+/// and token statistics.
+/// 展示已记录轮次（最新在前），含每轮工具、耗时与 Token 统计。
+pub(super) fn show_tool_history(session: &SessionLog) {
+    if session.is_empty() {
+        crate::console::out_println!("{}", i18n::t_str("cli.history.empty"));
+        return;
+    }
+    let mut lines = vec![crate::style::header(&i18n::t_str("cli.history.title"))];
+    for (i, record) in session.rounds().iter().rev().enumerate() {
+        lines.push(format_round_header(i + 1, session.len()));
+        lines.push(format_round_detail(record));
+        lines.push(String::new());
+    }
+    let _ = crate::pager::print_paged(&lines.join("\n"));
 }
 
 /// Print the session summary (round count, tool-call count, enabled tools).
@@ -233,6 +272,7 @@ mod tests {
 
     use super::super::utils::push_test_input;
     use manualaid_core::audit::{Auditor, SessionMode};
+    use manualaid_ws::session::RoundStats;
 
     fn executor(root: &Path) -> Executor {
         Executor::new(
@@ -249,6 +289,11 @@ mod tests {
 
     async fn session_with_round(root: &Path) -> SessionLog {
         let mut session = SessionLog::new();
+        add_round(root, &mut session).await;
+        session
+    }
+
+    async fn add_round(root: &Path, session: &mut SessionLog) {
         let registry = FormatRegistry::new();
         let calls = registry.parse(&read_call(root)).unwrap();
         let exec = executor(root);
@@ -256,8 +301,7 @@ mod tests {
         for call in &calls {
             results.push(exec.execute(call.clone()).await);
         }
-        session.push(calls, results);
-        session
+        session.push(calls, results, RoundStats::default());
     }
 
     #[test]
@@ -530,5 +574,55 @@ mod tests {
         if let Some(saved) = saved {
             let _ = manualaid_core::clipboard::write_clipboard(saved);
         }
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn submit_text_records_round_stats() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("submit-stats");
+        let registry = FormatRegistry::new();
+        let exec = executor(&root);
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions {
+            auto_copy: false,
+            ..LoopOptions::default()
+        };
+        push_test_input(&["n"]);
+        submit_text(
+            &exec,
+            &registry,
+            &mut session,
+            &mut options,
+            &read_call(&root),
+            50000,
+        )
+        .await;
+        let stats = session.latest(1).expect("round recorded").stats;
+        assert!(stats.total_tokens > 0);
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn show_tool_history_lists_newest_first() {
+        let _capture = crate::console::capture();
+        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("history");
+        let mut session = SessionLog::new();
+        add_round(&root, &mut session).await;
+        add_round(&root, &mut session).await;
+        show_tool_history(&session);
+        let output = _capture.text();
+        let newest = output.find("Round 1 of 2").expect("newest header");
+        let oldest = output.find("Round 2 of 2").expect("oldest header");
+        assert!(newest < oldest);
+        assert!(output.contains("[read]"));
+        assert!(output.contains("success"));
+        crate::style::set_enabled(false);
     }
 }
