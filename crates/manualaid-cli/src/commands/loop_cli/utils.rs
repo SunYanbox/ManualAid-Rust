@@ -237,6 +237,7 @@ pub fn render_menu() -> String {
         "cli.loop.menu_config",
         "cli.loop.menu_summary",
         "cli.loop.menu_history",
+        "cli.loop.menu_intent_rule",
         "cli.loop.menu_exit",
     ];
     let mut lines: Vec<String> = keys.iter().map(|key| i18n::t_str(key)).collect();

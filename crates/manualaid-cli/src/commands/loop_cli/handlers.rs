@@ -55,6 +55,17 @@ pub(super) fn copy_system_prompt(config: &Config, root: &Path, registry: &Format
     print_muted_block(&block);
 }
 
+/// Copy the intent-output-rule text to the clipboard so the user can
+/// paste it into an external LLM chat to re-emphasise the rule mid-session.
+/// 将意图规则文本复制到剪贴板，方便用户在外部 LLM 聊天中途重新强调该规则。
+pub(super) fn copy_intent_rule() {
+    let text = i18n::t_str("prompt.system.intent-output-rule");
+    match manualaid_core::clipboard::write_clipboard(&text) {
+        Ok(()) => print_muted_block(&[i18n::t_str("cli.message.intent_rule_copied")]),
+        Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
+    }
+}
+
 /// Read the clipboard and submit its text as one round.
 /// 读取剪贴板并把其文本作为一轮提交。
 pub(super) async fn paste_and_submit(

@@ -9,7 +9,7 @@ use manualaid_ws::config::Config;
 use manualaid_ws::session::SessionLog;
 
 use super::config::persist_and_confirm;
-use super::handlers::{copy_round_index, copy_round_result, copy_system_prompt};
+use super::handlers::{copy_intent_rule, copy_round_index, copy_round_result, copy_system_prompt};
 use super::utils::{
     apply_format_mode, cycle_format, cycle_lang, parse_round_index, print_muted_block, t_fmt,
 };
@@ -26,6 +26,7 @@ pub(super) fn handle_inline_command(
     let parts: Vec<&str> = line.split_whitespace().collect();
     match parts.as_slice() {
         ["/ws"] => copy_system_prompt(config, root, registry),
+        ["/intent"] => copy_intent_rule(),
         ["/tools"] => {
             let list = manualaid_ws::prompt::render_tools_list(config, registry);
             let _ = crate::pager::print_paged(&list);

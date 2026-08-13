@@ -36,7 +36,7 @@ pub use utils::{
 
 use config::config_menu;
 use handlers::{
-    copy_round_result, copy_system_prompt, input_and_submit, paste_and_submit,
+    copy_intent_rule, copy_round_result, copy_system_prompt, input_and_submit, paste_and_submit,
     print_session_summary, show_tool_history,
 };
 use inline::handle_inline_command;
@@ -240,6 +240,7 @@ async fn loop_main_at(
             }
             "6" => print_session_summary(&config, &session),
             "7" => show_tool_history(&session),
+            "8" => copy_intent_rule(),
             "0" => should_exit = true,
             _ => crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid")),
         }
