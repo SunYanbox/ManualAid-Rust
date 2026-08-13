@@ -514,6 +514,7 @@ mod tests {
                 file.display()
             ))
             .unwrap()
+            .calls
             .remove(0);
         let start = std::time::Instant::now();
         let result = executor.execute(call).await;
@@ -528,10 +529,14 @@ mod tests {
     #[tokio::test]
     async fn execute_failed_paths_keep_zero_duration() {
         let executor = Executor::new(Auditor::new(std::env::temp_dir()), Arc::new(None));
-        let call = crate::parser::FormatRegistry::new()
-            .parse("<nonsense><x>1</x></nonsense>")
-            .unwrap()
-            .remove(0);
+        // 未知工具名会被解析器丢弃，此处直接构造调用以覆盖执行器的
+        // unknown-tool 守卫分支。
+        let call = crate::parser::ParsedToolCall {
+            tool_name: "nonsense".to_string(),
+            params: IndexMap::new(),
+            format: crate::tools::ToolCallFormat::Xml,
+            source_offset: None,
+        };
         let result = executor.execute(call).await;
         assert!(!result.success);
         assert_eq!(result.execution_duration_ms, 0);

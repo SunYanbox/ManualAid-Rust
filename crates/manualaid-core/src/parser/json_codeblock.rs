@@ -7,7 +7,8 @@
 use indexmap::IndexMap;
 use serde_json::Value;
 
-use super::traits::{ParseError, ParsedToolCall, ToolCallFormatParser};
+use super::tool_set::EnabledToolSet;
+use super::traits::{ParseError, ParseOutcome, ParsedToolCall, ToolCallFormatParser};
 use crate::tools::ToolCallFormat;
 use crate::tools::ToolKind;
 
@@ -20,13 +21,16 @@ impl ToolCallFormatParser for JsonCodeblockParser {
         "json-codeblock"
     }
 
-    fn try_parse(&self, input: &str) -> Result<Vec<ParsedToolCall>, ParseError> {
+    fn try_parse(&self, input: &str, tools: &EnabledToolSet) -> Result<ParseOutcome, ParseError> {
         let blocks = extract_json_blocks(input);
         let mut calls = Vec::new();
         for (block, offset) in &blocks {
-            calls.extend(parse_json_tool_call(block, *offset)?);
+            calls.extend(parse_json_tool_call(block, *offset, tools)?);
         }
-        Ok(calls)
+        Ok(ParseOutcome {
+            calls,
+            warnings: Vec::new(),
+        })
     }
 
     fn tool_call_template(&self, tool: &ToolKind) -> String {
@@ -116,8 +120,21 @@ fn looks_like_json(text: &str) -> bool {
 }
 
 /// Parse a single JSON value into one or more tool calls.
+///
+/// Only objects whose tool name is defined in `tools` produce calls;
+/// everything else is silently skipped (the empty vec means "not a tool
+/// call in this format", so auto-detection can fall through). The only
+/// hard error is malformed JSON.
 /// 将单个 JSON 值解析为一个或多个工具调用。
-fn parse_json_tool_call(json_text: &str, offset: usize) -> Result<Vec<ParsedToolCall>, ParseError> {
+///
+/// 只有工具名在 `tools` 中定义的对象才产生调用，其余内容静默跳过
+/// （空 vec 表示“不是本格式的工具调用”，自动检测可继续尝试其他解析器）。
+/// 唯一的硬错误是 JSON 格式损坏。
+fn parse_json_tool_call(
+    json_text: &str,
+    offset: usize,
+    tools: &EnabledToolSet,
+) -> Result<Vec<ParsedToolCall>, ParseError> {
     let value: Value = serde_json::from_str(json_text).map_err(|e| {
         ParseError::new(format!("JSON parse error: {e}"))
             .with_offset(offset)
@@ -126,63 +143,56 @@ fn parse_json_tool_call(json_text: &str, offset: usize) -> Result<Vec<ParsedTool
     })?;
 
     match value {
-        Value::Array(items) => {
-            let mut calls = Vec::new();
-            for item in items {
-                calls.push(tool_call_from_object(item, offset)?);
-            }
-            Ok(calls)
-        }
-        Value::Object(_) => Ok(vec![tool_call_from_object(value, offset)?]),
-        _ => Err(
-            ParseError::new("Expected a JSON object or array of tool calls")
-                .with_offset(offset)
-                .with_format(ToolCallFormat::JsonCodeblock),
-        ),
+        Value::Array(items) => Ok(items
+            .into_iter()
+            .filter_map(|item| tool_call_from_object(item, offset, tools))
+            .collect()),
+        Value::Object(_) => Ok(tool_call_from_object(value, offset, tools)
+            .into_iter()
+            .collect()),
+        _ => Ok(Vec::new()),
     }
 }
 
-/// Convert a JSON object into a `ParsedToolCall`.
-/// 将 JSON 对象转换为 `ParsedToolCall`。
-fn tool_call_from_object(obj: Value, offset: usize) -> Result<ParsedToolCall, ParseError> {
-    let map = obj.as_object().ok_or_else(|| {
-        ParseError::new(format!("Tool call must be a JSON object, got {obj}"))
-            .with_offset(offset)
-            .with_format(ToolCallFormat::JsonCodeblock)
-    })?;
-
+/// Convert a JSON object into a `ParsedToolCall`; `None` means the object
+/// is not a defined tool call and is silently skipped.
+/// 将 JSON 对象转换为 `ParsedToolCall`；`None` 表示该对象不是已定义的
+/// 工具调用，静默跳过。
+fn tool_call_from_object(
+    obj: Value,
+    offset: usize,
+    tools: &EnabledToolSet,
+) -> Option<ParsedToolCall> {
+    let map = obj.as_object()?;
     let tool_name = map
         .get("tool_use")
         .or_else(|| map.get("name"))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .ok_or_else(|| {
-            ParseError::new("Missing \"tool_use\" field in tool call object")
-                .with_offset(offset)
-                .with_format(ToolCallFormat::JsonCodeblock)
-        })?;
+        .and_then(Value::as_str)?;
+    if !tools.contains_tool(tool_name) {
+        return None;
+    }
 
     let params = if let Some(params_value) = map.get("params") {
         match params_value {
+            // 只保留该工具已定义的参数名。
             Value::Object(pm) => pm
                 .iter()
+                .filter(|(key, _)| tools.contains_param(tool_name, key))
                 .map(|(key, value)| (key.clone(), value.clone()))
-                .collect::<IndexMap<_, _>>(),
-            other => {
-                let mut params = IndexMap::new();
-                params.insert("params".to_string(), other.clone());
-                params
-            }
+                .collect(),
+            // 非对象形式的 `params` 无法映射到已定义参数，丢弃。
+            _ => IndexMap::new(),
         }
     } else {
         map.iter()
             .filter(|(key, _)| *key != "tool_use" && *key != "name")
+            .filter(|(key, _)| tools.contains_param(tool_name, key))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect()
     };
 
-    Ok(ParsedToolCall {
-        tool_name,
+    Some(ParsedToolCall {
+        tool_name: tool_name.to_string(),
         params,
         format: ToolCallFormat::JsonCodeblock,
         source_offset: Some(offset),
@@ -228,8 +238,12 @@ mod tests {
     #[test]
     fn parses_params_fallback_keys() {
         let calls = JsonCodeblockParser
-            .try_parse("```json\n{\"tool_use\": \"read\", \"file_path\": \"/a.txt\"}\n```")
-            .unwrap();
+            .try_parse(
+                "```json\n{\"tool_use\": \"read\", \"file_path\": \"/a.txt\"}\n```",
+                &EnabledToolSet::all(),
+            )
+            .unwrap()
+            .calls;
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].tool_name, "read");
         assert_eq!(
@@ -243,28 +257,50 @@ mod tests {
         let calls = JsonCodeblockParser
             .try_parse(
                 "```json\n[{\"tool_use\": \"read\", \"params\": {\"file_path\": \"/a\"}}, {\"tool_use\": \"edit\", \"params\": {\"file_path\": \"/b\"}}]\n```",
+                &EnabledToolSet::all(),
             )
-            .unwrap();
+            .unwrap()
+            .calls;
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[1].tool_name, "edit");
     }
 
     #[test]
-    fn missing_tool_use_is_an_error() {
-        let result = JsonCodeblockParser.try_parse("```json\n{\"params\": {\"x\": \"1\"}}\n```");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().message.contains("tool_use"));
+    fn missing_tool_use_yields_no_calls() {
+        let outcome = JsonCodeblockParser
+            .try_parse(
+                "```json\n{\"params\": {\"x\": \"1\"}}\n```",
+                &EnabledToolSet::all(),
+            )
+            .unwrap();
+        assert!(outcome.calls.is_empty());
     }
 
     #[test]
-    fn non_object_value_is_an_error() {
-        let result = JsonCodeblockParser.try_parse("```json\n\"just a string\"\n```");
-        assert!(result.is_err());
+    fn non_object_value_yields_no_calls() {
+        let outcome = JsonCodeblockParser
+            .try_parse("```json\n\"just a string\"\n```", &EnabledToolSet::all())
+            .unwrap();
+        assert!(outcome.calls.is_empty());
+    }
+
+    #[test]
+    fn unknown_tool_use_is_skipped() {
+        let outcome = JsonCodeblockParser
+            .try_parse(
+                "```json\n{\"tool_use\": \"bogus\", \"params\": {\"x\": \"1\"}}\n```",
+                &EnabledToolSet::all(),
+            )
+            .unwrap();
+        assert!(outcome.calls.is_empty());
     }
 
     #[test]
     fn empty_input_yields_no_calls() {
-        let calls = JsonCodeblockParser.try_parse("").unwrap();
+        let calls = JsonCodeblockParser
+            .try_parse("", &EnabledToolSet::all())
+            .unwrap()
+            .calls;
         assert!(calls.is_empty());
     }
 
