@@ -16,6 +16,7 @@ use super::utils::{
     format_round_detail, format_round_header, format_round_header_muted, format_round_summary,
     parse_round_index, print_muted_block, read_line, t_fmt,
 };
+use tokenx_rs;
 
 /// Generate the system prompt with the selected context files and copy it
 /// to the clipboard. Context files are resolved at this point so the
@@ -36,10 +37,17 @@ pub(super) fn copy_system_prompt(config: &Config, root: &Path, registry: &Format
         &all_skills(),
         &context_files,
     );
-    let mut block = vec![t_fmt(
-        "cli.loop.timing_prompt",
-        &[("elapsed", &crate::format_duration(start.elapsed()))],
-    )];
+    let tokens = tokenx_rs::estimate_token_count(&text);
+    let mut block = vec![
+        t_fmt(
+            "cli.loop.timing_prompt",
+            &[("elapsed", &crate::format_duration(start.elapsed()))],
+        ),
+        t_fmt(
+            "cli.loop.token_estimate_prompt",
+            &[("tokens", &tokens.to_string())],
+        ),
+    ];
     match manualaid_core::clipboard::write_clipboard(&text) {
         Ok(()) => block.insert(0, i18n::t_str("cli.message.prompt_copied")),
         Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
@@ -132,13 +140,20 @@ pub(super) async fn submit_text(
     match execute_round_with_approval(executor, registry, text, ask_approval).await {
         Ok((calls, results, stats)) => {
             let _ = crate::pager::print_paged_collapsed(&format_round_summary(&results));
+            let round_tokens = stats.total_tokens;
             session.push(calls, results.clone(), stats);
             let round_index = session.len();
             let copy = options.auto_copy || ask_copy();
-            let mut block = vec![t_fmt(
-                "cli.loop.timing_round",
-                &[("elapsed", &crate::format_duration(round_start.elapsed()))],
-            )];
+            let mut block = vec![
+                t_fmt(
+                    "cli.loop.timing_round",
+                    &[("elapsed", &crate::format_duration(round_start.elapsed()))],
+                ),
+                t_fmt(
+                    "cli.loop.token_estimate_round",
+                    &[("tokens", &round_tokens.to_string())],
+                ),
+            ];
             if copy
                 && let Err(e) = manualaid_core::clipboard::write_clipboard(
                     manualaid_ws::prompt::format_results(&results, max_result_chars),
