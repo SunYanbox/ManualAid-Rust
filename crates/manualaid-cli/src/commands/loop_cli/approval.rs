@@ -41,10 +41,15 @@ pub async fn execute_round_with_approval(
     mut decide: impl FnMut(&AuditQueueItem) -> Approval,
 ) -> Result<(Vec<ParsedToolCall>, Vec<ToolResult>, RoundStats), String> {
     let parse_start = std::time::Instant::now();
-    let calls = registry
+    let outcome = registry
         .parse(input)
         .map_err(|e| t_fmt("cli.error.parse", &[("error", &e.to_string())]))?;
     let parse_duration = parse_start.elapsed();
+    // 解析器产生的软警告（如被丢弃的未闭合参数）直接展示给用户。
+    for warning in &outcome.warnings {
+        crate::console::out_println!("⚠ {warning}");
+    }
+    let calls = outcome.calls;
     if calls.is_empty() {
         return Err(i18n::t_str("cli.error.no_calls"));
     }
@@ -241,7 +246,10 @@ pub(super) fn ask_approval(item: &AuditQueueItem) -> Approval {
 mod tests {
     use super::*;
     use crate::commands::loop_cli::utils::push_test_input;
+    use manualaid_core::audit::{Auditor, SessionMode};
+    use manualaid_core::executor::Executor;
     use manualaid_core::parser::FormatRegistry;
+    use std::sync::Arc;
 
     fn queue_item() -> AuditQueueItem {
         AuditQueueItem {
@@ -275,10 +283,32 @@ mod tests {
         assert_eq!(APPROVAL_PAUSE, Duration::from_millis(500));
     }
 
+    #[tokio::test]
+    async fn execute_round_prints_parser_warnings() {
+        let capture = crate::console::capture();
+        let executor = Executor::new(
+            Auditor::new(std::env::temp_dir()).with_mode(SessionMode::AcceptEdit),
+            Arc::new(None),
+        );
+        let registry = FormatRegistry::new();
+        // 未闭合参数被解析器丢弃并产生软警告，警告应打印到控制台。
+        let input = "<edit><old_string>x</edit>";
+        let (calls, results, _stats) =
+            execute_round_with_approval(&executor, &registry, input, |_| Approval::Approve)
+                .await
+                .unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(results.len(), 1);
+        let text = capture.text();
+        assert!(text.contains('⚠'), "parser warning not printed: {text}");
+        assert!(text.contains("old_string"));
+    }
+
     fn parsed_call() -> ParsedToolCall {
         FormatRegistry::new()
             .parse("<read><file_path>Z:/a.txt</file_path></read>")
             .unwrap()
+            .calls
             .remove(0)
     }
 

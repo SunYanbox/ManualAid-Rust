@@ -14,8 +14,10 @@
 
 pub mod json_codeblock;
 pub mod registry;
+pub mod tool_set;
 pub mod traits;
 pub mod xml;
 
 pub use registry::{FormatRegistry, RegistryMode};
+pub use tool_set::EnabledToolSet;
 pub use traits::*;

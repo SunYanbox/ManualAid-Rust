@@ -300,7 +300,8 @@ mod tests {
         };
         let calls = manualaid_core::parser::FormatRegistry::new()
             .parse("<read><file_path>/tmp/a.txt</file_path></read>")
-            .unwrap();
+            .unwrap()
+            .calls;
         log.push(
             calls,
             vec![ToolResult::success("read", "hello world", true)],

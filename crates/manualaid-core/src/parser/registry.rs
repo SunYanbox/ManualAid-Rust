@@ -14,12 +14,13 @@
 //! 只接受始终注册的两种格式（`xml` 与 `json-codeblock`）。该分支保留为
 //! 面向未来格式的防御性检查，不要求高测试覆盖率。
 
-use std::sync::RwLock;
+use std::sync::{Arc, OnceLock, RwLock};
 
 use indexmap::IndexMap;
 
 use super::json_codeblock::JsonCodeblockParser;
-use super::traits::{ParseError, ParsedToolCall, ToolCallFormatParser};
+use super::tool_set::EnabledToolSet;
+use super::traits::{ParseError, ParseOutcome, ToolCallFormatParser};
 use super::xml::XmlParser;
 use crate::tools::ToolCallFormat;
 use crate::tools::ToolKind;
@@ -77,6 +78,12 @@ pub struct FormatRegistry {
     /// The current registry mode.
     /// 当前注册表模式。
     mode: RwLock<RegistryMode>,
+    /// Cache of the enabled-tool set: the fingerprint (canonical tool
+    /// names) plus the shared set. `None` means never configured, in which
+    /// case every tool is available.
+    /// 可用工具集合的缓存：指纹（规范顺序的工具名）与共享集合。`None`
+    /// 表示从未配置，此时全部工具可用。
+    enabled_tools: RwLock<Option<(Vec<String>, Arc<EnabledToolSet>)>>,
 }
 
 impl FormatRegistry {
@@ -89,7 +96,37 @@ impl FormatRegistry {
         Self {
             parsers: RwLock::new(parsers),
             mode: RwLock::new(RegistryMode::AutoDetect),
+            enabled_tools: RwLock::new(None),
         }
+    }
+
+    /// Set the available tools. The lookup structures are rebuilt only when
+    /// the effective set (unknown names dropped, order normalized) differs
+    /// from the cached fingerprint; an unchanged set reuses the cache.
+    /// 设置可用工具。只有当实际集合（未知名称已丢弃、顺序已规范化）与
+    /// 缓存指纹不同时才重建查找结构；集合不变时直接复用缓存。
+    pub fn set_enabled_tools(&self, tool_names: &[String]) -> Result<(), ParseError> {
+        let set = EnabledToolSet::from_names(tool_names);
+        let fingerprint = set.tool_names();
+        let mut guard = self.enabled_tools.write().map_err(|_| lock_poisoned())?;
+        let changed = guard
+            .as_ref()
+            .is_none_or(|(cached, _)| cached != &fingerprint);
+        if changed {
+            *guard = Some((fingerprint, Arc::new(set)));
+        }
+        Ok(())
+    }
+
+    /// The cached enabled-tool set, or the process-wide default (every
+    /// tool) when never configured.
+    /// 缓存的可用工具集合；从未配置时返回进程级默认（全部工具）。
+    fn enabled_tool_set(&self) -> Result<Arc<EnabledToolSet>, ParseError> {
+        let guard = self.enabled_tools.read().map_err(|_| lock_poisoned())?;
+        Ok(guard
+            .as_ref()
+            .map(|(_, set)| set.clone())
+            .unwrap_or_else(default_tool_set))
     }
 
     /// Set the registry mode.
@@ -132,10 +169,13 @@ impl FormatRegistry {
     ///
     /// `AutoDetect` 模式下第一个产生调用（非空）的解析器获胜；仅当所有
     /// 解析器都没有产生调用且至少一个报告错误时才返回错误。
-    pub fn parse(&self, input: &str) -> Result<Vec<ParsedToolCall>, ParseError> {
+    pub fn parse(&self, input: &str) -> Result<ParseOutcome, ParseError> {
+        let tools = self.enabled_tool_set()?;
         match self.mode()? {
-            RegistryMode::AutoDetect => self.parse_auto(input),
-            RegistryMode::Fixed(format) => self.parse_with(format_name(format), input),
+            RegistryMode::AutoDetect => self.parse_auto(input, &tools),
+            RegistryMode::Fixed(format) => {
+                self.parse_with_tools(format_name(format), input, &tools)
+            }
         }
     }
 
@@ -168,41 +208,64 @@ impl FormatRegistry {
 
     /// Parse with one specific parser by name.
     /// 按名称使用特定的解析器解析。
-    pub fn parse_with(
+    pub fn parse_with(&self, format_name: &str, input: &str) -> Result<ParseOutcome, ParseError> {
+        let tools = self.enabled_tool_set()?;
+        self.parse_with_tools(format_name, input, &tools)
+    }
+
+    /// Parse with one specific parser by name, using a given tool set.
+    /// 按名称使用特定的解析器解析，并指定工具集合。
+    fn parse_with_tools(
         &self,
         format_name: &str,
         input: &str,
-    ) -> Result<Vec<ParsedToolCall>, ParseError> {
-        let guard = self
-            .parsers
-            .read()
-            .map_err(|_| ParseError::new("Registry lock poisoned"))?;
+        tools: &EnabledToolSet,
+    ) -> Result<ParseOutcome, ParseError> {
+        let guard = self.parsers.read().map_err(|_| lock_poisoned())?;
         let parser = guard.get(format_name).ok_or_else(|| {
             ParseError::new(format!("No parser registered for format `{format_name}`"))
         })?;
-        parser.try_parse(input)
+        parser.try_parse(input, tools)
     }
 
-    /// Auto-detect: return the first non-empty parse result.
-    /// 自动检测：返回第一个非空解析结果。
-    fn parse_auto(&self, input: &str) -> Result<Vec<ParsedToolCall>, ParseError> {
-        let guard = self
-            .parsers
-            .read()
-            .map_err(|_| ParseError::new("Registry lock poisoned"))?;
+    /// Auto-detect: return the first non-empty parse result; warnings of
+    /// parsers that yielded no calls are merged into the final outcome.
+    /// 自动检测：返回第一个非空解析结果；未产生调用的解析器的警告会
+    /// 合并进最终结果。
+    fn parse_auto(&self, input: &str, tools: &EnabledToolSet) -> Result<ParseOutcome, ParseError> {
+        let guard = self.parsers.read().map_err(|_| lock_poisoned())?;
         let mut last_error: Option<ParseError> = None;
+        let mut warnings = Vec::new();
         for parser in guard.values() {
-            match parser.try_parse(input) {
-                Ok(calls) if !calls.is_empty() => return Ok(calls),
-                Ok(_) => {}
+            match parser.try_parse(input, tools) {
+                Ok(outcome) if !outcome.calls.is_empty() => return Ok(outcome),
+                Ok(outcome) => warnings.extend(outcome.warnings),
                 Err(e) => last_error = Some(e),
             }
         }
         match last_error {
             Some(error) => Err(error),
-            None => Ok(Vec::new()),
+            None => Ok(ParseOutcome {
+                calls: Vec::new(),
+                warnings,
+            }),
         }
     }
+}
+
+/// The process-wide default tool set (every built-in tool), built once.
+/// 进程级默认工具集合（全部内置工具），只构建一次。
+fn default_tool_set() -> Arc<EnabledToolSet> {
+    static DEFAULT: OnceLock<Arc<EnabledToolSet>> = OnceLock::new();
+    DEFAULT
+        .get_or_init(|| Arc::new(EnabledToolSet::all()))
+        .clone()
+}
+
+/// The error used when a registry lock is poisoned.
+/// 注册表锁被污染时使用的错误。
+fn lock_poisoned() -> ParseError {
+    ParseError::new("Registry lock poisoned")
 }
 
 impl Default for FormatRegistry {
@@ -229,7 +292,8 @@ mod tests {
         let registry = FormatRegistry::new();
         let calls = registry
             .parse("<read><file_path>/a.txt</file_path></read>")
-            .unwrap();
+            .unwrap()
+            .calls;
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].tool_name, "read");
     }
@@ -241,7 +305,8 @@ mod tests {
             .parse(
                 "```json\n{\"tool_use\": \"read\", \"params\": {\"file_path\": \"/a.txt\"}}\n```",
             )
-            .unwrap();
+            .unwrap()
+            .calls;
         assert_eq!(calls.len(), 1);
     }
 
@@ -253,8 +318,43 @@ mod tests {
             .unwrap();
         let calls = registry
             .parse("{\"tool_use\": \"read\", \"params\": {}}")
-            .unwrap();
+            .unwrap()
+            .calls;
         assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn set_enabled_tools_reuses_cache_for_same_set() {
+        let registry = FormatRegistry::new();
+        registry
+            .set_enabled_tools(&["read".to_string(), "edit".to_string()])
+            .unwrap();
+        let first = registry.enabled_tool_set().unwrap();
+        // 乱序的相同集合不重建缓存。
+        registry
+            .set_enabled_tools(&["edit".to_string(), "read".to_string()])
+            .unwrap();
+        let second = registry.enabled_tool_set().unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn set_enabled_tools_rebuilds_when_set_changes() {
+        let registry = FormatRegistry::new();
+        registry.set_enabled_tools(&["read".to_string()]).unwrap();
+        let first = registry.enabled_tool_set().unwrap();
+        registry
+            .set_enabled_tools(&["read".to_string(), "edit".to_string()])
+            .unwrap();
+        let second = registry.enabled_tool_set().unwrap();
+        assert!(!Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn unset_registry_returns_all_tools_set() {
+        let registry = FormatRegistry::new();
+        let set = registry.enabled_tool_set().unwrap();
+        assert_eq!(set.tool_names().len(), crate::tools::all_tools().len());
     }
 
     #[test]
@@ -287,5 +387,41 @@ mod tests {
         let formats = FormatRegistry::new().registered_formats().unwrap();
         assert!(formats.contains(&"xml".to_string()));
         assert!(formats.contains(&"json-codeblock".to_string()));
+    }
+
+    #[test]
+    fn render_template_in_fixed_mode_reports_missing_parser() {
+        let registry = FormatRegistry::new();
+        registry
+            .set_mode(RegistryMode::Fixed(ToolCallFormat::Xml))
+            .unwrap();
+        // 从注册表移除解析器后，固定模式应报"未注册"错误。
+        registry.parsers.write().unwrap().shift_remove("xml");
+        let err = registry
+            .render_tool_call_template(&ToolKind::Read)
+            .expect_err("fixed mode with a removed parser must fail");
+        assert!(
+            err.message
+                .contains("No parser registered for format `xml`")
+        );
+    }
+
+    #[test]
+    fn poisoned_lock_reports_error() {
+        let registry = FormatRegistry::new();
+        // 在持锁时 panic 使 parsers 锁进入中毒状态，之后的操作应返回错误。
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _guard = registry.parsers.write().unwrap();
+                    panic!("poison the registry lock");
+                })
+                .join()
+                .expect_err("scoped thread must panic");
+        });
+        let err = registry
+            .parse("<read><file_path>/a.txt</file_path></read>")
+            .expect_err("poisoned lock must surface as a ParseError");
+        assert_eq!(err.message, "Registry lock poisoned");
     }
 }

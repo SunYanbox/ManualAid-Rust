@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::tool_set::EnabledToolSet;
 use crate::tools::ToolCallFormat;
 use crate::tools::ToolKind;
 
@@ -101,6 +102,22 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
+/// The result of a parse attempt: the recognized calls plus soft issues
+/// (warnings) that did not abort parsing.
+/// 一次解析尝试的结果：识别出的调用，以及未中断解析的软问题（警告）。
+#[derive(Debug, Clone, Default)]
+pub struct ParseOutcome {
+    /// Zero or more recognized tool calls. Empty means the input is simply
+    /// not in this format, rather than malformed.
+    /// 零个或多个已识别的工具调用。为空表示输入有效但此格式不包含工具
+    /// 调用（而非格式错误）。
+    pub calls: Vec<ParsedToolCall>,
+    /// Soft issues that did not abort parsing (e.g. a discarded parameter
+    /// whose closing tag was missing).
+    /// 未中断解析的软问题（例如因缺少闭合标签而被丢弃的参数）。
+    pub warnings: Vec<String>,
+}
+
 /// A parser that extracts tool calls from raw text and renders standard
 /// call templates for any tool in its own wire format.
 /// 从原始文本中提取工具调用，并为其线格式中的任何工具渲染标准调用模板
@@ -112,13 +129,16 @@ pub trait ToolCallFormatParser: Send + Sync {
 
     /// Attempt to parse tool calls from `input`.
     ///
-    /// Returns a list of zero or more recognized tool calls. An empty vec
-    /// means the input is simply not in this format, rather than malformed.
+    /// Only tool names and parameter names defined in `tools` are
+    /// recognized; all other tags and keys are discarded. An empty `calls`
+    /// vec means the input is simply not in this format, rather than
+    /// malformed.
     /// 尝试从 `input` 中解析工具调用。
     ///
-    /// 返回零个或多个已识别工具调用的列表。空的 vec 表示输入有效但此
-    /// 格式不包含工具调用（而非格式错误）。
-    fn try_parse(&self, input: &str) -> Result<Vec<ParsedToolCall>, ParseError>;
+    /// 只识别 `tools` 中定义的工具名与参数名，其余标签与键一律丢弃。
+    /// 空的 `calls` 列表表示输入有效但此格式不包含工具调用（而非格式
+    /// 错误）。
+    fn try_parse(&self, input: &str, tools: &EnabledToolSet) -> Result<ParseOutcome, ParseError>;
 
     /// Generate a standard call example for `tool` in this parser's own
     /// wire format, used by the prompt builder.
