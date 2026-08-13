@@ -153,6 +153,10 @@ async fn loop_main_at(
 
     let registry = FormatRegistry::new();
     apply_format_mode(&registry, &config)?;
+    // 解析器只识别会话中启用的工具，集合不变时复用注册表缓存。
+    registry
+        .set_enabled_tools(&config.enabled_tool_names())
+        .map_err(|e| e.to_string())?;
 
     let mode = mode.unwrap_or_default();
     let mut executor = build_executor(current_dir, &config, mode);

@@ -364,7 +364,7 @@ mod tests {
 
     async fn add_round(root: &Path, session: &mut SessionLog, stats: RoundStats) {
         let registry = FormatRegistry::new();
-        let calls = registry.parse(&read_call(root)).unwrap();
+        let calls = registry.parse(&read_call(root)).unwrap().calls;
         let exec = executor(root);
         let mut results = Vec::new();
         for call in &calls {
