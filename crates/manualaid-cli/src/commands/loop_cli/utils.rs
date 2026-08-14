@@ -45,37 +45,34 @@ pub(super) fn format_config_issue(issue: &ConfigIssue) -> String {
 /// Read one line from stdin; EOF or an error yields `None`.
 /// 从标准输入读取一行；EOF 或出错返回 `None`。
 pub(super) fn read_line() -> Option<String> {
-    #[cfg(test)]
-    {
-        // Unit tests drive interactive loops with a scripted per-thread
-        // input queue; an empty queue acts as EOF so the real stdin is
-        // never read (and never blocks) in tests.
-        // 单元测试用线程本地的脚本输入队列驱动交互循环；队列为空视为
-        // EOF，测试中绝不读取（也不会阻塞）真实 stdin。
-        TEST_INPUT.with(|input| input.borrow_mut().pop_front())
+    // While a test capture is active, interactive loops are driven by the
+    // scripted per-thread input queue; an empty queue acts as EOF so the
+    // real stdin is never read (and never blocks) in tests. Production
+    // never captures, so it always reaches the real stdin below.
+    // 测试捕获期间，交互循环由线程本地的脚本输入队列驱动；队列为空视为
+    // EOF，测试中绝不读取（也不会阻塞）真实 stdin。生产环境从不捕获，
+    // 因此总是走到下面的真实 stdin 分支。
+    if crate::console::is_capturing() {
+        return TEST_INPUT.with(|input| input.borrow_mut().pop_front());
     }
-    #[cfg(not(test))]
-    {
-        use std::io::BufRead;
-        let mut line = String::new();
-        match std::io::stdin().lock().read_line(&mut line) {
-            Ok(0) => None,
-            Ok(_) => Some(line),
-            Err(_) => None,
-        }
+    use std::io::BufRead;
+    let mut line = String::new();
+    match std::io::stdin().lock().read_line(&mut line) {
+        Ok(0) => None,
+        Ok(_) => Some(line),
+        Err(_) => None,
     }
 }
 
-#[cfg(test)]
 thread_local! {
     static TEST_INPUT: std::cell::RefCell<std::collections::VecDeque<String>> =
         const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
 }
 
-/// Queue scripted input lines for the current test thread.
-/// 为当前测试线程排队脚本输入行。
-#[cfg(test)]
-pub(super) fn push_test_input(lines: &[&str]) {
+/// Queue scripted input lines for the current test thread; used by both
+/// unit and integration tests.
+/// 为当前测试线程排队脚本输入行，供单元测试与集成测试使用。
+pub fn push_test_input(lines: &[&str]) {
     TEST_INPUT.with(|input| {
         let mut queue = input.borrow_mut();
         for line in lines {

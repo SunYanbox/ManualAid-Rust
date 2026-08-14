@@ -10,12 +10,18 @@ use manualaid_cli::cli::Cli;
 use manualaid_cli::commands::{run, run_dir_clean_with_stdin, run_main};
 
 mod common;
+#[path = "commands/handlers.rs"]
+mod handlers;
 #[path = "commands/loop.rs"]
 mod r#loop;
 
 /// Serializes tests that depend on the process-wide i18n locale.
 /// 串行化依赖进程级 i18n locale 的测试。
 static LOCALE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Serializes tests that toggle the process-wide style state.
+/// 串行化切换进程级样式状态的测试。
+static STYLE_LOCK: Mutex<()> = Mutex::new(());
 
 fn parse(args: &[&str]) -> Cli {
     Cli::try_parse_from(args).expect("args should parse")
