@@ -16,6 +16,7 @@ use super::utils::{
     format_round_detail, format_round_header, format_round_header_muted, format_round_summary,
     parse_round_index, print_muted_block, read_line, t_fmt,
 };
+use manualaid_core::clipboard::{ClipboardProvider, RealClipboard};
 use tokenx_rs;
 
 /// Generate the system prompt with the selected context files and copy it
@@ -24,6 +25,15 @@ use tokenx_rs;
 /// 结合所选上下文文件生成系统提示词并复制到剪贴板。上下文文件在此刻解析，因此只在真正
 /// 生成提示词时才询问选择。
 pub(super) fn copy_system_prompt(config: &Config, root: &Path, registry: &FormatRegistry) {
+    copy_system_prompt_with_provider(&RealClipboard, config, root, registry);
+}
+
+pub(super) fn copy_system_prompt_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    config: &Config,
+    root: &Path,
+    registry: &FormatRegistry,
+) {
     let start = std::time::Instant::now();
     let context_files = if config.context_auto_load {
         select_context_files(root)
@@ -48,7 +58,7 @@ pub(super) fn copy_system_prompt(config: &Config, root: &Path, registry: &Format
             &[("tokens", &tokens.to_string())],
         ),
     ];
-    match manualaid_core::clipboard::write_clipboard(&text) {
+    match provider.write(&text) {
         Ok(()) => block.insert(0, i18n::t_str("cli.message.prompt_copied")),
         Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
     }
@@ -64,7 +74,26 @@ pub(super) async fn paste_and_submit(
     options: &mut LoopOptions,
     max_result_chars: usize,
 ) {
-    let text = match manualaid_core::clipboard::read_clipboard() {
+    paste_and_submit_with_provider(
+        &RealClipboard,
+        executor,
+        registry,
+        session,
+        options,
+        max_result_chars,
+    )
+    .await;
+}
+
+pub(super) async fn paste_and_submit_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    executor: &Executor,
+    registry: &FormatRegistry,
+    session: &mut SessionLog,
+    options: &mut LoopOptions,
+    max_result_chars: usize,
+) {
+    let text = match provider.read() {
         Ok(text) if text.trim().is_empty() => {
             crate::console::out_println!("{}", i18n::t_str("cli.message.clipboard_empty"));
             return;
@@ -75,7 +104,8 @@ pub(super) async fn paste_and_submit(
             return;
         }
     };
-    submit_text(
+    submit_text_with_provider(
+        provider,
         executor,
         registry,
         session,
@@ -136,6 +166,27 @@ pub(super) async fn submit_text(
     text: &str,
     max_result_chars: usize,
 ) {
+    submit_text_with_provider(
+        &RealClipboard,
+        executor,
+        registry,
+        session,
+        options,
+        text,
+        max_result_chars,
+    )
+    .await;
+}
+
+pub(super) async fn submit_text_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    executor: &Executor,
+    registry: &FormatRegistry,
+    session: &mut SessionLog,
+    options: &mut LoopOptions,
+    text: &str,
+    max_result_chars: usize,
+) {
     let round_start = std::time::Instant::now();
     match execute_round_with_approval(executor, registry, text, ask_approval).await {
         Ok((calls, results, stats)) => {
@@ -155,9 +206,10 @@ pub(super) async fn submit_text(
                 ),
             ];
             if copy
-                && let Err(e) = manualaid_core::clipboard::write_clipboard(
-                    manualaid_ws::prompt::format_results(&results, max_result_chars),
-                )
+                && let Err(e) = provider.write(&manualaid_ws::prompt::format_results(
+                    &results,
+                    max_result_chars,
+                ))
             {
                 eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
             } else if copy {
@@ -186,6 +238,14 @@ pub(super) fn ask_copy() -> bool {
 /// Copy the `index`-th latest round (default: latest) to the clipboard.
 /// 把从最新算起的第 `index` 轮（默认最新）复制到剪贴板。
 pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
+    copy_round_result_with_provider(&RealClipboard, session, max_result_chars);
+}
+
+pub(super) fn copy_round_result_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    session: &SessionLog,
+    max_result_chars: usize,
+) {
     if session.is_empty() {
         crate::console::out_println!("{}", i18n::t_str("cli.message.no_rounds"));
         return;
@@ -201,7 +261,7 @@ pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
     crate::console::flush();
     let input = read_line().unwrap_or_default();
     match parse_round_index(&input, session.len()) {
-        Some(index) => copy_round_index(session, index, max_result_chars),
+        Some(index) => copy_round_index_with_provider(provider, session, index, max_result_chars),
         None => crate::console::out_println!(
             "{}",
             t_fmt(
@@ -227,7 +287,12 @@ pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
 /// 无法工作（如非控制台终端）时控制台也不会被刷屏。
 const COPY_PREVIEW_MAX_LINES: usize = 10;
 
-pub(super) fn copy_round_index(session: &SessionLog, index: usize, max_result_chars: usize) {
+pub(super) fn copy_round_index_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    session: &SessionLog,
+    index: usize,
+    max_result_chars: usize,
+) {
     let record = session.latest(index).expect("validated index");
     let content = manualaid_ws::prompt::format_results(&record.results, max_result_chars);
     let preview = [
@@ -248,7 +313,7 @@ pub(super) fn copy_round_index(session: &SessionLog, index: usize, max_result_ch
     let previewed = crate::style::gray(&truncate_preview_lines(&content, COPY_PREVIEW_MAX_LINES));
     let text = indent_each_line(&(preview.join("\n") + "\n" + &previewed));
     let _ = crate::pager::print_paged_collapsed(&text);
-    match manualaid_core::clipboard::write_clipboard(content) {
+    match provider.write(&content) {
         Ok(()) => print_muted_block(&[t_fmt(
             "cli.message.result_copied",
             &[("index", &index.to_string())],
@@ -356,6 +421,7 @@ mod tests {
 
     use super::super::utils::push_test_input;
     use manualaid_core::audit::{Auditor, SessionMode};
+    use manualaid_core::clipboard::MockClipboard;
     use manualaid_ws::session::RoundStats;
 
     fn executor(root: &Path) -> Executor {
@@ -408,7 +474,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn print_session_summary_lists_stats() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _lock = crate::test_support::LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("summary");
         let session = session_with_round(&root).await;
@@ -426,7 +494,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn copy_round_result_rejects_out_of_range_index() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _lock = crate::test_support::LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("copy-index");
         let session = session_with_round(&root).await;
@@ -515,18 +585,15 @@ mod tests {
     }
 
     #[tokio::test]
-    // The lock must span the await so no concurrent test touches the
-    // clipboard while this round reads or writes it.
-    // 锁须跨 await 持有，避免并发测试在本轮读写剪贴板时访问剪贴板。
-    #[allow(clippy::await_holding_lock)]
     async fn submit_text_with_auto_copy_asks_and_skips_copy_on_no() {
         let _capture = crate::console::capture();
-        let _lock = lock_clipboard();
+        let mock = MockClipboard::new();
         let root = crate::test_support::temp_dir("submit-autocopy");
         let mut session = SessionLog::new();
         let mut options = LoopOptions::default();
         push_test_input(&["n"]);
-        submit_text(
+        submit_text_with_provider(
+            &mock,
             &executor(&root),
             &FormatRegistry::new(),
             &mut session,
@@ -538,43 +605,67 @@ mod tests {
         assert_eq!(session.len(), 1);
     }
 
-    // The clipboard tests below save the user's clipboard text first and
-    // restore it afterwards; the in-process lock serializes them against
-    // concurrent clipboard access within this process.
-    // 以下剪贴板测试先保存用户剪贴板文本，结束后恢复；进程内锁保证与同进程
-    // 的并发剪贴板访问串行。
-    fn lock_clipboard() -> std::sync::MutexGuard<'static, ()> {
-        // A failed clipboard test must not poison the shared lock for the
-        // remaining tests, so a poisoned guard is recovered like the shell
-        // tests do.
-        // 某个剪贴板测试失败时不能毒化共享锁拖垮其余测试，因此与 shell
-        // 测试一样对毒化守卫做恢复。
-        crate::test_support::CLIPBOARD_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
-    fn with_clipboard_restored(run: impl FnOnce()) {
-        let saved = manualaid_core::clipboard::read_clipboard().ok();
-        run();
-        if let Some(saved) = saved {
-            let _ = manualaid_core::clipboard::write_clipboard(saved);
-        }
+    #[tokio::test]
+    async fn submit_text_with_auto_copy_writes_to_clipboard() {
+        let _capture = crate::console::capture();
+        let mock = MockClipboard::new();
+        let root = crate::test_support::temp_dir("submit-autocopy-write");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions {
+            auto_copy: true,
+            ..LoopOptions::default()
+        };
+        push_test_input(&["y"]);
+        submit_text_with_provider(
+            &mock,
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            &read_call(&root),
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 1);
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.contains("hello"));
     }
 
     #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
+    async fn submit_text_with_auto_copy_write_error_does_not_panic() {
+        let _capture = crate::console::capture();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+        let root = crate::test_support::temp_dir("submit-autocopy-err");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions {
+            auto_copy: true,
+            ..LoopOptions::default()
+        };
+        submit_text_with_provider(
+            &mock,
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            &read_call(&root),
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 1);
+    }
+
+    #[tokio::test]
     async fn paste_and_submit_pastes_clipboard_text_as_a_round() {
         let _capture = crate::console::capture();
-        let _lock = lock_clipboard();
+        let mock = MockClipboard::new();
         let root = crate::test_support::temp_dir("paste-round");
-        let saved = manualaid_core::clipboard::read_clipboard().ok();
-        manualaid_core::clipboard::write_clipboard(read_call(&root))
-            .expect("set clipboard for pasting");
+        mock.write(&read_call(&root)).unwrap();
         let mut session = SessionLog::new();
         let mut options = LoopOptions::default();
         push_test_input(&["n"]);
-        paste_and_submit(
+        paste_and_submit_with_provider(
+            &mock,
             &executor(&root),
             &FormatRegistry::new(),
             &mut session,
@@ -583,22 +674,17 @@ mod tests {
         )
         .await;
         assert_eq!(session.len(), 1);
-        if let Some(saved) = saved {
-            let _ = manualaid_core::clipboard::write_clipboard(saved);
-        }
     }
 
     #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
     async fn paste_and_submit_with_empty_clipboard_is_noop() {
         let _capture = crate::console::capture();
-        let _lock = lock_clipboard();
+        let mock = MockClipboard::new();
         let root = crate::test_support::temp_dir("paste-empty");
-        let saved = manualaid_core::clipboard::read_clipboard().ok();
-        manualaid_core::clipboard::write_clipboard("").expect("clear clipboard");
         let mut session = SessionLog::new();
         let mut options = LoopOptions::default();
-        paste_and_submit(
+        paste_and_submit_with_provider(
+            &mock,
             &executor(&root),
             &FormatRegistry::new(),
             &mut session,
@@ -607,57 +693,87 @@ mod tests {
         )
         .await;
         assert_eq!(session.len(), 0);
-        if let Some(saved) = saved {
-            let _ = manualaid_core::clipboard::write_clipboard(saved);
-        }
+    }
+
+    #[tokio::test]
+    async fn paste_and_submit_with_read_error_is_noop() {
+        let _capture = crate::console::capture();
+        let mock = MockClipboard::new();
+        mock.set_read_error("mock read failure");
+        let root = crate::test_support::temp_dir("paste-err");
+        let mut session = SessionLog::new();
+        let mut options = LoopOptions::default();
+        paste_and_submit_with_provider(
+            &mock,
+            &executor(&root),
+            &FormatRegistry::new(),
+            &mut session,
+            &mut options,
+            100,
+        )
+        .await;
+        assert_eq!(session.len(), 0);
     }
 
     #[test]
     fn copy_system_prompt_writes_prompt_to_clipboard() {
         let _capture = crate::console::capture();
-        let _lock = lock_clipboard();
+        let mock = MockClipboard::new();
         let root = crate::test_support::temp_dir("copy-prompt");
-        with_clipboard_restored(|| {
-            copy_system_prompt(&Config::default(), &root, &FormatRegistry::new());
-            let clipboard = manualaid_core::clipboard::read_clipboard().expect("read clipboard");
-            assert!(clipboard.contains("<read>"));
-        });
+        copy_system_prompt_with_provider(&mock, &Config::default(), &root, &FormatRegistry::new());
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.contains("<read>"));
     }
 
     #[test]
     fn copy_system_prompt_includes_selected_context_files() {
         let _capture = crate::console::capture();
-        let _lock = lock_clipboard();
+        let mock = MockClipboard::new();
         let root = crate::test_support::temp_dir("copy-prompt-context");
         std::fs::write(root.join("AGENTS.md"), "# project rules").unwrap();
-        with_clipboard_restored(|| {
-            copy_system_prompt(&Config::default(), &root, &FormatRegistry::new());
-            let clipboard = manualaid_core::clipboard::read_clipboard().expect("read clipboard");
-            let dynamic = clipboard
-                .split_once("<dynamic-context>")
-                .and_then(|(_, rest)| rest.split_once("</dynamic-context>"))
-                .map(|(inner, _)| inner)
-                .unwrap_or_default();
-            assert!(dynamic.contains("<context_files path=\"AGENTS.md\">"));
-            assert!(dynamic.contains("# project rules"));
-        });
+        copy_system_prompt_with_provider(&mock, &Config::default(), &root, &FormatRegistry::new());
+        let clipboard = mock.read().unwrap();
+        let dynamic = clipboard
+            .split_once("<dynamic-context>")
+            .and_then(|(_, rest)| rest.split_once("</dynamic-context>"))
+            .map(|(inner, _)| inner)
+            .unwrap_or_default();
+        assert!(dynamic.contains("<context_files path=\"AGENTS.md\">"));
+        assert!(dynamic.contains("# project rules"));
+    }
+
+    #[test]
+    fn copy_system_prompt_with_write_error_does_not_panic() {
+        let _capture = crate::console::capture();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+        let root = crate::test_support::temp_dir("copy-prompt-err");
+        copy_system_prompt_with_provider(&mock, &Config::default(), &root, &FormatRegistry::new());
+        assert!(mock.read().unwrap().is_empty());
     }
 
     #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
     async fn copy_round_result_copies_selected_round() {
         let _capture = crate::console::capture();
-        let _lock = lock_clipboard();
+        let mock = MockClipboard::new();
         let root = crate::test_support::temp_dir("copy-valid");
         let session = session_with_round(&root).await;
-        let saved = manualaid_core::clipboard::read_clipboard().ok();
         push_test_input(&["1"]);
-        copy_round_result(&session, 100);
-        let clipboard = manualaid_core::clipboard::read_clipboard().expect("read clipboard");
+        copy_round_result_with_provider(&mock, &session, 100);
+        let clipboard = mock.read().unwrap();
         assert!(clipboard.contains("hello"));
-        if let Some(saved) = saved {
-            let _ = manualaid_core::clipboard::write_clipboard(saved);
-        }
+    }
+
+    #[tokio::test]
+    async fn copy_round_result_with_write_error_does_not_panic() {
+        let _capture = crate::console::capture();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+        let root = crate::test_support::temp_dir("copy-err");
+        let session = session_with_round(&root).await;
+        push_test_input(&["1"]);
+        copy_round_result_with_provider(&mock, &session, 100);
+        assert!(mock.read().unwrap().is_empty());
     }
 
     #[test]
@@ -668,7 +784,9 @@ mod tests {
 
     #[test]
     fn truncate_preview_lines_caps_long_text() {
-        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         i18n::set_locale("en");
         let text = (1..=15)
             .map(|i| i.to_string())
@@ -682,19 +800,21 @@ mod tests {
     }
 
     #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
     async fn copy_preview_is_indented_and_collapsed() {
         let _capture = crate::console::capture();
-        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
-        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let _clip = lock_clipboard();
-        crate::style::set_enabled(false);
-        i18n::set_locale("en");
+        let mock = MockClipboard::new();
         let root = crate::test_support::temp_dir("copy-preview-indent");
         let session = session_with_round(&root).await;
-        let saved = manualaid_core::clipboard::read_clipboard().ok();
+        let _style_lock = crate::test_support::STYLE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _locale_lock = crate::test_support::LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        crate::style::set_enabled(false);
+        i18n::set_locale("en");
         push_test_input(&["1"]);
-        copy_round_result(&session, 100);
+        copy_round_result_with_provider(&mock, &session, 100);
         let output = _capture.text();
         // Every preview line is indented by two spaces (the tool line
         // template already carries its own two leading spaces), and the
@@ -706,9 +826,6 @@ mod tests {
         assert!(!output.contains("[[read]]"));
         assert!(output.contains("success  exec"));
         assert!(output.contains("  hello"));
-        if let Some(saved) = saved {
-            let _ = manualaid_core::clipboard::write_clipboard(saved);
-        }
         crate::style::set_enabled(false);
     }
 
@@ -716,7 +833,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn submit_text_records_round_stats() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _lock = crate::test_support::LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("submit-stats");
         let registry = FormatRegistry::new();
@@ -744,8 +863,12 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn show_tool_history_lists_newest_first() {
         let _capture = crate::console::capture();
-        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
-        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _style_lock = crate::test_support::STYLE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _locale_lock = crate::test_support::LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         crate::style::set_enabled(false);
         i18n::set_locale("en");
         let root = crate::test_support::temp_dir("history");

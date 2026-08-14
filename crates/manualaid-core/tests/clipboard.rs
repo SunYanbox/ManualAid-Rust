@@ -1,7 +1,8 @@
 use std::sync::{Mutex, MutexGuard};
 
 use manualaid_core::clipboard::{
-    ClipboardContent, inspect_clipboard, read_clipboard, write_clipboard,
+    ClipboardContent, ClipboardProvider, MockClipboard, inspect_clipboard, read_clipboard,
+    write_clipboard,
 };
 
 // 剪贴板是系统级共享资源，所有会写入剪贴板的测试（clipboard 模块与
@@ -49,4 +50,51 @@ fn test_read_clipboard_returns_ok() {
     let _lock = lock_clipboard();
     let result = read_clipboard();
     assert!(result.is_ok(), "reading clipboard should not fail");
+}
+
+#[test]
+fn mock_read_returns_empty_initially() {
+    let mock = MockClipboard::new();
+    assert_eq!(mock.read().unwrap(), "");
+}
+
+#[test]
+fn mock_write_read_roundtrip() {
+    let mock = MockClipboard::new();
+    mock.write("hello").unwrap();
+    assert_eq!(mock.read().unwrap(), "hello");
+}
+
+#[test]
+fn mock_write_overwrites_previous() {
+    let mock = MockClipboard::new();
+    mock.write("first").unwrap();
+    mock.write("second").unwrap();
+    assert_eq!(mock.read().unwrap(), "second");
+}
+
+#[test]
+fn mock_write_empty_clears() {
+    let mock = MockClipboard::new();
+    mock.write("content").unwrap();
+    mock.write("").unwrap();
+    assert_eq!(mock.read().unwrap(), "");
+}
+
+#[test]
+fn mock_read_error_is_consumed_on_first_call() {
+    let mock = MockClipboard::new();
+    mock.write("data").unwrap();
+    mock.set_read_error("read failed");
+    assert_eq!(mock.read(), Err("read failed".to_string()));
+    assert_eq!(mock.read().unwrap(), "data");
+}
+
+#[test]
+fn mock_write_error_is_consumed_on_first_call() {
+    let mock = MockClipboard::new();
+    mock.set_write_error("write failed");
+    assert_eq!(mock.write("data"), Err("write failed".to_string()));
+    mock.write("data").unwrap();
+    assert_eq!(mock.read().unwrap(), "data");
 }
