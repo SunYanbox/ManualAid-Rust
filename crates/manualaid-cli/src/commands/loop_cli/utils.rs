@@ -56,6 +56,16 @@ pub(super) fn read_line() -> Option<String> {
     }
     #[cfg(not(test))]
     {
+        // Integration-test binaries (which build the lib without
+        // `cfg(test)`) signal test mode through the console capture; the
+        // same scripted queue drives their loops. Production never
+        // captures, so it always reaches the real stdin below.
+        // 集成测试二进制（构建 lib 时不含 `cfg(test)`）通过 console
+        // capture 表示测试模式，同样用脚本队列驱动循环。生产环境从不
+        // 捕获，因此总是走到下面的真实 stdin 分支。
+        if crate::console::is_capturing() {
+            return TEST_INPUT.with(|input| input.borrow_mut().pop_front());
+        }
         use std::io::BufRead;
         let mut line = String::new();
         match std::io::stdin().lock().read_line(&mut line) {
@@ -66,16 +76,15 @@ pub(super) fn read_line() -> Option<String> {
     }
 }
 
-#[cfg(test)]
 thread_local! {
     static TEST_INPUT: std::cell::RefCell<std::collections::VecDeque<String>> =
         const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
 }
 
-/// Queue scripted input lines for the current test thread.
-/// 为当前测试线程排队脚本输入行。
-#[cfg(test)]
-pub(super) fn push_test_input(lines: &[&str]) {
+/// Queue scripted input lines for the current test thread; used by both
+/// unit and integration tests.
+/// 为当前测试线程排队脚本输入行，供单元测试与集成测试使用。
+pub fn push_test_input(lines: &[&str]) {
     TEST_INPUT.with(|input| {
         let mut queue = input.borrow_mut();
         for line in lines {
@@ -237,6 +246,7 @@ pub fn render_menu() -> String {
         "cli.loop.menu_config",
         "cli.loop.menu_summary",
         "cli.loop.menu_history",
+        "cli.loop.menu_intent_rule",
         "cli.loop.menu_exit",
     ];
     let mut lines: Vec<String> = keys.iter().map(|key| i18n::t_str(key)).collect();

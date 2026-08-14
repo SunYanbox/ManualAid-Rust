@@ -255,6 +255,28 @@ fn loop_binary_copies_single_context_file_to_clipboard() {
 }
 
 #[test]
+fn loop_binary_copies_intent_rule_to_clipboard() {
+    let dir = common::TempDir::new("loop-flow-intent-rule");
+    let home = common::TempDir::new("loop-flow-intent-rule-home");
+    let _clipboard_lock = ClipboardLock::acquire();
+    with_clipboard_restored(|| {
+        let mut child = common::ScriptedChild::spawn(dir.path(), Some(home.path()), &[]);
+        child.send_line("8");
+        // Read while the child still owns the X11 selection: the content
+        // written by the short-lived binary would be lost once it exits.
+        // 在子进程仍持有 X11 选择权时读取：短命二进制退出后内容可能丢失。
+        // The template markers are locale-independent, so the assertion
+        // holds under any default locale.
+        // 模板标记与 locale 无关，任何默认 locale 下断言都成立。
+        let clipboard = wait_for_clipboard_content("<intent-output-rule priority=\"highest\">");
+        assert!(clipboard.contains("</intent-output-rule>"));
+        child.send_line("0");
+        let output = child.wait_with_output();
+        assert!(output.status.success());
+    });
+}
+
+#[test]
 fn loop_binary_asks_selection_when_multiple_context_files_exist() {
     let dir = common::TempDir::new("loop-flow-ctx-multi");
     let home = common::TempDir::new("loop-flow-ctx-multi-home");

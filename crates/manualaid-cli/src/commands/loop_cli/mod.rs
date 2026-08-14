@@ -31,14 +31,21 @@ pub use config::render_config_menu;
 pub use preview::approval_preview;
 pub use utils::{
     cycle_format, cycle_lang, format_round_detail, format_round_header, format_round_summary,
-    parse_round_index, render_menu,
+    parse_round_index, push_test_input, render_menu,
+};
+// Handlers are re-exported for the integration tests in
+// tests/commands/handlers.rs; the no-provider wrappers stay private.
+// handlers 重导出供 tests/commands/handlers.rs 集成测试使用；
+// 不带 provider 的薄包装保持私有。
+pub use handlers::{
+    ask_copy, copy_intent_rule_with_provider, copy_round_result, copy_round_result_with_provider,
+    copy_system_prompt_with_provider, input_and_submit, paste_and_submit_with_provider,
+    print_session_summary, show_tool_history, submit_text, submit_text_with_provider,
+    truncate_preview_lines,
 };
 
 use config::config_menu;
-use handlers::{
-    copy_round_result, copy_system_prompt, input_and_submit, paste_and_submit,
-    print_session_summary, show_tool_history,
-};
+use handlers::{copy_intent_rule, copy_system_prompt, paste_and_submit};
 use inline::handle_inline_command;
 use utils::{
     apply_cli_lang, apply_format_mode, clear_screen, format_config_issue, read_line,
@@ -240,6 +247,7 @@ async fn loop_main_at(
             }
             "6" => print_session_summary(&config, &session),
             "7" => show_tool_history(&session),
+            "8" => copy_intent_rule(),
             "0" => should_exit = true,
             _ => crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid")),
         }

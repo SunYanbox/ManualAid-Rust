@@ -28,7 +28,7 @@ pub(super) fn copy_system_prompt(config: &Config, root: &Path, registry: &Format
     copy_system_prompt_with_provider(&RealClipboard, config, root, registry);
 }
 
-pub(super) fn copy_system_prompt_with_provider<P: ClipboardProvider>(
+pub fn copy_system_prompt_with_provider<P: ClipboardProvider>(
     provider: &P,
     config: &Config,
     root: &Path,
@@ -65,6 +65,21 @@ pub(super) fn copy_system_prompt_with_provider<P: ClipboardProvider>(
     print_muted_block(&block);
 }
 
+/// Copy the intent-output-rule text to the clipboard so the user can
+/// paste it into an external LLM chat to re-emphasise the rule mid-session.
+/// 将意图规则文本复制到剪贴板，方便用户在外部 LLM 聊天中途重新强调该规则。
+pub(super) fn copy_intent_rule() {
+    copy_intent_rule_with_provider(&RealClipboard);
+}
+
+pub fn copy_intent_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+    let text = i18n::t_str("prompt.system.intent-output-rule");
+    match provider.write(&text) {
+        Ok(()) => print_muted_block(&[i18n::t_str("cli.message.intent_rule_copied")]),
+        Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
+    }
+}
+
 /// Read the clipboard and submit its text as one round.
 /// 读取剪贴板并把其文本作为一轮提交。
 pub(super) async fn paste_and_submit(
@@ -85,7 +100,7 @@ pub(super) async fn paste_and_submit(
     .await;
 }
 
-pub(super) async fn paste_and_submit_with_provider<P: ClipboardProvider>(
+pub async fn paste_and_submit_with_provider<P: ClipboardProvider>(
     provider: &P,
     executor: &Executor,
     registry: &FormatRegistry,
@@ -126,7 +141,7 @@ const INPUT_END_MARKER: &str = "/end";
 /// marker lets an interactive session continue after the round.
 /// 从标准输入读取多行文本，直到单独的 `/end` 行（或 EOF）并作为一轮
 /// 提交。EOF 仍支持管道输入，标记行则让交互会话在一轮后可以继续。
-pub(super) async fn input_and_submit(
+pub async fn input_and_submit(
     executor: &Executor,
     registry: &FormatRegistry,
     session: &mut SessionLog,
@@ -158,7 +173,7 @@ pub(super) async fn input_and_submit(
 
 /// Parse and execute input, print the summary and copy results when asked.
 /// 解析并执行输入，打印摘要并按需复制结果。
-pub(super) async fn submit_text(
+pub async fn submit_text(
     executor: &Executor,
     registry: &FormatRegistry,
     session: &mut SessionLog,
@@ -178,7 +193,7 @@ pub(super) async fn submit_text(
     .await;
 }
 
-pub(super) async fn submit_text_with_provider<P: ClipboardProvider>(
+pub async fn submit_text_with_provider<P: ClipboardProvider>(
     provider: &P,
     executor: &Executor,
     registry: &FormatRegistry,
@@ -229,7 +244,7 @@ pub(super) async fn submit_text_with_provider<P: ClipboardProvider>(
 
 /// Ask whether to copy the round results to the clipboard.
 /// 询问是否将本轮结果复制到剪贴板。
-pub(super) fn ask_copy() -> bool {
+pub fn ask_copy() -> bool {
     crate::console::out_print!("{}", i18n::t_str("cli.message.ask_copy"));
     crate::console::flush();
     read_line().is_some_and(|line| line.trim().eq_ignore_ascii_case("y"))
@@ -237,11 +252,11 @@ pub(super) fn ask_copy() -> bool {
 
 /// Copy the `index`-th latest round (default: latest) to the clipboard.
 /// 把从最新算起的第 `index` 轮（默认最新）复制到剪贴板。
-pub(super) fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
+pub fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
     copy_round_result_with_provider(&RealClipboard, session, max_result_chars);
 }
 
-pub(super) fn copy_round_result_with_provider<P: ClipboardProvider>(
+pub fn copy_round_result_with_provider<P: ClipboardProvider>(
     provider: &P,
     session: &SessionLog,
     max_result_chars: usize,
@@ -334,7 +349,7 @@ fn indent_each_line(text: &str) -> String {
 /// Cap `text` at `max_lines` lines, appending a note about how many were
 /// omitted. Returns the text unchanged when it already fits.
 /// 把 `text` 截断到 `max_lines` 行并追加省略说明；未超出时原样返回。
-fn truncate_preview_lines(text: &str, max_lines: usize) -> String {
+pub fn truncate_preview_lines(text: &str, max_lines: usize) -> String {
     let lines: Vec<&str> = text.lines().collect();
     if lines.len() <= max_lines {
         return text.to_string();
@@ -352,7 +367,7 @@ fn truncate_preview_lines(text: &str, max_lines: usize) -> String {
 /// and token statistics, plus the session totals in the title line.
 /// 展示已记录轮次（最新在前），含每轮工具、耗时与 Token 统计，并在标题
 /// 行显示会话总计。
-pub(super) fn show_tool_history(session: &SessionLog) {
+pub fn show_tool_history(session: &SessionLog) {
     if session.is_empty() {
         crate::console::out_println!("{}", i18n::t_str("cli.history.empty"));
         return;
@@ -396,7 +411,7 @@ pub(super) fn show_tool_history(session: &SessionLog) {
 
 /// Print the session summary (round count, tool-call count, enabled tools).
 /// 打印会话摘要（批次数量、工具调用数量、已启用工具）。
-pub(super) fn print_session_summary(config: &Config, session: &SessionLog) {
+pub fn print_session_summary(config: &Config, session: &SessionLog) {
     let tools = config.enabled_tool_names().join(", ");
     let text = [
         crate::style::header(&i18n::t_str("cli.message.summary_title")),
@@ -412,486 +427,4 @@ pub(super) fn print_session_summary(config: &Config, session: &SessionLog) {
     ]
     .join("\n");
     let _ = crate::pager::print_paged(&text);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Arc;
-
-    use super::super::utils::push_test_input;
-    use manualaid_core::audit::{Auditor, SessionMode};
-    use manualaid_core::clipboard::MockClipboard;
-    use manualaid_ws::session::RoundStats;
-
-    fn executor(root: &Path) -> Executor {
-        Executor::new(
-            Auditor::new(root.to_path_buf()).with_mode(SessionMode::AcceptEdit),
-            Arc::new(None),
-        )
-    }
-
-    fn read_call(root: &Path) -> String {
-        let file = root.join("target.txt");
-        std::fs::write(&file, "hello").unwrap();
-        format!("<read><file_path>{}</file_path></read>", file.display())
-    }
-
-    async fn session_with_round(root: &Path) -> SessionLog {
-        let mut session = SessionLog::new();
-        add_round(root, &mut session, RoundStats::default()).await;
-        session
-    }
-
-    async fn add_round(root: &Path, session: &mut SessionLog, stats: RoundStats) {
-        let registry = FormatRegistry::new();
-        let calls = registry.parse(&read_call(root)).unwrap().calls;
-        let exec = executor(root);
-        let mut results = Vec::new();
-        for call in &calls {
-            results.push(exec.execute(call.clone()).await);
-        }
-        session.push(calls, results, stats);
-    }
-
-    #[test]
-    fn ask_copy_accepts_yes_ignores_rest() {
-        let _capture = crate::console::capture();
-        push_test_input(&["y"]);
-        assert!(ask_copy());
-        push_test_input(&["Y"]);
-        assert!(ask_copy());
-        push_test_input(&["n"]);
-        assert!(!ask_copy());
-        push_test_input(&[""]);
-        assert!(!ask_copy());
-    }
-
-    #[tokio::test]
-    // The lock must span the await so no concurrent test flips the
-    // process-wide locale while this test prints localized text.
-    // 锁须跨 await 持有，避免并发测试在本测试输出本地化文本时切换全局 locale。
-    #[allow(clippy::await_holding_lock)]
-    async fn print_session_summary_lists_stats() {
-        let _capture = crate::console::capture();
-        let _lock = crate::test_support::LOCALE_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        i18n::set_locale("en");
-        let root = crate::test_support::temp_dir("summary");
-        let session = session_with_round(&root).await;
-        print_session_summary(&Config::default(), &session);
-    }
-
-    #[test]
-    fn copy_round_result_without_rounds_prints_notice() {
-        let _capture = crate::console::capture();
-        let session = SessionLog::new();
-        copy_round_result(&session, 100);
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn copy_round_result_rejects_out_of_range_index() {
-        let _capture = crate::console::capture();
-        let _lock = crate::test_support::LOCALE_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        i18n::set_locale("en");
-        let root = crate::test_support::temp_dir("copy-index");
-        let session = session_with_round(&root).await;
-        push_test_input(&["9"]);
-        copy_round_result(&session, 100);
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn input_and_submit_eof_without_text_is_noop() {
-        let _capture = crate::console::capture();
-        let root = crate::test_support::temp_dir("input-eof");
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions::default();
-        push_test_input(&[]);
-        input_and_submit(
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 0);
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn input_and_submit_end_marker_without_text_is_noop() {
-        let _capture = crate::console::capture();
-        let root = crate::test_support::temp_dir("input-marker");
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions::default();
-        push_test_input(&["/end"]);
-        input_and_submit(
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 0);
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn input_and_submit_executes_typed_round() {
-        let _capture = crate::console::capture();
-        let root = crate::test_support::temp_dir("input-round");
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions {
-            auto_copy: false,
-            ..LoopOptions::default()
-        };
-        push_test_input(&[&read_call(&root), "/end", "n"]);
-        input_and_submit(
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 1);
-        assert_eq!(session.total_calls(), 1);
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn submit_text_parse_error_prints_message_and_keeps_session_empty() {
-        let _capture = crate::console::capture();
-        let root = crate::test_support::temp_dir("submit-parse");
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions::default();
-        submit_text(
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            "not a tool call",
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 0);
-    }
-
-    #[tokio::test]
-    async fn submit_text_with_auto_copy_asks_and_skips_copy_on_no() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        let root = crate::test_support::temp_dir("submit-autocopy");
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions::default();
-        push_test_input(&["n"]);
-        submit_text_with_provider(
-            &mock,
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            &read_call(&root),
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn submit_text_with_auto_copy_writes_to_clipboard() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        let root = crate::test_support::temp_dir("submit-autocopy-write");
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions {
-            auto_copy: true,
-            ..LoopOptions::default()
-        };
-        push_test_input(&["y"]);
-        submit_text_with_provider(
-            &mock,
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            &read_call(&root),
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 1);
-        let clipboard = mock.read().unwrap();
-        assert!(clipboard.contains("hello"));
-    }
-
-    #[tokio::test]
-    async fn submit_text_with_auto_copy_write_error_does_not_panic() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        mock.set_write_error("mock write failure");
-        let root = crate::test_support::temp_dir("submit-autocopy-err");
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions {
-            auto_copy: true,
-            ..LoopOptions::default()
-        };
-        submit_text_with_provider(
-            &mock,
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            &read_call(&root),
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn paste_and_submit_pastes_clipboard_text_as_a_round() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        let root = crate::test_support::temp_dir("paste-round");
-        mock.write(&read_call(&root)).unwrap();
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions::default();
-        push_test_input(&["n"]);
-        paste_and_submit_with_provider(
-            &mock,
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn paste_and_submit_with_empty_clipboard_is_noop() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        let root = crate::test_support::temp_dir("paste-empty");
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions::default();
-        paste_and_submit_with_provider(
-            &mock,
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 0);
-    }
-
-    #[tokio::test]
-    async fn paste_and_submit_with_read_error_is_noop() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        mock.set_read_error("mock read failure");
-        let root = crate::test_support::temp_dir("paste-err");
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions::default();
-        paste_and_submit_with_provider(
-            &mock,
-            &executor(&root),
-            &FormatRegistry::new(),
-            &mut session,
-            &mut options,
-            100,
-        )
-        .await;
-        assert_eq!(session.len(), 0);
-    }
-
-    #[test]
-    fn copy_system_prompt_writes_prompt_to_clipboard() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        let root = crate::test_support::temp_dir("copy-prompt");
-        copy_system_prompt_with_provider(&mock, &Config::default(), &root, &FormatRegistry::new());
-        let clipboard = mock.read().unwrap();
-        assert!(clipboard.contains("<read>"));
-    }
-
-    #[test]
-    fn copy_system_prompt_includes_selected_context_files() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        let root = crate::test_support::temp_dir("copy-prompt-context");
-        std::fs::write(root.join("AGENTS.md"), "# project rules").unwrap();
-        copy_system_prompt_with_provider(&mock, &Config::default(), &root, &FormatRegistry::new());
-        let clipboard = mock.read().unwrap();
-        let dynamic = clipboard
-            .split_once("<dynamic-context>")
-            .and_then(|(_, rest)| rest.split_once("</dynamic-context>"))
-            .map(|(inner, _)| inner)
-            .unwrap_or_default();
-        assert!(dynamic.contains("<context_files path=\"AGENTS.md\">"));
-        assert!(dynamic.contains("# project rules"));
-    }
-
-    #[test]
-    fn copy_system_prompt_with_write_error_does_not_panic() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        mock.set_write_error("mock write failure");
-        let root = crate::test_support::temp_dir("copy-prompt-err");
-        copy_system_prompt_with_provider(&mock, &Config::default(), &root, &FormatRegistry::new());
-        assert!(mock.read().unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn copy_round_result_copies_selected_round() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        let root = crate::test_support::temp_dir("copy-valid");
-        let session = session_with_round(&root).await;
-        push_test_input(&["1"]);
-        copy_round_result_with_provider(&mock, &session, 100);
-        let clipboard = mock.read().unwrap();
-        assert!(clipboard.contains("hello"));
-    }
-
-    #[tokio::test]
-    async fn copy_round_result_with_write_error_does_not_panic() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        mock.set_write_error("mock write failure");
-        let root = crate::test_support::temp_dir("copy-err");
-        let session = session_with_round(&root).await;
-        push_test_input(&["1"]);
-        copy_round_result_with_provider(&mock, &session, 100);
-        assert!(mock.read().unwrap().is_empty());
-    }
-
-    #[test]
-    fn truncate_preview_lines_keeps_short_text() {
-        let text = "a\nb\nc";
-        assert_eq!(truncate_preview_lines(text, 10), text);
-    }
-
-    #[test]
-    fn truncate_preview_lines_caps_long_text() {
-        let _locale_lock = crate::test_support::LOCALE_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        i18n::set_locale("en");
-        let text = (1..=15)
-            .map(|i| i.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-        let capped = truncate_preview_lines(&text, 10);
-        // 10 kept lines plus the omission note.
-        // 保留 10 行加上省略说明。
-        assert_eq!(capped.lines().count(), 11);
-        assert!(capped.contains("5 lines omitted"));
-    }
-
-    #[tokio::test]
-    async fn copy_preview_is_indented_and_collapsed() {
-        let _capture = crate::console::capture();
-        let mock = MockClipboard::new();
-        let root = crate::test_support::temp_dir("copy-preview-indent");
-        let session = session_with_round(&root).await;
-        let _style_lock = crate::test_support::STYLE_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let _locale_lock = crate::test_support::LOCALE_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        crate::style::set_enabled(false);
-        i18n::set_locale("en");
-        push_test_input(&["1"]);
-        copy_round_result_with_provider(&mock, &session, 100);
-        let output = _capture.text();
-        // Every preview line is indented by two spaces (the tool line
-        // template already carries its own two leading spaces), and the
-        // tool name is bracketed exactly once by the template.
-        // 预览每行缩进两个空格（工具行模板本身已带两个前导空格），工具名
-        // 只由模板加一次方括号。
-        assert!(output.contains("  Round 1 of 1"));
-        assert!(output.contains("    [read]"));
-        assert!(!output.contains("[[read]]"));
-        assert!(output.contains("success  exec"));
-        assert!(output.contains("  hello"));
-        crate::style::set_enabled(false);
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn submit_text_records_round_stats() {
-        let _capture = crate::console::capture();
-        let _lock = crate::test_support::LOCALE_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        i18n::set_locale("en");
-        let root = crate::test_support::temp_dir("submit-stats");
-        let registry = FormatRegistry::new();
-        let exec = executor(&root);
-        let mut session = SessionLog::new();
-        let mut options = LoopOptions {
-            auto_copy: false,
-            ..LoopOptions::default()
-        };
-        push_test_input(&["n"]);
-        submit_text(
-            &exec,
-            &registry,
-            &mut session,
-            &mut options,
-            &read_call(&root),
-            50000,
-        )
-        .await;
-        let stats = session.latest(1).expect("round recorded").stats;
-        assert!(stats.total_tokens > 0);
-    }
-
-    #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
-    async fn show_tool_history_lists_newest_first() {
-        let _capture = crate::console::capture();
-        let _style_lock = crate::test_support::STYLE_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let _locale_lock = crate::test_support::LOCALE_LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        crate::style::set_enabled(false);
-        i18n::set_locale("en");
-        let root = crate::test_support::temp_dir("history");
-        let mut session = SessionLog::new();
-        let stats = RoundStats {
-            total_tokens: 100,
-            parse_duration_ms: 10,
-            audit_duration_ms: 20,
-            total_execution_duration_ms: 30,
-        };
-        add_round(&root, &mut session, stats).await;
-        add_round(&root, &mut session, stats).await;
-        show_tool_history(&session);
-        let output = _capture.text();
-        let newest = output.find("Round 1 of 2").expect("newest header");
-        let oldest = output.find("Round 2 of 2").expect("oldest header");
-        assert!(newest < oldest);
-        assert!(output.contains("[read]"));
-        assert!(output.contains("success"));
-        // Title line shows the session totals: 2 rounds of 100 tokens and
-        // 60 ms each. 标题行显示会话总计：2 轮 × 100 tokens、60 ms。
-        assert!(output.contains("200 tokens"));
-        assert!(output.contains("120.000000 ms"));
-        crate::style::set_enabled(false);
-    }
 }
