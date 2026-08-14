@@ -3,6 +3,15 @@ resolver = "2"
 members = ["crates/i18n","crates/manualaid-core","crates/manualaid-cli","crates/manualaid-ws"]
 
 [workspace.dependencies]
+chrono = "0.4.45"
+i18n = { version = "0.1.2", path = "crates/i18n" }
+indexmap = "2.14.0"
 log = "0.4.33"
+manualaid-core = { version = "0.3.1", path = "crates/manualaid-core" }
+manualaid-ws = { version = "0.2.2", path = "crates/manualaid-ws" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 similar = "3.1.2"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time"] }
+toml = "1.1.4"
 toml_edit = "0.25.13"
