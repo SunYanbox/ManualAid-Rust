@@ -802,6 +802,9 @@ mod tests {
     #[tokio::test]
     async fn copy_preview_is_indented_and_collapsed() {
         let _capture = crate::console::capture();
+        let mock = MockClipboard::new();
+        let root = crate::test_support::temp_dir("copy-preview-indent");
+        let session = session_with_round(&root).await;
         let _style_lock = crate::test_support::STYLE_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -810,9 +813,6 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         crate::style::set_enabled(false);
         i18n::set_locale("en");
-        let mock = MockClipboard::new();
-        let root = crate::test_support::temp_dir("copy-preview-indent");
-        let session = session_with_round(&root).await;
         push_test_input(&["1"]);
         copy_round_result_with_provider(&mock, &session, 100);
         let output = _capture.text();
