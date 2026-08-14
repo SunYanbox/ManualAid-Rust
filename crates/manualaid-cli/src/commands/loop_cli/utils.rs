@@ -45,22 +45,34 @@ pub(super) fn format_config_issue(issue: &ConfigIssue) -> String {
 /// Read one line from stdin; EOF or an error yields `None`.
 /// 从标准输入读取一行；EOF 或出错返回 `None`。
 pub(super) fn read_line() -> Option<String> {
-    // While a test capture is active, interactive loops are driven by the
-    // scripted per-thread input queue; an empty queue acts as EOF so the
-    // real stdin is never read (and never blocks) in tests. Production
-    // never captures, so it always reaches the real stdin below.
-    // 测试捕获期间，交互循环由线程本地的脚本输入队列驱动；队列为空视为
-    // EOF，测试中绝不读取（也不会阻塞）真实 stdin。生产环境从不捕获，
-    // 因此总是走到下面的真实 stdin 分支。
-    if crate::console::is_capturing() {
-        return TEST_INPUT.with(|input| input.borrow_mut().pop_front());
+    #[cfg(test)]
+    {
+        // Unit tests drive interactive loops with a scripted per-thread
+        // input queue; an empty queue acts as EOF so the real stdin is
+        // never read (and never blocks) in tests.
+        // 单元测试用线程本地的脚本输入队列驱动交互循环；队列为空视为
+        // EOF，测试中绝不读取（也不会阻塞）真实 stdin。
+        TEST_INPUT.with(|input| input.borrow_mut().pop_front())
     }
-    use std::io::BufRead;
-    let mut line = String::new();
-    match std::io::stdin().lock().read_line(&mut line) {
-        Ok(0) => None,
-        Ok(_) => Some(line),
-        Err(_) => None,
+    #[cfg(not(test))]
+    {
+        // Integration-test binaries (which build the lib without
+        // `cfg(test)`) signal test mode through the console capture; the
+        // same scripted queue drives their loops. Production never
+        // captures, so it always reaches the real stdin below.
+        // 集成测试二进制（构建 lib 时不含 `cfg(test)`）通过 console
+        // capture 表示测试模式，同样用脚本队列驱动循环。生产环境从不
+        // 捕获，因此总是走到下面的真实 stdin 分支。
+        if crate::console::is_capturing() {
+            return TEST_INPUT.with(|input| input.borrow_mut().pop_front());
+        }
+        use std::io::BufRead;
+        let mut line = String::new();
+        match std::io::stdin().lock().read_line(&mut line) {
+            Ok(0) => None,
+            Ok(_) => Some(line),
+            Err(_) => None,
+        }
     }
 }
 
