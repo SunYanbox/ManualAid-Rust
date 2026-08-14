@@ -247,10 +247,12 @@ async fn edit_reports_invalid_params() {
     assert!(!result.success);
     assert!(result.output.contains("must be different"));
 
-    let params = params_for(&[("file_path", "/tmp/x.txt"), ("old_string", "a")]);
+    // new_string 为空时表示删除，是合法操作，不再报错。
+    // 但 old_string 为空仍然应当报错。
+    let params = params_for(&[("file_path", "/tmp/x.txt"), ("old_string", "")]);
     let result = ToolKind::Edit.run(&params).await;
     assert!(!result.success);
-    assert!(result.output.contains("new_string"));
+    assert!(result.output.contains("old_string"));
 }
 
 #[tokio::test]

@@ -14,7 +14,7 @@ use crate::async_fs::read_file;
 /// 读取一个文件参数集。
 pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
     let file_path = match get_string(params, "file_path") {
-        Some(path) => path,
+        Some(path) => path.trim().to_string(),
         None => return ToolResult::failure("read", "Missing required parameter `file_path`"),
     };
 
@@ -45,7 +45,9 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
 /// unreadable paths report the underlying I/O error.
 pub(crate) async fn pre_check(params: &IndexMap<String, Value>) -> Result<(), String> {
     let file_path = get_string(params, "file_path")
-        .ok_or_else(|| "Missing required parameter `file_path`".to_string())?;
+        .ok_or_else(|| "Missing required parameter `file_path`".to_string())?
+        .trim()
+        .to_string();
     if std::path::Path::new(&file_path).is_dir() {
         return Err("`file_path` is a directory; cannot read it as a file".to_string());
     }

@@ -12,7 +12,7 @@ use crate::async_fs::write_file;
 /// 写入一个文件参数集。
 pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
     let file_path = match get_string(params, "file_path") {
-        Some(path) => path,
+        Some(path) => path.trim().to_string(),
         None => return ToolResult::failure("write", "Missing required parameter `file_path`"),
     };
     let content = match get_string(params, "content") {

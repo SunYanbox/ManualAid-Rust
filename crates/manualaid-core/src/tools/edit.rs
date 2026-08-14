@@ -49,8 +49,7 @@ pub(crate) async fn plan_edit(params: &IndexMap<String, Value>) -> Result<EditPl
     if old_string.is_empty() {
         return Err("`old_string` must not be empty".to_string());
     }
-    let new_string = get_string(params, "new_string")
-        .ok_or_else(|| "Missing required parameter `new_string`".to_string())?;
+    let new_string = get_string(params, "new_string").unwrap_or_default();
     let replace_all = get_bool(params, "replace_all").unwrap_or(false);
 
     if old_string == new_string {
@@ -63,7 +62,8 @@ pub(crate) async fn plan_edit(params: &IndexMap<String, Value>) -> Result<EditPl
         return Err(format!(
             "`old_string` not found in `{file_path}` — it may have already been applied \
              or the content has changed. Use the `read` tool to re-read `{file_path}` \
-             and re-issue the edit with the current content"
+             and re-issue the edit with the current content.\n\
+             String:\n{old_string}"
         ));
     }
 
@@ -104,6 +104,64 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
     }
 
     let replaced = if plan.replace_all { plan.count } else { 1 };
-    let message = format!("Replaced {replaced} occurrence(s) in `{}`", plan.file_path);
+
+    // 统计行数变化
+    let old_lines = plan.content.lines().count();
+    let new_lines = new_content.lines().count();
+    let line_diff = new_lines as i64 - old_lines as i64;
+    let line_info = if line_diff >= 0 {
+        format!("+{line_diff} lines")
+    } else {
+        format!("{line_diff} lines")
+    };
+
+    // replace_all 时生成文件级 diff 以反映所有替换位置；单次替换直接用参数级 diff
+    let diff = if plan.replace_all {
+        generate_diff(&plan.content, &new_content)
+    } else {
+        generate_diff(&plan.old_string, &plan.new_string)
+    };
+
+    let message = format!(
+        "Replaced {replaced} occurrence(s) in `{}` ({old_lines} -> {new_lines} lines, {line_info})\n```diff\n{diff}\n```",
+        plan.file_path
+    );
     ToolResult::success("edit", message, false)
+}
+
+/// 使用 `similar` crate 生成带上下文的 unified diff。
+/// 最多展示 200 行 diff 以避免 token 浪费。
+fn generate_diff(old: &str, new: &str) -> String {
+    use similar::TextDiff;
+
+    let diff = TextDiff::from_lines(old, new);
+    let mut output = String::new();
+
+    for op in diff.ops() {
+        for change in diff.iter_changes(op) {
+            let sign = match change.tag() {
+                similar::ChangeTag::Delete => '-',
+                similar::ChangeTag::Insert => '+',
+                similar::ChangeTag::Equal => ' ',
+            };
+            output.push(sign);
+            output.push(' ');
+            let value = change.value();
+            output.push_str(value);
+            if !value.ends_with('\n') {
+                output.push('\n');
+            }
+        }
+    }
+
+    let lines: Vec<&str> = output.lines().collect();
+    if lines.len() > 200 {
+        format!(
+            "{}\n... ({} more lines truncated)",
+            lines[..200].join("\n"),
+            lines.len() - 200
+        )
+    } else {
+        output.trim_end().to_string()
+    }
 }

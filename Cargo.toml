@@ -4,4 +4,5 @@ members = ["crates/i18n","crates/manualaid-core","crates/manualaid-cli","crates/
 
 [workspace.dependencies]
 log = "0.4.33"
+similar = "3.1.2"
 toml_edit = "0.25.13"
