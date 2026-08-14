@@ -9,10 +9,14 @@ use manualaid_ws::config::Config;
 use manualaid_ws::session::SessionLog;
 
 use super::config::persist_and_confirm;
-use super::handlers::{copy_round_index, copy_round_result, copy_system_prompt};
+use super::handlers::{
+    copy_round_index_with_provider, copy_round_result_with_provider,
+    copy_system_prompt_with_provider,
+};
 use super::utils::{
     apply_format_mode, cycle_format, cycle_lang, parse_round_index, print_muted_block, t_fmt,
 };
+use manualaid_core::clipboard::{ClipboardProvider, RealClipboard};
 
 /// Handle an inline `/command` typed at the menu prompt.
 /// 处理在菜单提示符输入的内置 `/命令`。
@@ -23,17 +27,28 @@ pub(super) fn handle_inline_command(
     session: &mut SessionLog,
     line: &str,
 ) {
+    handle_inline_command_with_provider(&RealClipboard, config, registry, root, session, line);
+}
+
+pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    config: &mut Config,
+    registry: &FormatRegistry,
+    root: &Path,
+    session: &mut SessionLog,
+    line: &str,
+) {
     let parts: Vec<&str> = line.split_whitespace().collect();
     match parts.as_slice() {
-        ["/ws"] => copy_system_prompt(config, root, registry),
+        ["/ws"] => copy_system_prompt_with_provider(provider, config, root, registry),
         ["/tools"] => {
             let list = manualaid_ws::prompt::render_tools_list(config, registry);
             let _ = crate::pager::print_paged(&list);
         }
-        ["/c"] => copy_round_result(session, config.max_result_chars),
+        ["/c"] => copy_round_result_with_provider(provider, session, config.max_result_chars),
         ["/c", index] => {
             if let Some(index) = parse_round_index(index, session.len()) {
-                copy_round_index(session, index, config.max_result_chars);
+                copy_round_index_with_provider(provider, session, index, config.max_result_chars);
             } else {
                 crate::console::out_println!(
                     "{}",
@@ -47,7 +62,7 @@ pub(super) fn handle_inline_command(
         ["/c", "t", tool_name] => {
             if let Some(tool) = ToolKind::from_name(tool_name) {
                 match registry.render_tool_call_template(&tool) {
-                    Ok(template) => match manualaid_core::clipboard::write_clipboard(&template) {
+                    Ok(template) => match provider.write(&template) {
                         Ok(()) => print_muted_block(&[i18n::t_str("cli.loop.copied")]),
                         Err(e) => {
                             eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]))
