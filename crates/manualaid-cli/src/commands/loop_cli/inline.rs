@@ -137,7 +137,10 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use manualaid_core::clipboard::MockClipboard;
+    use manualaid_core::tools::ToolResult;
     use manualaid_ws::config::Config;
+    use manualaid_ws::session::RoundStats;
 
     fn setup() -> (Config, FormatRegistry, std::path::PathBuf, SessionLog) {
         let root = crate::test_support::temp_dir("inline");
@@ -147,6 +150,92 @@ mod tests {
             root,
             SessionLog::new(),
         )
+    }
+
+    #[test]
+    fn inline_copy_tool_with_provider_writes_template() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup();
+        let mock = MockClipboard::new();
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            "/c t read",
+        );
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.contains("<read>"));
+    }
+
+    #[test]
+    fn inline_copy_tool_with_provider_write_error_leaves_clipboard_empty() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            "/c t read",
+        );
+        assert!(mock.read().unwrap().is_empty());
+    }
+
+    fn setup_with_rounds() -> (Config, FormatRegistry, std::path::PathBuf, SessionLog) {
+        let (config, registry, root, mut session) = setup();
+        session.push(
+            vec![],
+            vec![ToolResult::success("read", "file content here", true)],
+            RoundStats::default(),
+        );
+        (config, registry, root, session)
+    }
+
+    #[test]
+    fn inline_copy_index_with_provider_writes_round_result() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup_with_rounds();
+        let mock = MockClipboard::new();
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            "/c 1",
+        );
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.contains("file content here"));
+    }
+
+    #[test]
+    fn inline_copy_index_with_provider_write_error_leaves_clipboard_empty() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup_with_rounds();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            "/c 1",
+        );
+        assert!(mock.read().unwrap().is_empty());
     }
 
     #[test]
