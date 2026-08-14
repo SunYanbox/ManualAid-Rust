@@ -1,11 +1,106 @@
-//! System clipboard read / write via `arboard`.
-//! 通过 `arboard` 实现系统剪贴板的读取/写入。
+//! System clipboard abstraction with real and mock providers.
+//! 系统剪贴板抽象，提供真实实现与测试 Mock。
 //!
-//! 说明：当前阶段暂时放弃对剪贴板相关测试进行 Mock 与还原。
-//! 测试（包括 `self_check` 的剪贴板检查）写入的样例内容会直接保留在系统剪贴板上，
-//! 内容格式为 `ManualAid Test Clipboard at {yyyy-mm-dd hh:mm:ss}`，便于识别测试数据。
+//! # Description
+//! A [`ClipboardProvider`] trait decouples clipboard I/O from business
+//! logic so that tests can inject an in-memory [`MockClipboard`] instead
+//! of touching the real system clipboard.  The free functions
+//! [`read_clipboard`], [`write_clipboard`] and [`inspect_clipboard`]
+//! remain available as thin wrappers around [`RealClipboard`] for
+//! backward compatibility.
+//! # 描述
+//! [`ClipboardProvider`] trait 将剪贴板 I/O 与业务逻辑解耦，
+//! 使测试可以注入内存中的 [`MockClipboard`] 而非触碰真实系统剪贴板。
+//! [`read_clipboard`]、[`write_clipboard`] 和 [`inspect_clipboard`]
+//! 保留为 [`RealClipboard`] 的薄包装，保持向后兼容。
 
+use std::cell::RefCell;
 use std::sync::Mutex;
+
+/// Abstraction for clipboard read/write operations, enabling dependency
+/// injection for testability.
+/// 剪贴板读写操作的抽象，支持依赖注入以提升可测试性。
+pub trait ClipboardProvider {
+    /// Read text content from the clipboard; returns an empty string when
+    /// the clipboard holds no text.
+    /// 从剪贴板读取文本内容；剪贴板无文本时返回空字符串。
+    fn read(&self) -> Result<String, String>;
+    /// Write text content to the clipboard, replacing any previous content.
+    /// 向剪贴板写入文本内容，覆盖原有内容。
+    fn write(&self, text: &str) -> Result<(), String>;
+}
+
+/// Real clipboard implementation backed by `arboard`.
+/// 基于 `arboard` 的真实剪贴板实现。
+pub struct RealClipboard;
+
+impl ClipboardProvider for RealClipboard {
+    fn read(&self) -> Result<String, String> {
+        read_impl()
+    }
+    fn write(&self, text: &str) -> Result<(), String> {
+        write_impl(text)
+    }
+}
+
+/// In-memory clipboard for testing; stores a single `String` that can be
+/// read back after a write.  Optional errors can be injected via
+/// [`set_read_error`](MockClipboard::set_read_error) and
+/// [`set_write_error`](MockClipboard::set_write_error).
+/// 用于测试的内存剪贴板；存储单个 `String`，写入后可读回。
+/// 可通过 [`set_read_error`](MockClipboard::set_read_error) 和
+/// [`set_write_error`](MockClipboard::set_write_error) 注入错误。
+pub struct MockClipboard {
+    content: RefCell<String>,
+    read_error: RefCell<Option<String>>,
+    write_error: RefCell<Option<String>>,
+}
+
+impl MockClipboard {
+    /// Create an empty mock clipboard.
+    /// 创建一个空的 mock 剪贴板。
+    pub fn new() -> Self {
+        Self {
+            content: RefCell::new(String::new()),
+            read_error: RefCell::new(None),
+            write_error: RefCell::new(None),
+        }
+    }
+    /// Set an error to be returned by the next `read()` call; subsequent
+    /// calls behave normally unless the error is set again.
+    /// 设置下次 `read()` 返回的错误；后续调用恢复正常，除非重新设置错误。
+    pub fn set_read_error(&self, error: impl Into<String>) {
+        *self.read_error.borrow_mut() = Some(error.into());
+    }
+    /// Set an error to be returned by the next `write()` call; subsequent
+    /// calls behave normally unless the error is set again.
+    /// 设置下次 `write()` 返回的错误；后续调用恢复正常，除非重新设置错误。
+    pub fn set_write_error(&self, error: impl Into<String>) {
+        *self.write_error.borrow_mut() = Some(error.into());
+    }
+}
+
+impl Default for MockClipboard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ClipboardProvider for MockClipboard {
+    fn read(&self) -> Result<String, String> {
+        if let Some(err) = self.read_error.borrow_mut().take() {
+            return Err(err);
+        }
+        Ok(self.content.borrow().clone())
+    }
+    fn write(&self, text: &str) -> Result<(), String> {
+        if let Some(err) = self.write_error.borrow_mut().take() {
+            return Err(err);
+        }
+        *self.content.borrow_mut() = text.to_string();
+        Ok(())
+    }
+}
 
 /// The single persistent clipboard handle for the process lifetime.
 /// 进程存活期间唯一的剪贴板句柄。
@@ -39,28 +134,10 @@ fn keeper() -> Result<std::sync::MutexGuard<'static, Option<arboard::Clipboard>>
     Ok(guard)
 }
 
-/// Read the current text content from the system clipboard.
-/// 从系统剪贴板读取当前文本内容。
-///
-/// # Description
-/// Returns an empty string `""` when the clipboard contains no text
-/// (it is empty, or holds non-text data such as an image). Errors during
-/// the read (e.g. permission denied, clipboard busy) are returned as a
-/// human-readable message.
-/// # Test notes
-/// The system clipboard cannot be mocked or restored in tests, and
-/// reaching the no-text / error branches below would require leaving
-/// non-text data (such as images) on the clipboard. To avoid cluttering
-/// the user's clipboard, these branches are not required to have high
-/// test coverage.
-/// # 描述
-/// 当剪贴板中没有文本内容（为空，或包含图片等非文本数据）时，返回空字符串 `""`。
-/// 读取过程中发生的错误（如权限不足、剪贴板被占用）以人类可读的错误信息返回。
-/// # 测试说明
-/// 系统剪贴板无法在测试中被 Mock 或还原，而覆盖无文本 / 错误分支需要在剪贴板上
-/// 留下图片等非文本数据。为避免在用户剪贴板上产生多余的"垃圾"内容，
-/// 这些分支不要求高测试覆盖率。
-pub fn read_clipboard() -> Result<String, String> {
+/// Internal read implementation shared by [`RealClipboard`] and the
+/// backward-compatible free function [`read_clipboard`].
+/// [`RealClipboard`] 与向后兼容自由函数 [`read_clipboard`] 共享的内部读取实现。
+fn read_impl() -> Result<String, String> {
     let mut guard = keeper()?;
     let clipboard = guard.as_mut().expect("keeper must be initialized");
     match clipboard.get_text() {
@@ -68,6 +145,17 @@ pub fn read_clipboard() -> Result<String, String> {
         Err(arboard::Error::ContentNotAvailable) => Ok(String::new()),
         Err(e) => Err(format!("Read Clipboard Failed: {e}")),
     }
+}
+
+/// Internal write implementation shared by [`RealClipboard`] and the
+/// backward-compatible free function [`write_clipboard`].
+/// [`RealClipboard`] 与向后兼容自由函数 [`write_clipboard`] 共享的内部写入实现。
+fn write_impl(text: &str) -> Result<(), String> {
+    let mut guard = keeper()?;
+    let clipboard = guard.as_mut().expect("keeper must be initialized");
+    clipboard
+        .set_text(text)
+        .map_err(|e| format!("写入剪贴板失败：{e}"))
 }
 
 /// Describes what the system clipboard currently holds.
@@ -94,19 +182,18 @@ pub enum ClipboardContent {
 /// Errors during the inspection (e.g. permission denied, clipboard busy)
 /// are returned as a human-readable message.
 /// # Test notes
-/// The system clipboard cannot be mocked or restored in tests, and
-/// reaching the image / empty / error branches below would require
-/// leaving non-text data (such as images) on the clipboard. To avoid
-/// cluttering the user's clipboard, these branches are not required to
-/// have high test coverage.
+/// This function is not part of the [`ClipboardProvider`] trait because it
+/// has no callers outside this module.  Its image / empty / error branches
+/// require non-text data on the real clipboard and are not covered by
+/// unit tests.
 /// # 描述
 /// 与 [`read_clipboard`] 不同，本函数区分文本、图像和空内容，
 /// 便于调用方报告剪贴板上实际存在的内容。
 /// 检查过程中发生的错误（如权限不足、剪贴板被占用）以人类可读的错误信息返回。
 /// # 测试说明
-/// 系统剪贴板无法在测试中被 Mock 或还原，而覆盖图像 / 空内容 / 错误分支
-/// 需要在剪贴板上留下图片等非文本数据。为避免在用户剪贴板上产生多余的
-/// "垃圾"内容，这些分支不要求高测试覆盖率。
+/// 本函数不属于 [`ClipboardProvider`] trait，因为模块外无调用方。
+/// 其图像 / 空内容 / 错误分支需要在真实剪贴板上放置非文本数据，
+/// 不由单元测试覆盖。
 pub fn inspect_clipboard() -> Result<ClipboardContent, String> {
     let mut guard = keeper()?;
     let clipboard = guard.as_mut().expect("keeper must be initialized");
@@ -124,27 +211,34 @@ pub fn inspect_clipboard() -> Result<ClipboardContent, String> {
     }
 }
 
+/// Read the current text content from the system clipboard.
+/// 从系统剪贴板读取当前文本内容。
+///
+/// # Description
+/// This is a backward-compatible wrapper that delegates to
+/// [`RealClipboard::read`].  New code should accept a
+/// `&impl ClipboardProvider` parameter instead of calling this function
+/// directly, so that tests can inject a [`MockClipboard`].
+/// # 描述
+/// 向后兼容包装，委托给 [`RealClipboard::read`]。
+/// 新代码应接受 `&impl ClipboardProvider` 参数而非直接调用本函数，
+/// 以便测试注入 [`MockClipboard`]。
+pub fn read_clipboard() -> Result<String, String> {
+    RealClipboard.read()
+}
+
 /// Write text into the system clipboard, replacing any previous content.
 /// 将文本写入系统剪贴板，覆盖原有内容。
 ///
 /// # Description
-/// An empty string is also accepted (clears the clipboard). Failures during
-/// the write are returned as a human-readable message.
-/// # Test notes
-/// The system clipboard cannot be mocked or restored in tests, so tests
-/// calling this function intentionally leave the written text on the
-/// clipboard. To avoid extra clipboard writes, this function is not
-/// required to have high test coverage.
+/// This is a backward-compatible wrapper that delegates to
+/// [`RealClipboard::write`].  New code should accept a
+/// `&impl ClipboardProvider` parameter instead of calling this function
+/// directly, so that tests can inject a [`MockClipboard`].
 /// # 描述
-/// 空字符串也可以写入（用于清空剪贴板）。写入失败时以人类可读的错误信息返回。
-/// 写入成功后句柄保留在进程内，Linux 上不会因句柄过早 Drop 而丢失内容。
-/// # 测试说明
-/// 系统剪贴板无法在测试中被 Mock 或还原，调用本函数的测试会有意把文本留在剪贴板上。
-/// 为避免产生多余的剪贴板写入，本函数不要求高测试覆盖率。
+/// 向后兼容包装，委托给 [`RealClipboard::write`]。
+/// 新代码应接受 `&impl ClipboardProvider` 参数而非直接调用本函数，
+/// 以便测试注入 [`MockClipboard`]。
 pub fn write_clipboard(text: impl AsRef<str>) -> Result<(), String> {
-    let mut guard = keeper()?;
-    let clipboard = guard.as_mut().expect("keeper must be initialized");
-    clipboard
-        .set_text(text.as_ref())
-        .map_err(|e| format!("写入剪贴板失败：{e}"))
+    RealClipboard.write(text.as_ref())
 }

@@ -9,10 +9,14 @@ use manualaid_ws::config::Config;
 use manualaid_ws::session::SessionLog;
 
 use super::config::persist_and_confirm;
-use super::handlers::{copy_intent_rule, copy_round_index, copy_round_result, copy_system_prompt};
+use super::handlers::{
+    copy_round_index_with_provider, copy_round_result_with_provider,
+    copy_system_prompt_with_provider,
+};
 use super::utils::{
     apply_format_mode, cycle_format, cycle_lang, parse_round_index, print_muted_block, t_fmt,
 };
+use manualaid_core::clipboard::{ClipboardProvider, RealClipboard};
 
 /// Handle an inline `/command` typed at the menu prompt.
 /// 处理在菜单提示符输入的内置 `/命令`。
@@ -23,18 +27,28 @@ pub(super) fn handle_inline_command(
     session: &mut SessionLog,
     line: &str,
 ) {
+    handle_inline_command_with_provider(&RealClipboard, config, registry, root, session, line);
+}
+
+pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    config: &mut Config,
+    registry: &FormatRegistry,
+    root: &Path,
+    session: &mut SessionLog,
+    line: &str,
+) {
     let parts: Vec<&str> = line.split_whitespace().collect();
     match parts.as_slice() {
-        ["/ws"] => copy_system_prompt(config, root, registry),
-        ["/intent"] => copy_intent_rule(),
+        ["/ws"] => copy_system_prompt_with_provider(provider, config, root, registry),
         ["/tools"] => {
             let list = manualaid_ws::prompt::render_tools_list(config, registry);
             let _ = crate::pager::print_paged(&list);
         }
-        ["/c"] => copy_round_result(session, config.max_result_chars),
+        ["/c"] => copy_round_result_with_provider(provider, session, config.max_result_chars),
         ["/c", index] => {
             if let Some(index) = parse_round_index(index, session.len()) {
-                copy_round_index(session, index, config.max_result_chars);
+                copy_round_index_with_provider(provider, session, index, config.max_result_chars);
             } else {
                 crate::console::out_println!(
                     "{}",
@@ -48,7 +62,7 @@ pub(super) fn handle_inline_command(
         ["/c", "t", tool_name] => {
             if let Some(tool) = ToolKind::from_name(tool_name) {
                 match registry.render_tool_call_template(&tool) {
-                    Ok(template) => match manualaid_core::clipboard::write_clipboard(&template) {
+                    Ok(template) => match provider.write(&template) {
                         Ok(()) => print_muted_block(&[i18n::t_str("cli.loop.copied")]),
                         Err(e) => {
                             eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]))
@@ -123,7 +137,10 @@ pub(super) fn handle_inline_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use manualaid_core::clipboard::MockClipboard;
+    use manualaid_core::tools::ToolResult;
     use manualaid_ws::config::Config;
+    use manualaid_ws::session::RoundStats;
 
     fn setup() -> (Config, FormatRegistry, std::path::PathBuf, SessionLog) {
         let root = crate::test_support::temp_dir("inline");
@@ -133,6 +150,92 @@ mod tests {
             root,
             SessionLog::new(),
         )
+    }
+
+    #[test]
+    fn inline_copy_tool_with_provider_writes_template() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup();
+        let mock = MockClipboard::new();
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            "/c t read",
+        );
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.contains("<read>"));
+    }
+
+    #[test]
+    fn inline_copy_tool_with_provider_write_error_leaves_clipboard_empty() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            "/c t read",
+        );
+        assert!(mock.read().unwrap().is_empty());
+    }
+
+    fn setup_with_rounds() -> (Config, FormatRegistry, std::path::PathBuf, SessionLog) {
+        let (config, registry, root, mut session) = setup();
+        session.push(
+            vec![],
+            vec![ToolResult::success("read", "file content here", true)],
+            RoundStats::default(),
+        );
+        (config, registry, root, session)
+    }
+
+    #[test]
+    fn inline_copy_index_with_provider_writes_round_result() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup_with_rounds();
+        let mock = MockClipboard::new();
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            "/c 1",
+        );
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.contains("file content here"));
+    }
+
+    #[test]
+    fn inline_copy_index_with_provider_write_error_leaves_clipboard_empty() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup_with_rounds();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            "/c 1",
+        );
+        assert!(mock.read().unwrap().is_empty());
     }
 
     #[test]
