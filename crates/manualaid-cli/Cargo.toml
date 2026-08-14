@@ -1,6 +1,6 @@
 [package]
 name = "manualaid-cli"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 
 [dependencies]
@@ -9,7 +9,7 @@ clap = { version = "4.6.5", features = ["derive"] }
 crossterm = "0.29.0"
 i18n = { version = "0.1.2", path = "../i18n" }
 indexmap = "2.14.0"
-manualaid-core = { version = "0.3.0", path = "../manualaid-core" }
+manualaid-core = { version = "0.3.1", path = "../manualaid-core" }
 manualaid-ws = { version = "0.2.1", path = "../manualaid-ws" }
 serde_json = "1.0.151"
 similar.workspace = true
