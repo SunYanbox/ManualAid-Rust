@@ -509,3 +509,184 @@ fn xml_tolerates_comments_between_tool_calls() {
     assert_eq!(outcome.calls.len(), 1);
     assert_eq!(outcome.calls[0].tool_name, "read");
 }
+
+#[test]
+fn xml_doc_example_stray_cdata_noise_before_tool() {
+    // 文档示例 1：散落的 `<![CDATA[` / `]]>` 噪声不应吞掉后续的 `<edit>`
+    // 调用，也不应导致"未识别到任何工具调用"。
+    let outcome = xml("<![CDATA[ <![CDATA[ <![CDATA[\n\
+         <![CDATA[...]]>\n\
+         <![CDATA[\n\
+         <edit>]]>\n\
+           <file_path>README.md</file_path>\n\
+           <old_string>abcdefg,hijklmn</old_string>\n\
+         </edit>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(outcome.calls[0].tool_name, "edit");
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some("README.md")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("abcdefg,hijklmn")
+    );
+}
+
+#[test]
+fn xml_doc_example_cdata_after_tool_start_is_ignored() {
+    // 文档示例 2：紧跟工具开始标签的 `<![CDATA[` 是噪声，不影响后续参数。
+    let outcome = xml("<edit><![CDATA[\n\
+           <file_path>README.md</file_path>\n\
+           <old_string>abcdefg,hijklmn</old_string>\n\
+         </edit>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some("README.md")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("abcdefg,hijklmn")
+    );
+}
+
+#[test]
+fn xml_doc_example_ragged_close_inside_param_value() {
+    // 文档示例 3：非包裹场景的 `]]>` 在参数内按原文字面保留。
+    let outcome = xml("<edit><![CDATA[\n\
+           <file_path>]]>README.md</file_path>\n\
+           <old_string>abcdefg,hijklmn</old_string>\n\
+         </edit>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some("]]>README.md")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("abcdefg,hijklmn")
+    );
+}
+
+#[test]
+fn xml_doc_example_cdata_mid_value_keeps_close_tag_working() {
+    // 文档示例 4：参数值中间的 `<![CDATA[` 按字面推进，`</参数>` 仍正常
+    // 闭合，闭合标签之后的 `]]>` 是噪声。
+    let outcome = xml("<edit>\n\
+           <file_path>README.md<![CDATA[</file_path>]]>\n\
+           <old_string>abcdefg,hijklmn</old_string>\n\
+         </edit>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some("README.md<![CDATA[")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("abcdefg,hijklmn")
+    );
+}
+
+#[test]
+fn xml_doc_example_cdata_wrapping_works() {
+    // 文档示例 5：参数开始标签紧贴 `<![CDATA[` 时正常包裹解析。
+    let outcome = xml("<edit>\n\
+           <file_path><![CDATA[README.md]]></file_path>\n\
+           <old_string>abcdefg,hijklmn</old_string>\n\
+         </edit>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some("README.md")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("abcdefg,hijklmn")
+    );
+}
+
+#[test]
+fn xml_doc_example_cdata_with_leading_space_is_literal() {
+    // 文档示例 6：参数开始标签与 `<![CDATA[` 之间有空格就不算包裹，CDATA
+    // 标记连同内容按字面保留。
+    let outcome = xml("<edit>\n\
+           <file_path> <![CDATA[README.md]]></file_path>\n\
+           <old_string>abcdefg,hijklmn</old_string>\n\
+         </edit>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some(" <![CDATA[README.md]]>")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("abcdefg,hijklmn")
+    );
+}
+
+#[test]
+fn xml_cdata_close_must_touch_closing_tag() {
+    // 严格紧跟：`]]>` 与闭合标签之间有空白就不结束 CDATA，内容原文累积
+    // 到 EOF，工具调用整体不识别。
+    let outcome = xml("<write><file_path>/f</file_path><content><![CDATA[x]]>\n</content></write>");
+    assert!(outcome.calls.is_empty());
+    let outcome = xml("<write><file_path>/f</file_path><content><![CDATA[x]]> </content></write>");
+    assert!(outcome.calls.is_empty());
+}
+
+#[test]
+fn xml_comments_inside_param_are_ignored() {
+    // 注释一律忽略（含参数内），不会进入参数值。
+    let outcome = xml("<edit><old_string>a<!--x-->b</old_string><new_string>c</new_string></edit>");
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("ab")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("new_string")
+            .and_then(|v| v.as_str()),
+        Some("c")
+    );
+}
