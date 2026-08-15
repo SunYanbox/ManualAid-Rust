@@ -34,7 +34,7 @@ pub async fn run_shell_debug(command: &str, time_out: Option<&str>) -> Result<()
 /// tests can script the answer without touching the real stdin.
 /// 同 [`run_shell_debug`]，但确认读取函数可注入，测试可脚本化答复而不触碰
 /// 真实 stdin。
-async fn run_shell_debug_with_confirm(
+pub async fn run_shell_debug_with_confirm(
     command: &str,
     time_out: Option<&str>,
     read_confirm: impl FnOnce() -> Option<String>,
@@ -136,39 +136,7 @@ fn resolve_timeout(time_out: Option<&str>) -> Result<i64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{LOCALE_LOCK, temp_dir};
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn aborts_before_executing_when_confirmation_is_no() {
-        let _lang = LOCALE_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let dir = temp_dir("shell-abort");
-        let marker = dir.join("marker.txt");
-        let command = if cfg!(windows) {
-            format!("type nul > {}", marker.display())
-        } else {
-            format!("touch {}", marker.display())
-        };
-        let err = run_shell_debug_with_confirm(&command, None, || Some("n".to_string()))
-            .await
-            .unwrap_err();
-        assert!(err.contains("Aborted."));
-        assert!(!marker.exists(), "command must not run after abort");
-    }
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn denied_blacklist_command_never_reaches_confirm_or_execution() {
-        let _lang = LOCALE_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let err = run_shell_debug_with_confirm("rm -rf /", None, || {
-            panic!("confirmation must not be requested for a denied command")
-        })
-        .await
-        .unwrap_err();
-        assert!(err.contains("denied"), "unexpected error: {err}");
-    }
+    use crate::test_support::LOCALE_LOCK;
 
     #[allow(clippy::await_holding_lock)]
     #[tokio::test]
@@ -194,32 +162,6 @@ mod tests {
         let result =
             run_shell_debug_with_confirm("echo err 1>&2", None, || Some("y".to_string())).await;
         assert!(result.is_ok(), "unexpected error: {result:?}");
-    }
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn rejects_empty_command_before_audit() {
-        let _lang = LOCALE_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let err = run_shell_debug_with_confirm("   ", None, || {
-            panic!("confirmation must not be requested for an empty command")
-        })
-        .await
-        .unwrap_err();
-        assert!(err.contains("must not be empty"));
-    }
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn rejects_invalid_timeout() {
-        let _lang = LOCALE_LOCK.lock().unwrap();
-        i18n::set_locale("en");
-        let err = run_shell_debug_with_confirm("echo hi", Some("abc"), || {
-            panic!("confirmation must not be requested for an invalid timeout")
-        })
-        .await
-        .unwrap_err();
-        assert!(err.contains("Invalid timeout"));
     }
 
     #[test]

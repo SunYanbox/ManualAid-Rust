@@ -11,7 +11,7 @@ use crate::t_fmt;
 mod mask;
 mod plan_edit;
 mod restore;
-mod shell;
+pub mod shell;
 mod skill;
 
 pub use mask::{run_mask, run_mask_with_home};

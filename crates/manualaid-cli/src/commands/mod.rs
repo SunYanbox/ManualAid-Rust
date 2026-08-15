@@ -10,7 +10,7 @@ use crate::cli::{Cli, Command};
 use crate::env::default_message;
 use crate::{format_default_output, format_error_output, style};
 
-mod debug;
+pub mod debug;
 mod dir;
 mod init;
 pub mod loop_cli;
