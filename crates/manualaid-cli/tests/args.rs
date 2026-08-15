@@ -5,7 +5,7 @@ use std::path::Path;
 
 use clap::Parser;
 
-use manualaid_cli::cli::{Cli, Command, ModeArg};
+use manualaid_cli::cli::{Cli, Command, DebugAction, ModeArg};
 
 fn parse(args: &[&str]) -> Cli {
     Cli::try_parse_from(args).expect("args should parse")
@@ -49,29 +49,79 @@ fn mode_arg_maps_to_session_mode() {
 }
 
 #[test]
+fn parses_debug_plan_edit() {
+    let cli = parse(&[
+        "manualaid-cli",
+        "debug",
+        "plan_edit",
+        "target.txt",
+        "needle",
+    ]);
+    assert!(matches!(
+        cli.command,
+        Some(Command::Debug {
+            action: DebugAction::PlanEdit { path, old_string }
+        }) if path == "target.txt" && old_string == "needle"
+    ));
+}
+
+#[test]
+fn parses_debug_shell() {
+    let cli = parse(&["manualaid-cli", "debug", "shell", "echo hi", "5000"]);
+    assert!(matches!(
+        cli.command,
+        Some(Command::Debug {
+            action: DebugAction::Shell { command, time_out }
+        }) if command == "echo hi" && time_out.as_deref() == Some("5000")
+    ));
+    let cli = parse(&["manualaid-cli", "debug", "shell", "echo hi"]);
+    assert!(matches!(
+        cli.command,
+        Some(Command::Debug {
+            action: DebugAction::Shell { time_out, .. }
+        }) if time_out.is_none()
+    ));
+}
+
+#[test]
 fn parses_mask_command() {
-    let cli = parse(&["manualaid-cli", "mask", "hello"]);
-    assert!(matches!(cli.command, Some(Command::Mask { input }) if input == "hello"));
+    let cli = parse(&["manualaid-cli", "debug", "mask", "hello"]);
+    assert!(matches!(
+        cli.command,
+        Some(Command::Debug {
+            action: DebugAction::Mask { input }
+        }) if input == "hello"
+    ));
 }
 
 #[test]
 fn parses_restore_command() {
-    let cli = parse(&["manualaid-cli", "restore", "text", "--snapshot", "s.json"]);
+    let cli = parse(&[
+        "manualaid-cli",
+        "debug",
+        "restore",
+        "text",
+        "--snapshot",
+        "s.json",
+    ]);
     assert!(matches!(
         cli.command,
-        Some(Command::Restore { input, snapshot })
-            if input == "text" && snapshot == Path::new("s.json")
+        Some(Command::Debug {
+            action: DebugAction::Restore { input, snapshot }
+        }) if input == "text" && snapshot == Path::new("s.json")
     ));
 }
 
 #[test]
 fn parses_skill_flags() {
-    let cli = parse(&["manualaid-cli", "skill", "--global", "--project"]);
+    let cli = parse(&["manualaid-cli", "debug", "skill", "--global", "--project"]);
     assert!(matches!(
         cli.command,
-        Some(Command::Skill {
-            global: true,
-            project: true
+        Some(Command::Debug {
+            action: DebugAction::Skill {
+                global: true,
+                project: true
+            }
         })
     ));
 }

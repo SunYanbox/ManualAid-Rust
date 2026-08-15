@@ -64,7 +64,7 @@ fn mask_prints_masked_text_and_snapshot_json() {
         eprintln!("skipping: home directory cannot be resolved in this environment");
         return;
     }
-    let output = run(&["mask", "mail me at bob@example.com"]);
+    let output = run(&["debug", "mask", "mail me at bob@example.com"]);
     assert!(output.status.success());
     let text = stdout(&output);
     assert!(text.contains("[PRV_EMAIL_"));
@@ -81,7 +81,7 @@ fn mask_directory_input_fails_with_localized_error() {
         return;
     }
     let tmp = common::TempDir::new("mask-dir");
-    let output = run(&["mask", tmp.path().to_str().unwrap()]);
+    let output = run(&["debug", "mask", tmp.path().to_str().unwrap()]);
     assert!(!output.status.success());
     assert!(stderr(&output).contains("Masking failed"));
 }
@@ -95,6 +95,7 @@ fn restore_roundtrips_from_masked_file_and_snapshot_file() {
     fs::write(&snapshot_path, r#"{"[PRV_EMAIL_1]":"jane@example.com"}"#).unwrap();
 
     let output = run(&[
+        "debug",
         "restore",
         masked_path.to_str().unwrap(),
         "--snapshot",
@@ -112,6 +113,7 @@ fn restore_invalid_snapshot_fails_localized() {
     fs::write(&snapshot_path, "not json").unwrap();
 
     let output = run(&[
+        "debug",
         "restore",
         "[PRV_EMAIL_1]",
         "--snapshot",
@@ -121,6 +123,7 @@ fn restore_invalid_snapshot_fails_localized() {
     assert!(stderr(&output).contains("Failed to parse snapshot"));
 
     let output = run(&[
+        "debug",
         "restore",
         "[PRV_EMAIL_1]",
         "--snapshot",
@@ -157,22 +160,26 @@ fn skill_flags_filter_global_and_project_scopes() {
         "global description",
     );
 
-    let both = run_in(&project, &home, &["skill"]);
+    let both = run_in(&project, &home, &["debug", "skill"]);
     assert!(both.status.success());
     assert!(stdout(&both).contains("projskill"));
     assert!(stdout(&both).contains("globskill"));
 
-    let global_only = run_in(&project, &home, &["skill", "--global"]);
+    let global_only = run_in(&project, &home, &["debug", "skill", "--global"]);
     assert!(global_only.status.success());
     assert!(stdout(&global_only).contains("globskill"));
     assert!(!stdout(&global_only).contains("projskill"));
 
-    let project_only = run_in(&project, &home, &["skill", "--project"]);
+    let project_only = run_in(&project, &home, &["debug", "skill", "--project"]);
     assert!(project_only.status.success());
     assert!(stdout(&project_only).contains("projskill"));
     assert!(!stdout(&project_only).contains("globskill"));
 
-    let both_flags = run_in(&project, &home, &["skill", "--global", "--project"]);
+    let both_flags = run_in(
+        &project,
+        &home,
+        &["debug", "skill", "--global", "--project"],
+    );
     assert!(both_flags.status.success());
     assert!(stdout(&both_flags).contains("projskill"));
     assert!(stdout(&both_flags).contains("globskill"));
@@ -309,7 +316,7 @@ fn mask_output_includes_timings_with_char_count() {
         eprintln!("skipping: home directory cannot be resolved in this environment");
         return;
     }
-    let output = run(&["mask", "mail me at bob@example.com"]);
+    let output = run(&["debug", "mask", "mail me at bob@example.com"]);
     assert!(output.status.success());
     let text = stdout(&output);
     assert!(text.contains("Timings"));
@@ -322,7 +329,7 @@ fn skill_output_includes_timings() {
         eprintln!("skipping: home directory cannot be resolved in this environment");
         return;
     }
-    let output = run(&["skill"]);
+    let output = run(&["debug", "skill"]);
     assert!(output.status.success());
     let text = stdout(&output);
     assert!(text.contains("Timings"));

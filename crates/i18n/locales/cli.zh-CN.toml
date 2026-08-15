@@ -39,6 +39,7 @@ timing_restore = "还原：%{elapsed}（%{chars} 字符）"
 timing_init = "初始化：%{elapsed}"
 timing_dir_view = "目录查看：%{elapsed}"
 timing_dir_clean = "目录清理：%{elapsed}"
+timing_plan_edit = "计划编辑：%{elapsed}（%{chars} 字符）"
 
 [cli.dir]
 initialized = "- 已初始化 %{path}"
@@ -48,6 +49,20 @@ more_files = "… 另有 %{count} 个文件"
 more_dirs = "… 另有 %{count} 个目录"
 confirm = "删除 %{paths}？[y/N] "
 aborted = "已中止。"
+
+[cli.debug]
+arg_read = "读取参数文件 %{path} 失败：%{error}"
+plan_found = "在 %{path} 中找到 %{count} 处"
+plan_original = "搜索的原文本"
+plan_old_empty = "old_string 不能为空"
+shell_preview = "命令：%{command}\n超时：%{timeout} ms"
+shell_confirm = "确认执行该命令？[y/N] "
+shell_aborted = "已中止。"
+shell_denied = "命令被审计拒绝：%{reason}"
+shell_timeout_invalid = "无效超时：%{error}"
+shell_command_empty = "命令不能为空"
+shell_result = "exit_code: %{exit_code} | timed_out: %{timed_out} | 耗时：%{elapsed}"
+shell_failed = "命令执行失败"
 
 [cli.pager]
 more = "（按 q 退出，按其他键继续）"

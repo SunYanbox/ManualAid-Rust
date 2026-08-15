@@ -42,9 +42,11 @@ pub(super) fn format_config_issue(issue: &ConfigIssue) -> String {
     }
 }
 
-/// Read one line from stdin; EOF or an error yields `None`.
-/// 从标准输入读取一行；EOF 或出错返回 `None`。
-pub(super) fn read_line() -> Option<String> {
+/// Read one line from stdin; EOF or an error yields `None`. Also used by the
+/// `debug shell` confirmation prompt.
+/// 从标准输入读取一行；EOF 或出错返回 `None`。`debug shell` 的确认提示
+/// 也使用本函数。
+pub(crate) fn read_line() -> Option<String> {
     #[cfg(test)]
     {
         // Unit tests drive interactive loops with a scripted per-thread

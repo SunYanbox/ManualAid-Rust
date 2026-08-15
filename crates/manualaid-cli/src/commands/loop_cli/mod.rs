@@ -24,7 +24,7 @@ mod diff;
 mod handlers;
 mod inline;
 mod preview;
-mod utils;
+pub(crate) mod utils;
 
 pub use approval::execute_round_with_approval;
 pub use config::render_config_menu;
