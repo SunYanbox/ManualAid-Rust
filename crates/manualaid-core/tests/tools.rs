@@ -261,6 +261,86 @@ async fn edit_rejects_missing_old_string() {
 }
 
 #[tokio::test]
+async fn edit_missing_old_string_suggests_closest_match() {
+    let path = temp_file("edit-closest");
+    std::fs::write(&path, "line one\nline two\nline three\n").unwrap();
+    let params = params_for(&[
+        ("file_path", path.to_str().unwrap()),
+        ("old_string", "line one\nline twO"),
+        ("new_string", "x"),
+    ]);
+    let result = ToolKind::Edit.run(&params).await;
+    assert!(!result.success);
+    assert!(result.output.contains("not found"));
+    assert!(result.output.contains("Closest match"));
+    assert!(result.output.contains("line one\nline two"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn edit_missing_old_string_no_similar_suggestion() {
+    let path = temp_file("edit-no-closest");
+    std::fs::write(&path, "foo bar\nbaz\n").unwrap();
+    let params = params_for(&[
+        ("file_path", path.to_str().unwrap()),
+        ("old_string", "xyzzy"),
+        ("new_string", "x"),
+    ]);
+    let result = ToolKind::Edit.run(&params).await;
+    assert!(!result.success);
+    assert!(result.output.contains("not found"));
+    assert!(!result.output.contains("Closest match"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn edit_missing_old_string_crlf_only_diff() {
+    let path = temp_file("edit-crlf-file");
+    std::fs::write(&path, "a\r\nb\r\n").unwrap();
+    let params = params_for(&[
+        ("file_path", path.to_str().unwrap()),
+        ("old_string", "a\nb"),
+        ("new_string", "x"),
+    ]);
+    let result = ToolKind::Edit.run(&params).await;
+    assert!(!result.success);
+    assert!(result.output.contains("line endings differ"));
+    assert!(result.output.contains("CRLF"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn edit_missing_old_string_crlf_reverse_only_diff() {
+    let path = temp_file("edit-crlf-old");
+    std::fs::write(&path, "a\nb\n").unwrap();
+    let params = params_for(&[
+        ("file_path", path.to_str().unwrap()),
+        ("old_string", "a\r\nb"),
+        ("new_string", "x"),
+    ]);
+    let result = ToolKind::Edit.run(&params).await;
+    assert!(!result.success);
+    assert!(result.output.contains("line endings differ"));
+    assert!(result.output.contains("`old_string` uses CRLF"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn edit_missing_old_string_mixed_line_endings() {
+    let path = temp_file("edit-mixed-eol");
+    std::fs::write(&path, "a\r\nb\nc").unwrap();
+    let params = params_for(&[
+        ("file_path", path.to_str().unwrap()),
+        ("old_string", "b\r\nc"),
+        ("new_string", "x"),
+    ]);
+    let result = ToolKind::Edit.run(&params).await;
+    assert!(!result.success);
+    assert!(result.output.contains("line endings differ"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
 async fn write_creates_parent_directories() {
     let dir = std::env::temp_dir().join(format!("manualaid-core-tools-dir-{}", std::process::id()));
     let path = dir.join("nested").join("file.txt");
