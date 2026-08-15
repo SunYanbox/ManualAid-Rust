@@ -1,9 +1,16 @@
 use manualaid_cli::commands::debug::shell::run_shell_debug_with_confirm;
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 fn temp_dir(prefix: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("{}-{}", prefix, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let dir = std::env::temp_dir().join(format!(
+        "{}-{}",
+        prefix,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     fs::create_dir_all(&dir).unwrap();
     dir
 }
