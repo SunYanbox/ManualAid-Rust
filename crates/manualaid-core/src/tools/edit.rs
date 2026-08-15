@@ -52,6 +52,9 @@ pub struct EditPlan {
 /// 提取并预验证一次 edit 调用，返回 [`EditPlan`]。
 /// 任何必然导致编辑失败的条件（`old_string` 缺失或重复、文件不可读等）
 /// 都以 `Err(message)` 返回。
+/// When `old_string` is not found, the error additionally points out a
+/// line-ending mismatch or suggests the closest highly similar string.
+/// 当未找到 `old_string` 时，错误消息还会提示换行符差异或建议最相似的字符串。
 ///
 /// # Description
 /// Public so external callers (the CLI debug tools) can validate against the
@@ -78,11 +81,10 @@ pub async fn plan_edit(params: &IndexMap<String, Value>) -> Result<EditPlan, Str
     let content = read_file(&file_path).await.map_err(|e| e.to_string())?;
 
     if !content.contains(&old_string) {
-        return Err(format!(
-            "`old_string` not found in `{file_path}` — it may have already been applied \
-             or the content has changed. Use the `read` tool to re-read `{file_path}` \
-             and re-issue the edit with the current content.\n\
-             String:\n{old_string}"
+        return Err(missing_old_string_message(
+            &file_path,
+            &old_string,
+            &content,
         ));
     }
 
@@ -106,6 +108,107 @@ pub async fn plan_edit(params: &IndexMap<String, Value>) -> Result<EditPlan, Str
 
 /// Execute one edit parameter set.
 /// 执行一组 edit 参数。
+/// Builds the not-found error message and appends diagnostic suggestions.
+/// 构造 `old_string` 未找到的错误消息并附加诊断建议。
+///
+/// # Description
+/// Keeps the original failure text intact and adds one of two diagnostics:
+/// an explicit line-ending mismatch note, or the closest highly similar
+/// string from the file.
+/// # 描述
+/// 保留原有失败文本，并补充两类诊断之一：明确的换行符差异提示，或文件中
+/// 高度相似的最接近字符串。
+fn missing_old_string_message(file_path: &str, old_string: &str, content: &str) -> String {
+    let base = format!(
+        "`old_string` not found in `{file_path}` — it may have already been applied \
+         or the content has changed. Use the `read` tool to re-read `{file_path}` \
+         and re-issue the edit with the current content.\n\
+         String:\n{old_string}"
+    );
+
+    if let Some(note) = line_ending_mismatch(content, old_string) {
+        return format!("{base}\n{note}");
+    }
+
+    if let Some(candidate) = closest_match(content, old_string) {
+        return format!("{base}\nClosest match in the file (similarity >= 90%):\n{candidate}");
+    }
+
+    base
+}
+
+/// Detects whether the only difference between `content` and `old` is line
+/// ending style, returning a note describing which side uses CRLF vs LF.
+/// 检测 `content` 与 `old` 是否仅换行风格不同，返回描述哪一侧使用
+/// CRLF/LF 的提示。
+///
+/// # Description
+/// Only used after the raw `contains` check failed, so a hit here means the
+/// normalized forms are equal.
+/// # 描述
+/// 仅在原始 `contains` 检查失败后调用，因此命中即表示规范化后完全一致。
+fn line_ending_mismatch(content: &str, old: &str) -> Option<String> {
+    let content_normalized = content.replace("\r\n", "\n");
+    let old_normalized = old.replace("\r\n", "\n");
+
+    if !content_normalized.contains(&old_normalized) {
+        return None;
+    }
+
+    let content_crlf = content.contains("\r\n");
+    let old_crlf = old.contains("\r\n");
+    let content_lf = content.contains('\n') && !content_crlf;
+    let old_lf = old.contains('\n') && !old_crlf;
+
+    if content_crlf && old_lf {
+        return Some(
+            "Note: line endings differ — file uses CRLF, `old_string` uses LF".to_string(),
+        );
+    }
+    if old_crlf && content_lf {
+        return Some(
+            "Note: line endings differ — `old_string` uses CRLF, file uses LF".to_string(),
+        );
+    }
+
+    // Fallback: line endings differ but neither side is clearly CRLF/LF-only.
+    // 回退：换行风格不同，但无法明确归类为仅 CRLF 或仅 LF。
+    Some("Note: line endings differ — try matching the file's line endings".to_string())
+}
+
+/// Finds the most similar line or multi-line window in `content` to `old`.
+/// 在 `content` 中查找与 `old` 最相似的单行或多行连续片段。
+///
+/// # Description
+/// Uses `similar::get_close_matches` on line windows. Windows include every
+/// contiguous run of the same line count as `old`, so multi-line
+/// `old_string`s are matched without quadratic cost. The returned candidate
+/// is at least 90% similar, or `None` if nothing qualifies.
+/// # 描述
+/// 基于行窗口调用 `similar::get_close_matches`。窗口覆盖所有与 `old` 行数
+/// 相同的连续片段，因此无需二次方开销即可匹配多行 `old_string`。仅当候选
+/// 项相似度不低于 90% 时返回，否则返回 `None`。
+fn closest_match(content: &str, old: &str) -> Option<String> {
+    // Normalize line endings so CRLF vs LF differences do not distort the
+    // character-level similarity ratio; the line-ending mismatch path has
+    // already handled pure line-ending differences.
+    // 规范化换行符，避免 CRLF/LF 差异干扰字符级相似度；纯换行差异已由
+    // 上面的专用分支处理。
+    let content = content.replace("\r\n", "\n");
+
+    let lines: Vec<&str> = content.lines().collect();
+    let want = old.lines().count().max(1);
+    let mut candidates: Vec<String> = lines.iter().map(|line| (*line).to_string()).collect();
+    for window in lines.windows(want) {
+        candidates.push(window.join("\n"));
+    }
+
+    let refs: Vec<&str> = candidates.iter().map(String::as_str).collect();
+    similar::get_close_matches(old, &refs, 1, 0.9)
+        .first()
+        .map(|matched| (*matched).to_string())
+}
+
 pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
     let plan = match plan_edit(params).await {
         Ok(plan) => plan,
