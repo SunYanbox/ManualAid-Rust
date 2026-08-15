@@ -7,7 +7,7 @@
 use indexmap::IndexMap;
 use serde_json::Value;
 
-use super::{ToolResult, get_i64, get_string};
+use super::{ToolResult, get_bool, get_i64, get_string};
 use crate::async_fs::read_file;
 
 /// Read one file parameter set.
@@ -33,9 +33,18 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
         return ToolResult::failure("read", "`limit` must be >= 0");
     }
 
-    let output = match slice_lines(&content, offset, limit) {
+    let sliced = match slice_lines(&content, offset, limit) {
         Ok(output) => output,
         Err(message) => return ToolResult::failure("read", message),
+    };
+
+    let show_line_numbers = get_bool(params, "show_line_numbers").unwrap_or(false);
+    let show_line_endings = get_bool(params, "show_line_endings").unwrap_or(false);
+
+    let output = if show_line_numbers || show_line_endings {
+        decorate(&sliced, offset, show_line_numbers, show_line_endings)
+    } else {
+        sliced
     };
     ToolResult::success("read", output, true)
 }
@@ -79,6 +88,58 @@ fn slice_lines(content: &str, offset: i64, limit: i64) -> Result<String, String>
     Ok(lines[start..end].join(""))
 }
 
+/// Decorate a sliced read output with right-aligned line numbers and
+/// `cat -E`-style line-ending markers. The number prefix uses a fixed-width
+/// right-aligned field followed by `| ` so the model can reliably judge line
+/// lengths regardless of tabs. The default read path returns the raw slice;
+/// this function is only invoked when at least one diagnostic switch is
+/// enabled.
+/// 用右对齐的行号与 `cat -E` 风格的行尾标记装饰已切片的读取输出。
+/// 行号前缀使用定宽右对齐字段并后接 `| `，使模型无需依赖制表符即可可靠判断行宽。
+/// 默认读取路径返回原始切片；仅当至少一个诊断开关启用时才调用本函数。
+fn decorate(sliced: &str, offset: i64, show_line_numbers: bool, show_line_endings: bool) -> String {
+    if sliced.is_empty() {
+        return sliced.to_string();
+    }
+
+    let mut output = String::new();
+    let start_line_no = if offset > 0 { offset } else { 1 };
+    let last_line_no = start_line_no + sliced.split_inclusive('\n').count() as i64 - 1;
+    let width = last_line_no.to_string().len();
+
+    for (line_no, segment) in (start_line_no..).zip(sliced.split_inclusive('\n')) {
+        let (content, ending) = match segment.strip_suffix('\n') {
+            Some(body) => {
+                if let Some(lf_body) = body.strip_suffix('\r') {
+                    (lf_body, Some("\r\n"))
+                } else {
+                    (body, Some("\n"))
+                }
+            }
+            None => (segment, None),
+        };
+
+        if show_line_numbers {
+            output.push_str(&format!("{:>width$}| ", line_no, width = width));
+        }
+        output.push_str(content);
+
+        if show_line_endings {
+            match ending {
+                Some("\r\n") => output.push_str("^M$"),
+                Some("\n") => output.push('$'),
+                Some(_) => {}
+                None => {}
+            }
+        }
+        if let Some(ending) = ending {
+            output.push_str(ending);
+        }
+    }
+
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,5 +167,53 @@ mod tests {
     #[test]
     fn offset_zero_with_limit_starts_at_beginning() {
         assert_eq!(slice_lines("a\nb\n", 0, 1).unwrap(), "a\n");
+    }
+
+    #[test]
+    fn decorate_no_flags_returns_original() {
+        assert_eq!(decorate("a\nb\n", 0, false, false), "a\nb\n");
+    }
+
+    #[test]
+    fn decorate_empty_slice_returns_empty() {
+        assert_eq!(decorate("", 0, true, true), "");
+    }
+
+    #[test]
+    fn decorate_line_numbers_from_one_without_offset() {
+        assert_eq!(decorate("a\nb\n", 0, true, false), "1| a\n2| b\n");
+    }
+
+    #[test]
+    fn decorate_line_numbers_start_at_offset() {
+        assert_eq!(decorate("a\nb\n", 5, true, false), "5| a\n6| b\n");
+    }
+
+    #[test]
+    fn decorate_line_numbers_right_aligns() {
+        assert_eq!(
+            decorate("a\nb\nc\n", 9, true, false),
+            " 9| a\n10| b\n11| c\n"
+        );
+    }
+
+    #[test]
+    fn decorate_line_endings_marks_lf_with_dollar() {
+        assert_eq!(decorate("a\nb\n", 0, false, true), "a$\nb$\n");
+    }
+
+    #[test]
+    fn decorate_line_endings_marks_crlf_with_caret_m_dollar() {
+        assert_eq!(decorate("a\r\nb\r\n", 0, false, true), "a^M$\r\nb^M$\r\n");
+    }
+
+    #[test]
+    fn decorate_line_endings_skips_missing_trailing_newline() {
+        assert_eq!(decorate("a\nb", 0, false, true), "a$\nb");
+    }
+
+    #[test]
+    fn decorate_combined_line_numbers_and_endings() {
+        assert_eq!(decorate("a\r\nb\n", 0, true, true), "1| a^M$\r\n2| b$\n");
     }
 }

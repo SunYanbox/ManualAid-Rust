@@ -224,6 +224,18 @@ impl ToolKind {
                 ),
                 ToolParam::new("offset", "integer", "tool.read.param.offset.desc", false),
                 ToolParam::new("limit", "integer", "tool.read.param.limit.desc", false),
+                ToolParam::new(
+                    "show_line_numbers",
+                    "boolean",
+                    "tool.read.param.show_line_numbers.desc",
+                    false,
+                ),
+                ToolParam::new(
+                    "show_line_endings",
+                    "boolean",
+                    "tool.read.param.show_line_endings.desc",
+                    false,
+                ),
             ],
             Self::Edit => vec![
                 ToolParam::with_semantic(

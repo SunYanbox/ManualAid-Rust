@@ -11,7 +11,7 @@ desc = "用主动语态清晰、简洁地描述该命令的作用"
 desc = "最大执行时间（毫秒，默认 120000，最大 600000）"
 
 [tool.read]
-desc = "从本地文件系统读取文件内容。file_path 必须是绝对路径。默认最多返回 2000 行。"
+desc = "从本地文件系统读取文件内容。file_path 必须是绝对路径。"
 
 [tool.read.param.file_path]
 desc = "要读取的文件的绝对路径"
@@ -20,7 +20,13 @@ desc = "要读取的文件的绝对路径"
 desc = "开始读取的行号（从 1 开始）。仅当文件太大无法一次读完时提供。"
 
 [tool.read.param.limit]
-desc = "要读取的最大行数。仅当文件太大无法一次读完时提供（默认上限 2000）。"
+desc = "要读取的最大行数。仅当文件太大无法一次读完时提供。"
+
+[tool.read.param.show_line_numbers]
+desc = "以 cat -n 格式显示绝对 1-based 行号（右对齐数字 + `| ` 标记）。仅供诊断，复制文本到 edit 参数时请勿带上行号前缀。"
+
+[tool.read.param.show_line_endings]
+desc = "以 cat -E 格式显示行尾：`$` 表示 LF，`^M$` 表示 CRLF。仅供诊断，复制文本到 edit 参数时请勿带上这些标记。"
 
 [tool.edit]
 desc = "在文件中执行精确字符串替换。old_string 必须与文件内容完全匹配，且除非 replace_all 为 true，否则必须唯一。"
@@ -29,7 +35,7 @@ desc = "在文件中执行精确字符串替换。old_string 必须与文件内�
 desc = "要修改的文件的绝对路径"
 
 [tool.edit.param.old_string]
-desc = "要查找的精确文本。必须与文件内容完全匹配（包括缩进）。replace_all 为 false 时必须在文件中唯一，否则编辑失败。匹配前请去掉 Read 输出的行号前缀（行号 + 制表符）。"
+desc = "要查找的精确文本。必须与文件内容完全匹配（包括缩进）。replace_all 为 false 时必须在文件中唯一，否则编辑失败。如果 Read 输出包含行号或行尾诊断标记，复制文本到此参数前请先去除这些标记。"
 
 [tool.edit.param.new_string]
 desc = "替换文本（必须与 old_string 不同）"
