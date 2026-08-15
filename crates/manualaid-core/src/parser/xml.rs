@@ -7,7 +7,8 @@
 //! XML 线格式解析器：`<tool><param>value</param></tool>`。只解析已定义的
 //! 工具与参数标签；其余标签被忽略或作为参数原文保留，模型只需转义工具
 //! 自身的标签（裸 `&` 也原样保留）。未闭合或不含任何已定义参数的工具
-//! 调用被忽略，扫描从其开始标签之后继续。
+//! 调用被忽略，扫描从其开始标签之后继续。CDATA 包裹扫描到文件末尾仍未
+//! 闭合时，参数标签视为未正确闭合并写入软警告。
 
 use indexmap::IndexMap;
 use serde_json::Value;
@@ -38,11 +39,20 @@ impl ToolCallFormatParser for XmlParser {
         loop {
             let Some(p) = next_angle(input, pos) else {
                 // EOF：未闭合的工具调用整体忽略，并从其开始标签之后重新
-                // 扫描，使后续内容（如其他工具调用）仍能正常解析。
+                // 扫描，使后续内容（如其他工具调用）仍能正常解析。CDATA
+                // 包裹扫描到 EOF 仍未闭合（`]]>` 后从未紧贴闭合标签）时，
+                // 参数标签视为未正确闭合，写入软警告而不是静默丢弃。
                 let Some(open) = tool.take() else {
                     break;
                 };
-                param = None;
+                if let Some(cap) = param.take()
+                    && cap.is_cdata_wrapped
+                {
+                    warnings.push(format!(
+                        "Unclosed parameter <{}> of tool <{}> discarded (missing </{}>)",
+                        cap.name, open.name, cap.name
+                    ));
+                }
                 pos = open.open_end;
                 continue;
             };
@@ -58,20 +68,24 @@ impl ToolCallFormatParser for XmlParser {
                 continue;
             }
             if input[p..].starts_with("<![CDATA[") {
-                // CDATA 只在参数捕获刚开始（值仍为空白，即紧贴参数开始标签）
-                // 时作为包裹处理；其他情况一律按普通文本处理，不拦截，交由
-                // 后续的未知标签逻辑原文保留。
-                let is_wrapping = tool.is_some()
-                    && param
-                        .as_ref()
-                        .is_some_and(|cap| cap.value.trim().is_empty());
+                // CDATA 只在参数捕获刚开启且值仍为空串时作为包裹处理：此时
+                // `<![CDATA[` 必然紧贴参数开始标签的 `>`（中间有任何字符都会
+                // 先被追加进值）。其他情况一律不特殊处理：参数内把前缀按字面
+                // 文本推进（后续 `</参数>` 仍能正常闭合），空闲/工具内跳过前缀
+                // 继续扫描，绝不落入下方的通用标签解析——否则 `scan_tag_end`
+                // 会一路扫到下一个 `>`，吞掉中间的标签。
+                let is_wrapping =
+                    tool.is_some() && param.as_ref().is_some_and(|cap| cap.value.is_empty());
                 if is_wrapping && let (Some(open), Some(cap)) = (&tool, &mut param) {
-                    // 清空前导空白（格式化缩进），只保留 CDATA 内部内容
-                    cap.value.clear();
                     cap.is_cdata_wrapped = true;
                     pos = append_cdata(input, p, &open.name, &cap.name, &mut cap.value);
                     continue;
                 }
+                if let Some(cap) = param.as_mut() {
+                    cap.value.push_str(&input[p..p + 9]);
+                }
+                pos = p + 9;
+                continue;
             }
 
             // 孤立 `<`（后无内容）在参数内按原文保留。
@@ -302,10 +316,10 @@ fn append_cdata(input: &str, p: usize, tool: &str, param: &str, value: &mut Stri
     }
 }
 
-/// `]]>`（位于 `end`）之后（跳过空白）是否紧跟参数或工具的闭合标签。
+/// `]]>`（位于 `end`）之后是否紧贴参数或工具的闭合标签（`]]>` 与 `</`
+/// 之间不允许任何字符，含空白）。
 fn cdata_close_follows(input: &str, end: usize, tool: &str, param: &str) -> bool {
-    let after = input[end + 3..].trim_start();
-    let Some(rest) = after.strip_prefix("</") else {
+    let Some(rest) = input[end + 3..].strip_prefix("</") else {
         return false;
     };
     let name = rest
@@ -634,9 +648,12 @@ mod tests {
 
     #[test]
     fn unterminated_cdata_at_eof_is_ignored() {
-        // CDATA 包裹到 EOF 仍未闭合：工具未闭合被整体忽略，不 panic。
+        // CDATA 包裹到 EOF 仍未闭合：工具未闭合被整体忽略，参数标签写入
+        // 软警告，不 panic。
         let outcome = parse("<read><file_path><![CDATA[x");
         assert!(outcome.calls.is_empty());
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(outcome.warnings[0].contains("<file_path>"));
     }
 
     #[test]
@@ -657,8 +674,9 @@ mod tests {
     }
 
     #[test]
-    fn cdata_after_leading_whitespace_still_wraps() {
-        // 参数开始标签后的换行/缩进不影响 CDATA 包裹识别。
+    fn cdata_after_leading_whitespace_is_literal() {
+        // 参数开始标签后有任何空白（换行/缩进）就不算紧贴，CDATA 标记及
+        // 其内容按字面保留为参数值（仅裁首尾换行符）。
         let outcome =
             parse("<write><file_path>/f</file_path><content>\n  <![CDATA[x]]>\n</content></write>");
         assert_eq!(
@@ -666,8 +684,74 @@ mod tests {
                 .params
                 .get("content")
                 .and_then(Value::as_str),
-            Some("x")
+            Some("  <![CDATA[x]]>")
         );
+    }
+
+    #[test]
+    fn cdata_close_must_touch_closing_tag() {
+        // 严格紧跟：`]]>` 与闭合标签之间有空白就不结束 CDATA，内容原文
+        // 累积到 EOF，参数标签视为未正确闭合：工具调用不识别，写入软
+        // 警告而不是静默丢弃。
+        let outcome =
+            parse("<write><file_path>/f</file_path><content><![CDATA[x]]>\n</content></write>");
+        assert!(outcome.calls.is_empty());
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(outcome.warnings[0].contains("<content>"));
+        let outcome =
+            parse("<write><file_path>/f</file_path><content><![CDATA[x]]> </content></write>");
+        assert!(outcome.calls.is_empty());
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(outcome.warnings[0].contains("<content>"));
+    }
+
+    #[test]
+    fn cdata_wrap_to_eof_warns_unclosed_param() {
+        // 文档示例 7：`]]>` 后跟空白再跟 `</file_path>` 不算紧贴闭合标签，
+        // CDATA 包裹失败并累积到 EOF，file_path 参数标签未正确闭合：调用
+        // 不识别，但写入软警告而非静默丢弃。
+        let outcome = parse(
+            "<edit>\n  <file_path><![CDATA[README.md]]> </file_path>\n  \
+             <old_string>abcdefg,hijklmn</old_string>\n</edit>",
+        );
+        assert!(outcome.calls.is_empty());
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(outcome.warnings[0].contains("<file_path>"));
+        assert!(outcome.warnings[0].contains("<edit>"));
+    }
+
+    #[test]
+    fn cdata_close_follows_is_strict() {
+        assert!(cdata_close_follows(
+            "<content><![CDATA[x]]></content>",
+            19,
+            "write",
+            "content"
+        ));
+        assert!(cdata_close_follows(
+            "<content>x]]></write>",
+            10,
+            "write",
+            "content"
+        ));
+        assert!(!cdata_close_follows(
+            "<content>x]]> </content>",
+            10,
+            "write",
+            "content"
+        ));
+        assert!(!cdata_close_follows(
+            "<content>x]]>\n</content>",
+            10,
+            "write",
+            "content"
+        ));
+        assert!(!cdata_close_follows(
+            "<content>x]]></bogus>",
+            10,
+            "write",
+            "content"
+        ));
     }
 
     #[test]
