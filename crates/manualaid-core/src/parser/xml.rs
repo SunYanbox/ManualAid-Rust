@@ -58,16 +58,18 @@ impl ToolCallFormatParser for XmlParser {
                 continue;
             }
             if input[p..].starts_with("<![CDATA[") {
-                // CDATA 只在参数捕获刚开始（值仍为空白，即紧贴参数开始
-                // 标签）时作为包裹处理；参数值中间出现的 `<![CDATA[` 按
-                // 普通文本原文保留。非参数状态（空闲/工具内）直接跳过。
-                let wraps_value = param.as_ref().is_none_or(|cap| cap.value.trim().is_empty());
-                if wraps_value {
-                    if let (Some(open), Some(cap)) = (&tool, &mut param) {
-                        pos = append_cdata(input, p, &open.name, &cap.name, &mut cap.value);
-                    } else {
-                        pos = skip_cdata(input, p);
-                    }
+                // CDATA 只在参数捕获刚开始（值仍为空白，即紧贴参数开始标签）
+                // 时作为包裹处理；其他情况一律按普通文本处理，不拦截，交由
+                // 后续的未知标签逻辑原文保留。
+                let is_wrapping = tool.is_some()
+                    && param
+                        .as_ref()
+                        .is_some_and(|cap| cap.value.trim().is_empty());
+                if is_wrapping && let (Some(open), Some(cap)) = (&tool, &mut param) {
+                    // 清空前导空白（格式化缩进），只保留 CDATA 内部内容
+                    cap.value.clear();
+                    cap.is_cdata_wrapped = true;
+                    pos = append_cdata(input, p, &open.name, &cap.name, &mut cap.value);
                     continue;
                 }
             }
@@ -113,6 +115,7 @@ impl ToolCallFormatParser for XmlParser {
                             param = Some(ParamCapture {
                                 name: name.to_string(),
                                 value: String::new(),
+                                is_cdata_wrapped: false,
                             });
                         }
                     } else if closing && name == open.name {
@@ -131,10 +134,18 @@ impl ToolCallFormatParser for XmlParser {
                     // 参数内：只有本参数的闭合标签结束捕获；本工具的闭合
                     // 标签抛弃参数（警告）并结束调用；其余一切按原文保留。
                     if closing && name == cap.name {
-                        let trimmed = std::mem::take(&mut cap.value).trim().to_string();
-                        if !trimmed.is_empty() || !open.params.contains_key(&cap.name) {
-                            open.params.insert(cap.name.clone(), Value::String(trimmed));
+                        let mut value = std::mem::take(&mut cap.value);
+                        if cap.is_cdata_wrapped {
+                            // CDATA 包裹：去掉尾随空白（通常是格式化换行）
+                            value = value.trim_end().to_string();
+                        } else {
+                            // 非 CDATA 包裹：只去掉首尾换行符，保留缩进
+                            value = value
+                                .trim_matches(|c: char| c == '\n' || c == '\r')
+                                .to_string();
                         }
+                        // 允许空字符串参数（如 new_string 为空表示删除）
+                        open.params.insert(cap.name.clone(), Value::String(value));
                         param = None;
                     } else if closing && name == open.name {
                         // 本工具已收集过参数（进入过参数捕获），调用保留，
@@ -199,6 +210,8 @@ struct OpenTool {
 struct ParamCapture {
     name: String,
     value: String,
+    /// 是否通过 CDATA 包裹捕获（影响空白处理策略）。
+    is_cdata_wrapped: bool,
 }
 
 /// 完成一个工具调用并入队。
@@ -300,14 +313,6 @@ fn cdata_close_follows(input: &str, end: usize, tool: &str, param: &str) -> bool
         .next()
         .unwrap_or("");
     name == param || name == tool
-}
-
-/// 自 `p`（指向 `<![CDATA[`）开始的 CDATA 结束后的位置（不解析内容）。
-fn skip_cdata(input: &str, p: usize) -> usize {
-    input[p + 9..]
-        .find("]]>")
-        .map(|rel| p + 9 + rel + 3)
-        .unwrap_or(input.len())
 }
 
 /// 解码一段文本中的实体引用：预定义实体与数字引用还原；裸 `&` 与未知

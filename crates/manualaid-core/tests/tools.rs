@@ -153,6 +153,73 @@ async fn edit_single_replace_uses_first_occurrence() {
     let _ = std::fs::remove_file(&path);
 }
 
+#[tokio::test]
+async fn edit_reports_negative_line_delta() {
+    let path = temp_file("edit-negative-delta");
+    std::fs::write(&path, "a\nb\nc\n").unwrap();
+    let params = params_for(&[
+        ("file_path", path.to_str().unwrap()),
+        ("old_string", "a\nb"),
+        ("new_string", "x"),
+    ]);
+    let result = ToolKind::Edit.run(&params).await;
+    assert!(result.success, "{}", result.output);
+    assert!(result.output.contains("(3 -> 2 lines, -1 lines)"));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "x\nc\n");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn edit_diff_shows_context_and_insertion() {
+    let path = temp_file("edit-context-diff");
+    std::fs::write(&path, "a\nb\nc\n").unwrap();
+    let params = params_for(&[
+        ("file_path", path.to_str().unwrap()),
+        ("old_string", "a\nb\nc"),
+        ("new_string", "a\nB\nc"),
+    ]);
+    let result = ToolKind::Edit.run(&params).await;
+    assert!(result.success, "{}", result.output);
+    // unified diff 中上下文行以空格开头、删除行以 - 开头、新增行以 + 开头
+    assert!(result.output.contains("```diff\n  a\n- b\n+ B\n  c\n```"));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "a\nB\nc\n");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn edit_diff_is_truncated_beyond_200_lines() {
+    let path = temp_file("edit-truncated-diff");
+    let old_lines: Vec<String> = (0..120).map(|i| format!("line {i}")).collect();
+    let new_lines: Vec<String> = (0..120).map(|i| format!("other {i}")).collect();
+    let old = old_lines.join("\n");
+    let new = new_lines.join("\n");
+    std::fs::write(&path, format!("{old}\n")).unwrap();
+    let params = params_for(&[
+        ("file_path", path.to_str().unwrap()),
+        ("old_string", &old),
+        ("new_string", &new),
+    ]);
+    let result = ToolKind::Edit.run(&params).await;
+    assert!(result.success, "{}", result.output);
+    // 120 行删除 + 120 行新增 = 240 行 diff，超过 200 行上限被截断
+    assert!(result.output.contains("(40 more lines truncated)"));
+    assert!(result.output.contains("+ other 79"));
+    assert!(!result.output.contains("+ other 119"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn edit_reports_missing_required_params() {
+    let result = ToolKind::Edit.run(&IndexMap::new()).await;
+    assert!(!result.success);
+    assert!(result.output.contains("file_path"));
+
+    let params = params_for(&[("file_path", "/tmp/x.txt")]);
+    let result = ToolKind::Edit.run(&params).await;
+    assert!(!result.success);
+    assert!(result.output.contains("old_string"));
+}
+
 #[cfg(windows)]
 #[tokio::test]
 async fn edit_reports_write_failure() {
@@ -247,10 +314,12 @@ async fn edit_reports_invalid_params() {
     assert!(!result.success);
     assert!(result.output.contains("must be different"));
 
-    let params = params_for(&[("file_path", "/tmp/x.txt"), ("old_string", "a")]);
+    // new_string 为空时表示删除，是合法操作，不再报错。
+    // 但 old_string 为空仍然应当报错。
+    let params = params_for(&[("file_path", "/tmp/x.txt"), ("old_string", "")]);
     let result = ToolKind::Edit.run(&params).await;
     assert!(!result.success);
-    assert!(result.output.contains("new_string"));
+    assert!(result.output.contains("old_string"));
 }
 
 #[tokio::test]

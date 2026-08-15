@@ -244,7 +244,7 @@ impl ToolKind {
                     "new_string",
                     "string",
                     "tool.edit.param.new_string.desc",
-                    true,
+                    false,
                     ParamSemantic::Content,
                 ),
                 ToolParam::new(

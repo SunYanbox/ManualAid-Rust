@@ -20,7 +20,7 @@ const MAX_TIMEOUT_MS: i64 = 600_000;
 /// 执行一组 shell 命令参数。
 pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
     let command = match get_string(params, "command") {
-        Some(command) => command,
+        Some(command) => command.trim().to_string(),
         None => return ToolResult::failure("shell", "Missing required parameter `command`"),
     };
 

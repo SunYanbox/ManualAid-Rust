@@ -1021,7 +1021,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "manualaid-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "clap",
@@ -1038,7 +1038,7 @@ dependencies = [
 
 [[package]]
 name = "manualaid-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "arboard",
  "chardetng",
@@ -1054,6 +1054,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "similar",
  "tokio",
  "toml 1.1.4+spec-1.1.0",
  "toml_edit 0.25.13+spec-1.1.0",
@@ -1062,7 +1063,7 @@ dependencies = [
 
 [[package]]
 name = "manualaid-ws"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "i18n",
  "manualaid-core",
