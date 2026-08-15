@@ -62,6 +62,7 @@ fn run_main_returns_failure_for_invalid_restore() {
     fs::write(&snapshot, "not json").unwrap();
     let cli = parse(&[
         "manualaid-cli",
+        "debug",
         "restore",
         "[PRV_EMAIL_1]",
         "--snapshot",
@@ -82,6 +83,7 @@ fn run_restore_command_dispatches() {
     let snapshot_arg = snapshot.to_str().unwrap().to_string();
     let cli = parse(&[
         "manualaid-cli",
+        "debug",
         "restore",
         &masked_arg,
         "--snapshot",
@@ -94,7 +96,7 @@ fn run_restore_command_dispatches() {
 fn run_mask_command_dispatches_with_explicit_home() {
     let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-mask-dispatch");
-    let cli = parse(&["manualaid-cli", "mask", "hello"]);
+    let cli = parse(&["manualaid-cli", "debug", "mask", "hello"]);
     assert!(run(cli, Some(dir.path())).is_ok());
 }
 
@@ -102,8 +104,44 @@ fn run_mask_command_dispatches_with_explicit_home() {
 fn run_skill_command_dispatches_with_explicit_home() {
     let _capture = manualaid_cli::console::capture();
     let dir = common::TempDir::new("run-skill-dispatch");
-    let cli = parse(&["manualaid-cli", "skill", "--global", "--project"]);
+    let cli = parse(&["manualaid-cli", "debug", "skill", "--global", "--project"]);
     assert!(run(cli, Some(dir.path())).is_ok());
+}
+
+#[test]
+fn run_debug_plan_edit_dispatches_and_reports() {
+    let _capture = manualaid_cli::console::capture();
+    let dir = common::TempDir::new("run-debug-plan-edit");
+    let file = dir.path().join("target.txt");
+    fs::write(&file, "needle needle").unwrap();
+    let cli = parse(&[
+        "manualaid-cli",
+        "debug",
+        "plan_edit",
+        file.to_str().unwrap(),
+        "needle",
+    ]);
+    assert!(run(cli, Some(dir.path())).is_ok());
+    assert!(_capture.text().contains("Found 2 occurrence(s)"));
+    assert!(_capture.text().contains("Plan edit:"));
+}
+
+#[test]
+fn run_debug_shell_dispatches_with_scripted_confirm() {
+    let _capture = manualaid_cli::console::capture();
+    // The capture routes the confirmation prompt to the scripted input queue.
+    manualaid_cli::commands::loop_cli::push_test_input(&["y"]);
+    let cli = parse(&["manualaid-cli", "debug", "shell", "echo hi"]);
+    assert!(run(cli, None).is_ok());
+    assert!(_capture.text().contains("hi"));
+}
+
+#[test]
+fn run_debug_shell_denied_command_fails() {
+    let _guard = LOCALE_LOCK.lock().unwrap();
+    i18n::set_locale("en");
+    let cli = parse(&["manualaid-cli", "debug", "shell", "rm -rf /"]);
+    assert_eq!(run_main(cli), 1);
 }
 
 #[test]

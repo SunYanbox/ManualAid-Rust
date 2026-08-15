@@ -39,6 +39,7 @@ timing_restore = "Restore: %{elapsed} (%{chars} chars)"
 timing_init = "Init: %{elapsed}"
 timing_dir_view = "Directory view: %{elapsed}"
 timing_dir_clean = "Directory clean: %{elapsed}"
+timing_plan_edit = "Plan edit: %{elapsed} (%{chars} chars)"
 
 [cli.dir]
 initialized = "- Initialized %{path}"
@@ -48,6 +49,20 @@ more_files = "… %{count} more files"
 more_dirs = "… %{count} more dirs"
 confirm = "Remove %{paths}? [y/N] "
 aborted = "Aborted."
+
+[cli.debug]
+arg_read = "Failed to read argument file %{path}: %{error}"
+plan_found = "Found %{count} occurrence(s) in %{path}"
+plan_original = "Searched text"
+plan_old_empty = "old_string must not be empty"
+shell_preview = "Command: %{command}\nTimeout: %{timeout} ms"
+shell_confirm = "Execute this command? [y/N] "
+shell_aborted = "Aborted."
+shell_denied = "Command denied by audit: %{reason}"
+shell_timeout_invalid = "Invalid timeout: %{error}"
+shell_command_empty = "Command must not be empty"
+shell_result = "exit_code: %{exit_code} | timed_out: %{timed_out} | elapsed: %{elapsed}"
+shell_failed = "Command failed"
 
 [cli.pager]
 more = "(press q to quit, any other key to continue)"

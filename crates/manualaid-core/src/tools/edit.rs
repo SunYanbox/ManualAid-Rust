@@ -1,8 +1,11 @@
 //! Edit tool execution: exact string replacement with pre-verification.
 //! The pre-verify logic in `plan_edit` is shared with the executor's
 //! pre-check so calls guaranteed to fail never reach the approval queue.
+//! `plan_edit` and [`EditPlan`] are also public so the CLI debug tools
+//! exercise the same validation path as real execution.
 //! Edit 工具执行：精确字符串替换并预验证。`plan_edit` 中的预验证逻辑与
-//! 执行器的预检共用，保证必然失败的调用不会进入批准队列。
+//! 执行器的预检共用，保证必然失败的调用不会进入批准队列。`plan_edit`
+//! 与 [`EditPlan`] 对外公开，使 CLI 调试工具走与真实执行相同的校验路径。
 
 use indexmap::IndexMap;
 use serde_json::Value;
@@ -14,7 +17,15 @@ use crate::async_fs::{read_file, write_file};
 /// `old_string` occurrences captured before any modification.
 /// 一次 edit 调用的已验证计划：修改前捕获的文件内容与 `old_string`
 /// 出现次数。
-pub(crate) struct EditPlan {
+///
+/// # Description
+/// Public because the `debug plan_edit` CLI command reports the pre-verify
+/// outcome without modifying the file; `content` is the original text the
+/// search ran against, which debug output needs.
+/// # 描述
+/// 对外公开，因为 `debug plan_edit` CLI 命令只报告预检结果而不修改文件；
+/// `content` 是搜索所针对的原文本，调试输出需要用到。
+pub struct EditPlan {
     /// Target file path.
     /// 目标文件路径。
     pub file_path: String,
@@ -41,7 +52,15 @@ pub(crate) struct EditPlan {
 /// 提取并预验证一次 edit 调用，返回 [`EditPlan`]。
 /// 任何必然导致编辑失败的条件（`old_string` 缺失或重复、文件不可读等）
 /// 都以 `Err(message)` 返回。
-pub(crate) async fn plan_edit(params: &IndexMap<String, Value>) -> Result<EditPlan, String> {
+///
+/// # Description
+/// Public so external callers (the CLI debug tools) can validate against the
+/// real execution path; it never writes to the file. The parameter map is
+/// the same wire format the tool executor consumes.
+/// # 描述
+/// 对外公开，使外部调用方（CLI 调试工具）能走真实执行路径做校验；本函数
+/// 不会写入文件。参数映射与工具执行器消费的线格式一致。
+pub async fn plan_edit(params: &IndexMap<String, Value>) -> Result<EditPlan, String> {
     let file_path = get_string(params, "file_path")
         .ok_or_else(|| "Missing required parameter `file_path`".to_string())?;
     let old_string = get_string(params, "old_string")
