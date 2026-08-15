@@ -103,3 +103,30 @@ HTML 注释（`<!-- ... -->`）一律忽略：任何状态下都跳过其内容�
 
 应当解析为：`edit{file_path=" <![CDATA[README.md]]>", old_string="abcdefg,hijklmn"}`
 
+```
+<edit>
+  <file_path><![CDATA[README.md]]> </file_path> // 这样不能解析，因为`]]>`不是紧跟合法参数标签
+  <old_string>abcdefg,hijklmn</old_string>
+</edit>
+```
+
+应当解析为：`edit工具的file_path参数标签未正确闭合`
+
+```
+<edit>
+  <file_path> <![CDATA[README.md]]> </file_path> // 这样不能解析，因为不是紧跟合法参数标签
+  <old_string>abcdefg,hijklmn</old_string>
+</edit>
+```
+
+应当解析为：`edit{file_path=" <![CDATA[README.md]]> ", old_string="abcdefg,hijklmn"}`
+
+
+```
+<edit><![CDATA[ // 这样也不该解析——忽略
+  <file_path>README.md</file_path>]]>  // 这样也不该解析——忽略
+  <old_string>abcdefg,hijklmn</old_string>
+]]></edit>  // 这样也不该解析——忽略
+```
+
+应当解析为：`edit{file_path="README.md", old_string="abcdefg,hijklmn"}`

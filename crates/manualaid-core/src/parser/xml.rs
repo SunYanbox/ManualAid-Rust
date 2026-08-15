@@ -7,7 +7,8 @@
 //! XML 线格式解析器：`<tool><param>value</param></tool>`。只解析已定义的
 //! 工具与参数标签；其余标签被忽略或作为参数原文保留，模型只需转义工具
 //! 自身的标签（裸 `&` 也原样保留）。未闭合或不含任何已定义参数的工具
-//! 调用被忽略，扫描从其开始标签之后继续。
+//! 调用被忽略，扫描从其开始标签之后继续。CDATA 包裹扫描到文件末尾仍未
+//! 闭合时，参数标签视为未正确闭合并写入软警告。
 
 use indexmap::IndexMap;
 use serde_json::Value;
@@ -38,11 +39,20 @@ impl ToolCallFormatParser for XmlParser {
         loop {
             let Some(p) = next_angle(input, pos) else {
                 // EOF：未闭合的工具调用整体忽略，并从其开始标签之后重新
-                // 扫描，使后续内容（如其他工具调用）仍能正常解析。
+                // 扫描，使后续内容（如其他工具调用）仍能正常解析。CDATA
+                // 包裹扫描到 EOF 仍未闭合（`]]>` 后从未紧贴闭合标签）时，
+                // 参数标签视为未正确闭合，写入软警告而不是静默丢弃。
                 let Some(open) = tool.take() else {
                     break;
                 };
-                param = None;
+                if let Some(cap) = param.take()
+                    && cap.is_cdata_wrapped
+                {
+                    warnings.push(format!(
+                        "Unclosed parameter <{}> of tool <{}> discarded (missing </{}>)",
+                        cap.name, open.name, cap.name
+                    ));
+                }
                 pos = open.open_end;
                 continue;
             };
@@ -638,9 +648,12 @@ mod tests {
 
     #[test]
     fn unterminated_cdata_at_eof_is_ignored() {
-        // CDATA 包裹到 EOF 仍未闭合：工具未闭合被整体忽略，不 panic。
+        // CDATA 包裹到 EOF 仍未闭合：工具未闭合被整体忽略，参数标签写入
+        // 软警告，不 panic。
         let outcome = parse("<read><file_path><![CDATA[x");
         assert!(outcome.calls.is_empty());
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(outcome.warnings[0].contains("<file_path>"));
     }
 
     #[test]
@@ -678,17 +691,33 @@ mod tests {
     #[test]
     fn cdata_close_must_touch_closing_tag() {
         // 严格紧跟：`]]>` 与闭合标签之间有空白就不结束 CDATA，内容原文
-        // 累积到 EOF，工具调用整体不识别。
-        assert!(
-            parse("<write><file_path>/f</file_path><content><![CDATA[x]]>\n</content></write>")
-                .calls
-                .is_empty()
+        // 累积到 EOF，参数标签视为未正确闭合：工具调用不识别，写入软
+        // 警告而不是静默丢弃。
+        let outcome =
+            parse("<write><file_path>/f</file_path><content><![CDATA[x]]>\n</content></write>");
+        assert!(outcome.calls.is_empty());
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(outcome.warnings[0].contains("<content>"));
+        let outcome =
+            parse("<write><file_path>/f</file_path><content><![CDATA[x]]> </content></write>");
+        assert!(outcome.calls.is_empty());
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(outcome.warnings[0].contains("<content>"));
+    }
+
+    #[test]
+    fn cdata_wrap_to_eof_warns_unclosed_param() {
+        // 文档示例 7：`]]>` 后跟空白再跟 `</file_path>` 不算紧贴闭合标签，
+        // CDATA 包裹失败并累积到 EOF，file_path 参数标签未正确闭合：调用
+        // 不识别，但写入软警告而非静默丢弃。
+        let outcome = parse(
+            "<edit>\n  <file_path><![CDATA[README.md]]> </file_path>\n  \
+             <old_string>abcdefg,hijklmn</old_string>\n</edit>",
         );
-        assert!(
-            parse("<write><file_path>/f</file_path><content><![CDATA[x]]> </content></write>")
-                .calls
-                .is_empty()
-        );
+        assert!(outcome.calls.is_empty());
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(outcome.warnings[0].contains("<file_path>"));
+        assert!(outcome.warnings[0].contains("<edit>"));
     }
 
     #[test]

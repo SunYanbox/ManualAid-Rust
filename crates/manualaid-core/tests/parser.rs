@@ -662,13 +662,83 @@ fn xml_doc_example_cdata_with_leading_space_is_literal() {
 }
 
 #[test]
+fn xml_doc_example_cdata_close_with_whitespace_warns() {
+    // 文档示例 7：`]]>` 未紧贴参数闭合标签时 CDATA 包裹失败并累积到
+    // EOF，file_path 参数标签未正确闭合，产生软警告而非静默丢弃调用。
+    let outcome = xml("<edit>\n\
+           <file_path><![CDATA[README.md]]> </file_path>\n\
+           <old_string>abcdefg,hijklmn</old_string>\n\
+         </edit>");
+    assert!(outcome.calls.is_empty());
+    assert_eq!(outcome.warnings.len(), 1);
+    assert!(outcome.warnings[0].contains("<file_path>"));
+    assert!(outcome.warnings[0].contains("<edit>"));
+}
+
+#[test]
+fn xml_doc_example_cdata_with_spaces_is_literal() {
+    // 文档示例 8：参数开始标签与 `<![CDATA[` 之间有空格，`]]>` 与闭合
+    // 标签之间也有空格：不构成包裹，CDATA 标记连同两侧空格按字面保留。
+    let outcome = xml("<edit>\n\
+           <file_path> <![CDATA[README.md]]> </file_path>\n\
+           <old_string>abcdefg,hijklmn</old_string>\n\
+         </edit>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some(" <![CDATA[README.md]]> ")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("abcdefg,hijklmn")
+    );
+    assert!(outcome.warnings.is_empty());
+}
+
+#[test]
+fn xml_doc_example_cdata_noise_around_tool() {
+    // 文档示例 9：工具开始标签后、参数之间及工具闭合标签前的散落 CDATA
+    // 标记都是噪声，不影响参数解析。
+    let outcome = xml("<edit><![CDATA[\n\
+           <file_path>README.md</file_path>]]>\n\
+           <old_string>abcdefg,hijklmn</old_string>\n\
+         ]]></edit>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some("README.md")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("abcdefg,hijklmn")
+    );
+    assert!(outcome.warnings.is_empty());
+}
+
+#[test]
 fn xml_cdata_close_must_touch_closing_tag() {
     // 严格紧跟：`]]>` 与闭合标签之间有空白就不结束 CDATA，内容原文累积
-    // 到 EOF，工具调用整体不识别。
+    // 到 EOF，参数标签视为未正确闭合：工具调用不识别，写入软警告。
     let outcome = xml("<write><file_path>/f</file_path><content><![CDATA[x]]>\n</content></write>");
     assert!(outcome.calls.is_empty());
+    assert_eq!(outcome.warnings.len(), 1);
+    assert!(outcome.warnings[0].contains("<content>"));
     let outcome = xml("<write><file_path>/f</file_path><content><![CDATA[x]]> </content></write>");
     assert!(outcome.calls.is_empty());
+    assert_eq!(outcome.warnings.len(), 1);
+    assert!(outcome.warnings[0].contains("<content>"));
 }
 
 #[test]
