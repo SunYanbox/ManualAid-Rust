@@ -125,11 +125,10 @@ fn decorate(sliced: &str, offset: i64, show_line_numbers: bool, show_line_ending
         output.push_str(content);
 
         if show_line_endings {
-            match ending {
-                Some("\r\n") => output.push_str("^M$"),
-                Some("\n") => output.push('$'),
-                Some(_) => {}
-                None => {}
+            if ending == Some("\r\n") {
+                output.push_str("^M$");
+            } else if ending == Some("\n") {
+                output.push('$');
             }
         }
         if let Some(ending) = ending {
