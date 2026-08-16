@@ -105,6 +105,23 @@ async fn read_supports_offset_and_limit() {
 }
 
 #[tokio::test]
+async fn read_decorates_with_diagnostic_flags() {
+    let path = temp_file("diagnostic-flags");
+    std::fs::write(&path, "a\nb").unwrap();
+    let mut params = IndexMap::new();
+    params.insert(
+        "file_path".to_string(),
+        Value::String(path.to_str().unwrap().to_string()),
+    );
+    params.insert("show_line_numbers".to_string(), Value::Bool(true));
+    params.insert("show_line_endings".to_string(), Value::Bool(true));
+    let result = ToolKind::Read.run(&params).await;
+    assert!(result.success, "{}", result.output);
+    assert_eq!(result.output, "1| a$\n2| b");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
 async fn read_missing_file_fails() {
     let params = params_for(&[("file_path", "Z:/definitely/missing.txt")]);
     let result = ToolKind::Read.run(&params).await;

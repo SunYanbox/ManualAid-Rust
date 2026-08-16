@@ -11,7 +11,7 @@ desc = "Clear, concise description of what the command does in active voice"
 desc = "Maximum execution time in milliseconds (default: 120000, max: 600000)"
 
 [tool.read]
-desc = "Read the content of a file from the local filesystem. file_path must be an absolute path. Returns up to 2000 lines by default."
+desc = "Read the content of a file from the local filesystem. file_path must be an absolute path."
 
 [tool.read.param.file_path]
 desc = "The absolute path to the file to read"
@@ -20,7 +20,13 @@ desc = "The absolute path to the file to read"
 desc = "The line number to start reading from. 1-based. Only provide if the file is too large to read at once."
 
 [tool.read.param.limit]
-desc = "The maximum number of lines to read. Only provide if the file is too large to read at once (default max is 2000)."
+desc = "The maximum number of lines to read. Only provide if the file is too large to read at once."
+
+[tool.read.param.show_line_numbers]
+desc = "Show absolute 1-based line numbers in cat -n format (right-aligned number + `| ` marker). Diagnostic only; do not copy the number prefix into edit parameters."
+
+[tool.read.param.show_line_endings]
+desc = "Show line endings in cat -E format: `$` for LF, `^M$` for CRLF. Diagnostic only; do not copy the markers into edit parameters."
 
 [tool.edit]
 desc = "Perform an exact string replacement in a file. old_string must match the file content exactly and be unique unless replace_all is true."
@@ -29,7 +35,7 @@ desc = "Perform an exact string replacement in a file. old_string must match the
 desc = "Absolute path to the file to modify"
 
 [tool.edit.param.old_string]
-desc = "The exact text to search for. Must match the file content exactly, including indentation. When replace_all is false, it must be unique in the file — the edit fails otherwise. Strip the Read line prefix (line number + tab) before matching."
+desc = "The exact text to search for. Must match the file content exactly, including indentation. When replace_all is false, it must be unique in the file — the edit fails otherwise. If the read output included line-number or line-ending diagnostics, strip those markers before copying the text here."
 
 [tool.edit.param.new_string]
 desc = "The replacement text (must be different from old_string)"
