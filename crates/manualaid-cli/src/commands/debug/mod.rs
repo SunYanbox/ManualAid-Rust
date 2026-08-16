@@ -13,12 +13,14 @@ mod plan_edit;
 mod restore;
 pub mod shell;
 mod skill;
+mod whitelist;
 
 pub use mask::{run_mask, run_mask_with_home};
 pub use plan_edit::run_plan_edit;
 pub use restore::run_restore;
 pub use shell::run_shell_debug;
 pub use skill::{run_skill, run_skill_with_home};
+pub use whitelist::run_whitelist;
 
 /// Dispatch a `debug` action to its handler; async handlers run on a fresh
 /// Tokio runtime so the caller stays synchronous.
@@ -33,6 +35,7 @@ pub fn run_debug(action: DebugAction, home: Option<&Path>) -> Result<(), String>
         DebugAction::Mask { input } => run_mask(&input, home),
         DebugAction::Restore { input, snapshot } => run_restore(&input, &snapshot),
         DebugAction::Skill { global, project } => run_skill(global, project, home),
+        DebugAction::Whitelist { project } => run_whitelist(home, project.as_deref()),
     }
 }
 
