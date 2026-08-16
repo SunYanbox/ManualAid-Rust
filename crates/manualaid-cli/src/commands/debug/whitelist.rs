@@ -107,15 +107,7 @@ pub fn run_whitelist(home: Option<&Path>, project: Option<&Path>) -> Result<(), 
         .map(|s| s.as_str())
         .filter(|cmd| is_dangerous_allow_command(cmd))
         .collect();
-    if conflicts.is_empty() {
-        lines.push(indent_muted(
-            t_fmt("cli.debug.whitelist_blacklist_clean", &[]).as_str(),
-        ));
-    } else {
-        for cmd in &conflicts {
-            lines.push(indent_error(&format_command_item(cmd)));
-        }
-    }
+    lines.extend(render_conflict_items(&conflicts));
     if !issues.is_empty() {
         lines.push(String::new());
         lines.push(header_line("cli.debug.whitelist_ignored", issues.len()));
@@ -238,6 +230,16 @@ fn indent_error(s: &str) -> String {
     style::error(s)
 }
 
+/// Render conflict items as styled error lines; returns an empty vec when
+/// there are no conflicts so the caller can always extend without a branch.
+/// 将冲突条目渲染为带样式的错误行；无冲突时返回空向量，调用方可无条件扩展。
+fn render_conflict_items(conflicts: &[&str]) -> Vec<String> {
+    conflicts
+        .iter()
+        .map(|cmd| indent_error(&format_command_item(cmd)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,9 +334,12 @@ mod tests {
         let lines = format_command_group("", &long_items);
         assert!(
             lines.len() > 1,
-            "expected multi-line output for long items, got {} line(s): {:?}",
-            lines.len(),
-            lines
+            "expected multi-line output, got {n} line(s)",
+            n = lines.len()
+        );
+        assert!(
+            lines[0].starts_with('"'),
+            "first line should contain a command"
         );
     }
 
@@ -501,5 +506,32 @@ mod tests {
         assert!(text.contains("Project whitelist"));
         assert!(text.contains(r#""git status""#));
         assert!(text.contains("ignored"));
+    }
+
+    #[test]
+    fn render_conflict_items_returns_empty_when_none() {
+        assert!(render_conflict_items(&[]).is_empty());
+    }
+
+    #[test]
+    fn render_conflict_items_applies_error_style() {
+        let _guard = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(true);
+        let items = render_conflict_items(&["rm *"]);
+        crate::style::set_enabled(false);
+        assert_eq!(items.len(), 1);
+        // The result wraps the command in quotes with bold+red ANSI styling.
+        // 结果用引号包裹命令，并应用加粗红色 ANSI 样式。
+        assert!(items[0].contains("rm *"), "actual: {:?}", items[0]);
+        assert!(items[0].contains("\x1b[1;31m"), "actual: {:?}", items[0]);
+        assert!(items[0].contains("\x1b[0m"), "actual: {:?}", items[0]);
+    }
+
+    #[test]
+    fn render_conflict_items_multiple_entries() {
+        let items = render_conflict_items(&["rm *", "mkfs.ext4 *"]);
+        assert_eq!(items.len(), 2);
+        assert!(items[0].contains("rm *"));
+        assert!(items[1].contains("mkfs.ext4 *"));
     }
 }
