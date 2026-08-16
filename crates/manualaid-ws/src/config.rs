@@ -434,6 +434,16 @@ fn read_config_file(path: &Path) -> CoreResult<ConfigFile> {
         .map_err(|e| CoreError::Config(format!("invalid config `{}`: {e}", path.display())))
 }
 
+/// Public variant of the internal config reader for use by CLI diagnostics.
+/// Returns `Ok(ConfigFile::default())` when the file is missing so callers
+/// never need to distinguish "not yet initialized" from "reads correctly".
+/// 供 CLI 诊断使用的配置文件读取公开变体。
+/// 文件缺失时返回 `Ok(ConfigFile::default())`，调用方无需区分"尚未初始化"
+/// 与"读取正常"。
+pub fn read_config_file_at(path: &Path) -> CoreResult<ConfigFile> {
+    read_config_file(path)
+}
+
 /// Read the project config file as an editable document, creating the
 /// `.ManualAid` directory when missing; a missing file yields an empty doc.
 /// 将项目配置文件读为可编辑文档；`.ManualAid` 目录缺失时创建，文件缺失

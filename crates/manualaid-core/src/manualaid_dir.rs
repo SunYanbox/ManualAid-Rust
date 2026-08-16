@@ -68,6 +68,7 @@ pub const DEFAULT_GLOBAL_CONFIG_CONTENT: &str = concat!(
     "\n",
     "# 免审核白名单：命中即无需用户交互直接执行（精确匹配或 `*` 通配符；\n",
     "# 含 `;`、`&`、`|` 连接符的命令不会命中白名单）。\n",
+    "# 注意：\"gh pr view*\"可以同时覆盖\"gh pr view\"和\"gh pr view *\"\n",
     "[permissions]\n",
     "# allow_commands = [\"gh pr view *\", \"cargo fmt -- --check\"]\n",
     "\n",

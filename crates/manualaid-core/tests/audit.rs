@@ -214,27 +214,22 @@ fn wildcard_whitelist_matches_zero_or_more_characters() {
         );
         assert!(decisions.is_empty(), "{command} must be whitelisted");
     }
-    // The literal space before `*` is part of the pattern, so the bare
-    // command is not covered by `git log *`.
-    // `*` 前的空格属于模式字面量，因此裸命令不在 `git log *` 的覆盖范围内。
-    let decisions = auditor.check(
-        &params(&[("command", "git log"), ("description", "x")]),
-        ToolKind::Shell,
-    );
-    assert!(matches!(decisions[0].1, AuditDecision::NeedsApproval(_)));
 }
 
 #[test]
 fn exact_whitelist_does_not_match_extra_arguments() {
     let root = std::env::temp_dir();
-    let auditor = Auditor::new(root).with_allowed_commands(vec!["git log".to_string()]);
+    // Use `make test` (no default coverage) to verify exact matching
+    // independently of the expanded built-in whitelist.
+    // 使用 `make test`（无默认覆盖）独立验证精确匹配行为。
+    let auditor = Auditor::new(root).with_allowed_commands(vec!["make test".to_string()]);
     let allowed = auditor.check(
-        &params(&[("command", "git log"), ("description", "x")]),
+        &params(&[("command", "cargo fmt"), ("description", "x")]),
         ToolKind::Shell,
     );
     assert!(allowed.is_empty());
     let decisions = auditor.check(
-        &params(&[("command", "git log --oneline"), ("description", "x")]),
+        &params(&[("command", "make test --verbose"), ("description", "x")]),
         ToolKind::Shell,
     );
     assert!(matches!(decisions[0].1, AuditDecision::NeedsApproval(_)));

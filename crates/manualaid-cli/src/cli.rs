@@ -181,4 +181,15 @@ pub enum DebugAction {
         #[arg(long)]
         project: bool,
     },
+    /// Show the audit command whitelist: defaults, project/global config,
+    /// merged effective list, and blacklist conflict detection.
+    /// 查看审计命令白名单：默认列表、项目/全局配置、合并后的生效列表，
+    /// 以及黑名单冲突检测。
+    #[command(name = "whitelist")]
+    Whitelist {
+        /// Project root to read config from (defaults to cwd)
+        /// 读取配置的项目录（默认当前工作目录）
+        #[arg(long)]
+        project: Option<std::path::PathBuf>,
+    },
 }

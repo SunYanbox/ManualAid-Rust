@@ -8,6 +8,17 @@ use std::sync::Mutex;
 /// 串行化依赖进程级 i18n locale 的测试。
 pub(crate) static LOCALE_LOCK: Mutex<()> = Mutex::new(());
 
+/// Acquire the locale lock, recovering from poison if a previous test
+/// panicked while holding it. Calling `unwrap()` directly would abort the
+/// entire test run on the first poisoning event.
+/// 获取 locale 锁，并在前一个测试 panic 导致锁中毒时进行恢复。直接调用
+/// `unwrap()` 会在首次中毒事件时中止整个测试运行。
+pub(crate) fn acquire_locale_lock() -> std::sync::MutexGuard<'static, ()> {
+    LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Serializes tests that reload the global skill store with a temp home.
 /// 串行化用临时主目录重载全局技能库的测试。
 pub(crate) static SKILL_LOCK: Mutex<()> = Mutex::new(());

@@ -13,12 +13,14 @@ mod plan_edit;
 mod restore;
 pub mod shell;
 mod skill;
+mod whitelist;
 
 pub use mask::{run_mask, run_mask_with_home};
 pub use plan_edit::run_plan_edit;
 pub use restore::run_restore;
 pub use shell::run_shell_debug;
 pub use skill::{run_skill, run_skill_with_home};
+pub use whitelist::run_whitelist;
 
 /// Dispatch a `debug` action to its handler; async handlers run on a fresh
 /// Tokio runtime so the caller stays synchronous.
@@ -33,6 +35,7 @@ pub fn run_debug(action: DebugAction, home: Option<&Path>) -> Result<(), String>
         DebugAction::Mask { input } => run_mask(&input, home),
         DebugAction::Restore { input, snapshot } => run_restore(&input, &snapshot),
         DebugAction::Skill { global, project } => run_skill(global, project, home),
+        DebugAction::Whitelist { project } => run_whitelist(home, project.as_deref()),
     }
 }
 
@@ -97,5 +100,19 @@ mod tests {
         let missing = dir.join("missing.txt");
         let err = resolve_arg(&format!("@{}", missing.display())).unwrap_err();
         assert!(err.contains("Failed to read argument file"));
+    }
+
+    #[test]
+    fn run_debug_dispatches_whitelist() {
+        use crate::cli::DebugAction;
+        let _lang = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let dir = temp_dir("debug-whitelist-dispatch");
+        std::fs::create_dir_all(dir.join(".ManualAid")).unwrap();
+        let action = DebugAction::Whitelist {
+            project: Some(dir.clone()),
+        };
+        let result = run_debug(action, Some(&dir));
+        assert!(result.is_ok(), "unexpected error: {result:?}");
     }
 }

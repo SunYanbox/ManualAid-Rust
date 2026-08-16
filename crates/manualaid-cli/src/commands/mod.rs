@@ -17,7 +17,7 @@ pub mod loop_cli;
 
 pub use debug::{
     run_mask, run_mask_with_home, run_plan_edit, run_restore, run_shell_debug, run_skill,
-    run_skill_with_home,
+    run_skill_with_home, run_whitelist,
 };
 pub use dir::{
     run_dir_clean, run_dir_clean_with_home, run_dir_clean_with_stdin, run_dir_view,
