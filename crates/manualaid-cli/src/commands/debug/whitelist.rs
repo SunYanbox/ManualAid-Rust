@@ -306,6 +306,8 @@ mod tests {
 
     #[test]
     fn format_command_item_wraps_in_quotes() {
+        let _guard = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
         let item = format_command_item("git status");
         // Plain mode (no ANSI): plain text with literal quotes.
         assert_eq!(item, r#""git status""#);
