@@ -101,4 +101,18 @@ mod tests {
         let err = resolve_arg(&format!("@{}", missing.display())).unwrap_err();
         assert!(err.contains("Failed to read argument file"));
     }
+
+    #[test]
+    fn run_debug_dispatches_whitelist() {
+        use crate::cli::DebugAction;
+        let _lang = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let dir = temp_dir("debug-whitelist-dispatch");
+        std::fs::create_dir_all(dir.join(".ManualAid")).unwrap();
+        let action = DebugAction::Whitelist {
+            project: Some(dir.clone()),
+        };
+        let result = run_debug(action, Some(&dir));
+        assert!(result.is_ok(), "unexpected error: {result:?}");
+    }
 }

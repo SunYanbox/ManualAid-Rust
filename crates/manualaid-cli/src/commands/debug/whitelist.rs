@@ -336,6 +336,98 @@ mod tests {
         );
     }
 
+    #[test]
+    fn indent_error_applies_red_style() {
+        let _guard = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(true);
+        let result = indent_error("rm *");
+        crate::style::set_enabled(false);
+        // ANSI bold+red code: ESC[1;31m ... ESC[0m
+        assert!(result.contains("\x1b[1;31m"));
+        assert!(result.contains("rm *"));
+        assert!(result.contains("\x1b[0m"));
+    }
+
+    #[test]
+    fn indent_muted_applies_dim_style() {
+        let _guard = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(true);
+        let result = indent_muted("(none)");
+        crate::style::set_enabled(false);
+        // ANSI gray code: ESC[90m ... ESC[0m
+        assert!(result.contains("\x1b[90m"), "result was {:?}", result);
+        assert!(result.contains("(none)"));
+        assert!(result.contains("\x1b[0m"));
+    }
+
+    #[test]
+    fn format_command_item_uses_bold_style() {
+        let _guard = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(true);
+        let result = format_command_item("git status");
+        crate::style::set_enabled(false);
+        // ANSI bold code: ESC[1m ... ESC[0m, wrapped in literal quotes
+        assert!(result.contains(r#"""#));
+        assert!(result.contains("\x1b[1m"));
+        assert!(result.contains("git status"));
+        assert!(result.contains("\x1b[0m"));
+    }
+
+    #[tokio::test]
+    async fn run_whitelist_falls_back_to_home_dir() {
+        let _capture = crate::console::capture();
+        let _lang = acquire_locale_lock();
+        i18n::set_locale("en");
+        let dir = crate::test_support::temp_dir("whitelist-fallback-home");
+        std::fs::create_dir_all(dir.join(".ManualAid")).unwrap();
+        let result = run_whitelist(None, Some(&dir));
+        assert!(result.is_ok(), "unexpected error: {result:?}");
+        let text = _capture.text();
+        assert!(text.contains("Default whitelist"));
+        assert!(text.contains("Project whitelist"));
+    }
+
+    #[tokio::test]
+    async fn run_whitelist_falls_back_to_current_dir() {
+        let _capture = crate::console::capture();
+        let _lang = acquire_locale_lock();
+        i18n::set_locale("en");
+        let home = crate::test_support::temp_dir("whitelist-fallback-project");
+        std::fs::create_dir_all(home.join(".ManualAid")).unwrap();
+        let result = run_whitelist(Some(&home), None);
+        assert!(result.is_ok(), "unexpected error: {result:?}");
+        let text = _capture.text();
+        assert!(text.contains("Default whitelist"));
+        assert!(text.contains("Project whitelist"));
+    }
+
+    #[tokio::test]
+    async fn run_whitelist_shows_global_entries() {
+        let _capture = crate::console::capture();
+        let _lang = acquire_locale_lock();
+        i18n::set_locale("en");
+        let dir = crate::test_support::temp_dir("whitelist-global-only");
+        let home = crate::test_support::temp_dir("whitelist-global-only-home");
+        std::fs::create_dir_all(dir.join(".ManualAid")).unwrap();
+        std::fs::create_dir_all(home.join(".ManualAid")).unwrap();
+        // Only global config has entries; project is empty.
+        std::fs::write(
+            home.join(".ManualAid").join("config.toml"),
+            "[permissions]\nallow_commands = [\"grep -r *\", \"tail -f *\"]\n",
+        )
+        .unwrap();
+        let result = run_whitelist(Some(&home), Some(&dir));
+        assert!(result.is_ok(), "unexpected error: {result:?}");
+        let text = _capture.text();
+        // Project should show (none); global should show entries.
+        assert!(text.contains("Project whitelist"));
+        assert!(text.contains("(none)"));
+        assert!(
+            text.contains(r#""grep -r *""#),
+            "expected global command in output:\n{text}"
+        );
+    }
+
     #[tokio::test]
     async fn run_whitelist_prints_sections_without_config() {
         let _capture = crate::console::capture();
