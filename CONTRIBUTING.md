@@ -43,9 +43,11 @@ When adding a new crate or feature, use `cargo add xxx` **without specifying a v
 
 ## Commits and Pull Requests
 
-- Commit messages should follow the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/) (e.g., `feat:`, `fix:`, `docs:`).
-- PR descriptions should be objective, describing what changed and its impact, without inferring the intent behind the code.
+- Commit messages should follow the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/) (e.g., `feat:`, `fix:`, `docs:`). For detailed guidelines, see `doc/commit-conventions.md`.
+- PR descriptions should be objective, describing what changed and its impact, without inferring the intent behind the code. See `doc/issue-pr-guide.md` for templates.
 - In the PR, please ensure that all checks (formatting, lint, compilation, documentation, tests) have passed.
+
+> **Tip**: You can run `./scripts/ci.*` (choose the appropriate script for your platform) to run all CI checks (format, lint, compile, docs, tests, and coverage) in one command. This is the recommended way to validate your changes before submitting a PR.
 
 ## Comment Style
 
