@@ -43,9 +43,11 @@
 
 ## 提交与 Pull Request
 
-- 提交信息请遵循[约定式提交规范](https://www.conventionalcommits.org/en/v1.0.0/)（如 `feat:`, `fix:`, `docs:` 等）。
-- PR 描述应保持客观，说明变更内容与影响，无需推断代码意图。
+- 提交信息请遵循[约定式提交规范](https://www.conventionalcommits.org/en/v1.0.0/)（如 `feat:`, `fix:`, `docs:` 等）。详细指南见 `doc/commit-conventions.md`。
+- PR 描述应保持客观，说明变更内容与影响，无需推断代码意图。模板见 `doc/issue-pr-guide.md`。
 - 在 PR 中，请确保所有检查（格式、lint、编译、文档、测试）均已通过。
+
+> **提示**：您可以使用 `./scripts/ci.*`（根据平台选择合适脚本）一键运行所有 CI 检查（格式、lint、编译、文档、测试和覆盖率）。这是在提交 PR 前验证变更的推荐方式。
 
 ## 注释风格
 
