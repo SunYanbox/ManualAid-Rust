@@ -33,16 +33,46 @@ use crate::tools::{ParamSemantic, ToolKind};
 
 /// Whitelisted commands that are safe on every platform.
 /// 所有平台都安全的白名单命令。
-const COMMON_DEFAULT_COMMANDS: &[&str] = &["git status"];
+const COMMON_DEFAULT_COMMANDS: &[&str] = &[
+    // Folder
+    "ls *",
+    "cat *",
+    "grep *",
+    "dir",
+    "dir *",
+    // Github
+    "git log*",
+    "git branch",
+    "git branch -a",
+    "git fetch",
+    "git fetch -p",
+    "git status*",
+    "git diff*",
+    "gh pr view*",
+    "gh pr list*",
+    "gh issue view*",
+    "gh issue list*",
+    // Rust
+    "cargo check*",
+    "cargo test*",
+    "cargo fmt*",
+];
 
 /// Platform listing commands auto-approved only on Windows.
 /// 仅 Windows 自动放行的平台列表命令。
 #[cfg(windows)]
-const PLATFORM_DEFAULT_COMMANDS: &[&str] = &["dir"];
+const PLATFORM_DEFAULT_COMMANDS: &[&str] = &[
+    "where *",
+    "findstr *",
+    "date /t",
+    "time /t",
+    "tasklist",
+    "tree",
+];
 /// Platform listing commands auto-approved only on Unix/macOS.
 /// 仅 Unix/macOS 自动放行的平台列表命令。
 #[cfg(not(windows))]
-const PLATFORM_DEFAULT_COMMANDS: &[&str] = &["ls"];
+const PLATFORM_DEFAULT_COMMANDS: &[&str] = &["pwd", "ls"];
 
 /// The built-in default command whitelist: platform listing commands plus
 /// commands safe on every platform. User-config `[permissions]` entries are
