@@ -88,9 +88,6 @@ pub(super) fn config_menu(
                         &[("bytes", &crate::format_bytes(usage.metadata_bytes))],
                     ),
                 ];
-                // Accent (cyan) styling so the numbers stand out from the
-                // plain menu lines around them.
-                // 用青色强调样式，让数字在周边纯文本菜单行中更醒目。
                 for line in lines {
                     crate::console::out_println!("{}", crate::style::accent(&line));
                 }
