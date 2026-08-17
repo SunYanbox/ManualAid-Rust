@@ -1,8 +1,12 @@
 //! JSON code-block wire-format parser: Anthropic-style fenced
 //! ` ```json … ``` ` blocks with `tool_use` / `params` objects, plus a
-//! top-level array form and inline JSON detection.
+//! top-level array form and inline JSON detection. The prompt wraps every
+//! tool-call template in a ` ```func_calls ` fence, so that fence is also
+//! accepted as a JSON fence when the enclosed text looks like JSON.
 //! JSON 代码块线格式解析器：Anthropic 风格围栏 ` ```json … ``` ` 块
 //! （`tool_use` / `params` 对象），另支持顶层数组形式与内联 JSON 检测。
+//! 系统提示词会把所有工具调用模板包在 ` ```func_calls ` 围栏中，因此该
+//! 围栏在包裹内容形如 JSON 时也作为 JSON 围栏接受。
 
 use indexmap::IndexMap;
 use serde_json::Value;
@@ -54,10 +58,12 @@ impl ToolCallFormatParser for JsonCodeblockParser {
     }
 }
 
-/// Extract fenced JSON code blocks (` ```json … ``` `) from `input`.
+/// Extract fenced JSON code blocks (` ```json … ``` ` or the prompt's
+/// ` ```func_calls … ``` ` wrapper) from `input`.
 /// When no fence is found, inline JSON objects/arrays containing a
 /// `"tool_use"` field are detected.
-/// 从 `input` 中提取围栏 JSON 代码块（` ```json … ``` `）。
+/// 从 `input` 中提取围栏 JSON 代码块（` ```json … ``` ` 或系统提示词的
+/// ` ```func_calls … ``` ` 包裹块）。
 /// 未找到围栏时，检测包含 `"tool_use"` 字段的内联 JSON 对象/数组。
 fn extract_json_blocks(input: &str) -> Vec<(String, usize)> {
     let mut blocks = Vec::new();
@@ -94,13 +100,24 @@ fn extract_json_blocks(input: &str) -> Vec<(String, usize)> {
     blocks
 }
 
-/// Locate the next JSON fence: ` ```json\n `, ` ```json\r\n `, or a bare
-/// ` ```\n ` whose content starts with `{` or `[`. Returns the text after
-/// the fence plus the length of the fence prefix itself.
-/// 定位下一个 JSON 围栏：` ```json\n `、` ```json\r\n `，或内容以 `{` /
-/// `[` 开头的裸 ` ```\n `。返回围栏后的文本及该文本的绝对字符偏移。
+/// Locate the next JSON fence: a known ` ```json ` or ` ```func_calls `
+/// fence (CRLF or LF), or a bare ` ```\n ` whose content starts with `{`
+/// or `[`. The `func_calls` fence is trusted like `json` because the
+/// system prompt wraps tool-call templates in it; only the bare fence
+/// needs a content sniff. Returns the text after the fence plus the
+/// length of the fence prefix itself.
+/// 定位下一个 JSON 围栏：已知的 ` ```json ` 或 ` ```func_calls ` 围栏
+///（CRLF 或 LF），或内容以 `{` / `[` 开头的裸 ` ```\n `。`func_calls`
+/// 围栏与 `json` 一样直接信任，因为系统提示词用它包裹工具调用模板；
+/// 只有裸围栏需要嗅探内容。返回围栏后的文本及该文本的绝对字符偏移。
 fn find_fence(remaining: &str) -> Option<(&str, usize)> {
-    for (fence, content) in [("```json\n", true), ("```json\r\n", true), ("```\n", false)] {
+    for (fence, content) in [
+        ("```json\n", true),
+        ("```json\r\n", true),
+        ("```func_calls\n", true),
+        ("```func_calls\r\n", true),
+        ("```\n", false),
+    ] {
         if let Some(pos) = remaining.find(fence) {
             let after = &remaining[pos + fence.len()..];
             if !content && !looks_like_json(after) {
@@ -220,6 +237,38 @@ mod tests {
         let blocks = extract_json_blocks("prefix\r\n```json\r\n{\"key\": \"val\"}\r\n```\r\n");
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].0, "{\"key\": \"val\"}");
+    }
+
+    #[test]
+    fn extracts_func_calls_fence() {
+        let blocks = extract_json_blocks("prefix\n```func_calls\n{\"key\": \"val\"}\n```\nsuffix");
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].0, "{\"key\": \"val\"}");
+    }
+
+    #[test]
+    fn extracts_func_calls_crlf_fence() {
+        let blocks =
+            extract_json_blocks("prefix\r\n```func_calls\r\n{\"key\": \"val\"}\r\n```\r\n");
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].0, "{\"key\": \"val\"}");
+    }
+
+    #[test]
+    fn parses_tool_call_in_func_calls_fence() {
+        let calls = JsonCodeblockParser
+            .try_parse(
+                "```func_calls\n{\"tool_use\": \"read\", \"params\": {\"file_path\": \"/a.txt\"}}\n```",
+                &EnabledToolSet::all(),
+            )
+            .unwrap()
+            .calls;
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].tool_name, "read");
+        assert_eq!(
+            calls[0].params.get("file_path").and_then(Value::as_str),
+            Some("/a.txt")
+        );
     }
 
     #[test]

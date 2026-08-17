@@ -35,7 +35,7 @@ pub fn build_system_prompt(
     };
     let tools_list = render_tools_list(&effective, registry);
     let format_desc = format!(
-        "{}\n```\n{}\n```\n",
+        "{}\n```func_calls\n{}\n```\n{}\n",
         t_fmt(
             "cli.prompt.format_desc",
             &[("format", &config.tool_call_format)]
@@ -43,6 +43,7 @@ pub fn build_system_prompt(
         registry
             .render_tool_call_template(&ToolKind::Read)
             .unwrap_or_default(),
+        i18n::t_str("cli.prompt.func_calls_notes")
     );
 
     let mut out = String::new();
@@ -120,7 +121,7 @@ pub fn render_tools_list(config: &Config, registry: &FormatRegistry) -> String {
             out.push('\n');
         }
 
-        out.push_str("**Call template:**\n\n```\n");
+        out.push_str("**Call template:**\n\n```func_calls\n");
         if let Ok(template) = registry.render_tool_call_template(tool) {
             out.push_str(&template);
         }
