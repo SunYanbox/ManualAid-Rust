@@ -71,7 +71,7 @@ common-rules = """
 
 intent-output-rule = """
 <intent-output-rule priority="highest">
-At the beginning of every user-visible output (including tool calls), first output the `<intent>` tag and its contents, then output other content or initiate a tool call.
+At the beginning of every user-visible output (including tool calls), first output a code block of type `txt` containing the `<intent>` tag and its content, then output other content or initiate tool calls.
 
 Inside the `<intent>` tag, write in order:
 1. Status: current exploration/execution progress.
@@ -104,3 +104,4 @@ You are running on Windows:
 
 [cli.prompt]
 format_desc = "The current tool-calling format is `%{format}`. Tool calls must follow this format exactly:"
+func_calls_notes = "**Note: All tool calls must be placed in a code block of type `func_calls`.**"

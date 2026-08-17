@@ -71,7 +71,7 @@ common-rules = """
 
 intent-output-rule = """
 <intent-output-rule priority="highest">
-每次用户可见输出（含工具调用）的开头，先输出 `<intent>` 标签及其内容，再输出其他内容或发起工具调用。
+每次用户可见输出（含工具调用）的开头，先输出包含 `<intent>` 标签及其内容的代码块（类型`txt`），再输出其他内容或发起工具调用。
 
 <intent> 标签内按顺序写：
 1. 状态：当前探索/执行进展。
@@ -104,3 +104,4 @@ platform-notes = """
 
 [cli.prompt]
 format_desc = "当前工具调用格式为 `%{format}`。工具调用必须严格遵循此格式："
+func_calls_notes = "**注意：所有工具调用必须放在类型为func_calls的代码块中。**"
