@@ -241,17 +241,15 @@ mod tests {
 
     #[test]
     fn extracts_func_calls_fence() {
-        let blocks =
-            extract_json_blocks("prefix\n```func_calls\n{\"key\": \"val\"}\n```\nsuffix");
+        let blocks = extract_json_blocks("prefix\n```func_calls\n{\"key\": \"val\"}\n```\nsuffix");
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].0, "{\"key\": \"val\"}");
     }
 
     #[test]
     fn extracts_func_calls_crlf_fence() {
-        let blocks = extract_json_blocks(
-            "prefix\r\n```func_calls\r\n{\"key\": \"val\"}\r\n```\r\n",
-        );
+        let blocks =
+            extract_json_blocks("prefix\r\n```func_calls\r\n{\"key\": \"val\"}\r\n```\r\n");
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].0, "{\"key\": \"val\"}");
     }
