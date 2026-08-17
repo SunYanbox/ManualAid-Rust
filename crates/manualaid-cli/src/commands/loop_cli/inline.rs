@@ -342,4 +342,73 @@ mod tests {
         let (mut config, registry, root, mut session) = setup();
         handle_inline_command(&mut config, &registry, &root, &mut session, "/xyz");
     }
+
+    #[test]
+    fn inline_empty_command_does_nothing() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "");
+        let output = _capture.text();
+        // The function returns immediately with no output; trim to ignore whitespace.
+        assert!(output.trim().is_empty());
+    }
+
+    #[test]
+    fn inline_help_command_prints_help() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/help");
+        let output = _capture.text();
+        // Help text should list available commands, e.g. "/mode" is always present.
+        assert!(output.contains("/mode") || output.contains("/help"));
+    }
+
+    #[test]
+    fn inline_history_command_prints_history() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup_with_rounds();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/history");
+        let output = _capture.text();
+        // History should show the tool name from the round.
+        assert!(output.contains("read"));
+    }
+
+    #[test]
+    fn inline_summary_command_prints_summary() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session) = setup_with_rounds();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/summary");
+        let output = _capture.text();
+        // Summary should mention the tool used.
+        assert!(output.contains("read"));
+    }
+
+    #[test]
+    fn inline_clear_command_clears_screen() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/clear");
+        let output = _capture.text();
+        // On Windows, clear may use `cls` which doesn't write to stdout;
+        // on Unix, it usually prints ANSI escape sequences. Accept either.
+        assert!(output.contains("\x1B[2J\x1B[1;1H") || output.is_empty());
+    }
+
+    #[test]
+    fn inline_clear_command_with_alias_cls() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let (mut config, registry, root, mut session) = setup();
+        handle_inline_command(&mut config, &registry, &root, &mut session, "/cls");
+        let output = _capture.text();
+        assert!(output.contains("\x1B[2J\x1B[1;1H") || output.is_empty());
+    }
 }

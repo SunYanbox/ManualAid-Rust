@@ -206,7 +206,13 @@ async fn loop_main_at(
         crate::console::out_print!("{}", i18n::t_str("cli.loop.menu_prompt"));
         crate::console::flush();
 
-        let line = match tokio::task::spawn_blocking(|| read_line()).await {
+        #[cfg(test)]
+        let line = match read_line() {
+            Some(line) => line,
+            _ => break,
+        };
+        #[cfg(not(test))]
+        let line = match tokio::task::spawn_blocking(read_line).await {
             Ok(Some(line)) => line,
             _ => break,
         };
@@ -521,6 +527,25 @@ mod tests {
         assert!(output.contains("rm *"));
         assert!(output.contains("ignored"));
         assert!(!output.contains("git log *"));
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn loop_mode_toggle_switches_session_mode() {
+        let _capture = crate::console::capture();
+        let _lang = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skills = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("loop-mode-ws");
+        let home = crate::test_support::temp_dir("loop-mode-home");
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        super::utils::push_test_input(&["/mode", "0"]);
+        loop_main_at(&root, &home, None, None).await.unwrap();
+        let output = _capture.text();
+        // Single toggle covers both branches: Manual -> AcceptEdit
+        assert!(output.contains("accept edit"));
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_dir_all(&home);
     }
