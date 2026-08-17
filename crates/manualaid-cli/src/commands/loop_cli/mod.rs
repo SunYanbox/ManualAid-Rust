@@ -206,12 +206,30 @@ async fn loop_main_at(
         crate::console::out_print!("{}", i18n::t_str("cli.loop.menu_prompt"));
         crate::console::flush();
 
-        let line = match read_line() {
-            Some(line) => line,
-            None => break,
+        let line = match tokio::task::spawn_blocking(|| read_line()).await {
+            Ok(Some(line)) => line,
+            _ => break,
         };
         let trimmed = line.trim();
+
         if trimmed.starts_with('/') {
+            if trimmed == "/mode" || trimmed == "/m" {
+                options.mode = match options.mode {
+                    SessionMode::Manual => SessionMode::AcceptEdit,
+                    SessionMode::AcceptEdit => SessionMode::Manual,
+                };
+                executor = build_executor(current_dir, &config, options.mode);
+                let mode_name = if options.mode == SessionMode::Manual {
+                    i18n::t_str("cli.config.mode_manual")
+                } else {
+                    i18n::t_str("cli.config.mode_accept_edit")
+                };
+                crate::console::out_println!(
+                    "{}",
+                    t_fmt("cli.config.mode_switched", &[("mode", &mode_name)])
+                );
+                continue;
+            }
             handle_inline_command(&mut config, &registry, current_dir, &mut session, trimmed);
             continue;
         }

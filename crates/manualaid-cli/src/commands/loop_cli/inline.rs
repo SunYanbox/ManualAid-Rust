@@ -39,6 +39,31 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
     line: &str,
 ) {
     let parts: Vec<&str> = line.split_whitespace().collect();
+    if parts.is_empty() {
+        return;
+    }
+    let cmd = parts[0];
+    match cmd {
+        // `|`表示匹配任意一个
+        "/help" | "/?" | "/h" => {
+            crate::console::out_println!("{}", i18n::t_str("cli.help.text"));
+            return;
+        }
+        "/history" | "/H" => {
+            super::show_tool_history(session);
+            return;
+        }
+        "/summary" | "/s" => {
+            super::print_session_summary(config, session);
+            return;
+        }
+        "/clear" | "/cls" => {
+            super::clear_screen();
+            return;
+        }
+        _ => {}
+    }
+    // `[]`表示匹配格式完全一样的
     match parts.as_slice() {
         ["/ws"] => copy_system_prompt_with_provider(provider, config, root, registry),
         ["/tools"] => {
