@@ -40,7 +40,11 @@ fn from_name_round_trips_every_tool() {
 fn all_formats_lists_every_builtin_variant() {
     assert_eq!(
         ToolCallFormat::all(),
-        &[ToolCallFormat::Xml, ToolCallFormat::JsonCodeblock]
+        &[
+            ToolCallFormat::Xml,
+            ToolCallFormat::JsonCodeblock,
+            ToolCallFormat::Invoke
+        ]
     );
 }
 

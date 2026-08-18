@@ -291,7 +291,8 @@ fn round_summary_marks_success_and_failure() {
 #[test]
 fn format_and_lang_cycling_helpers() {
     assert_eq!(cycle_format("auto"), "xml");
-    assert_eq!(cycle_format("json-codeblock"), "auto");
+    assert_eq!(cycle_format("json-codeblock"), "invoke");
+    assert_eq!(cycle_format("invoke"), "auto");
     assert_eq!(cycle_lang("en"), "zh-CN");
     assert_eq!(cycle_lang("zh-CN"), "en");
 }
