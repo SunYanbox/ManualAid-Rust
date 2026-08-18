@@ -99,6 +99,19 @@ impl ToolCallFormatParser for XmlParser {
 
             let closing = input.as_bytes()[p + 1] == b'/';
             let (name, name_end) = read_tag_name(input, if closing { p + 2 } else { p + 1 });
+
+            // `<` 后紧跟 `>`、`/` 或空白等非法名称起始字符时不构成合法
+            // 标签；若继续按标签扫描会贪婪吞掉后续真实闭合标签（如参数
+            // 值中的 `p < target` 吞掉 `</content>`）。参数捕获内把 `<` 按
+            // 字面文本保留，只推进一个字符；空闲/工具内状态则跳过 `<`。
+            if name.is_empty() {
+                if let Some(cap) = param.as_mut() {
+                    cap.value.push('<');
+                }
+                pos = p + 1;
+                continue;
+            }
+
             let (self_closing, tag_end) = scan_tag_end(input, name_end);
 
             match (&mut tool, &mut param) {
@@ -467,6 +480,55 @@ mod tests {
         let outcome = parse("<read><Error>boom</Error><file_path>/a</file_path></read>");
         assert!(!outcome.calls[0].params.contains_key("Error"));
         assert!(outcome.calls[0].params.contains_key("file_path"));
+    }
+
+    #[test]
+    fn bare_less_than_in_param_value_is_literal() {
+        // 参数值中的裸 `<` 后接空白等非法名称起始字符时应按字面文本
+        // 保留，不得吞掉后续真实闭合标签。
+        let outcome =
+            parse("<write><file_path>/f</file_path><content>p < target</content></write>");
+        assert_eq!(outcome.calls.len(), 1);
+        assert_eq!(
+            outcome.calls[0]
+                .params
+                .get("content")
+                .and_then(Value::as_str),
+            Some("p < target")
+        );
+        assert!(outcome.warnings.is_empty());
+    }
+
+    #[test]
+    fn bare_less_than_before_tool_call_does_not_swallow_start_tag() {
+        // 空闲文本中的裸 `<` 不应吞掉后续工具调用的开始标签。
+        let outcome = parse("a < b<read><file_path>/a.txt</file_path></read>");
+        assert_eq!(outcome.calls.len(), 1);
+        assert_eq!(outcome.calls[0].tool_name, "read");
+        assert_eq!(
+            outcome.calls[0]
+                .params
+                .get("file_path")
+                .and_then(Value::as_str),
+            Some("/a.txt")
+        );
+    }
+
+    #[test]
+    fn bare_lt_slash_in_param_kept_literal() {
+        // 参数值中的 `</ `（空名闭合）应作为字面文本保留，正常闭合。
+        let outcome = parse(
+            "<edit><file_path>/f</file_path><old_string>a </ b</old_string><new_string>x</new_string></edit>",
+        );
+        assert_eq!(outcome.calls.len(), 1);
+        assert_eq!(
+            outcome.calls[0]
+                .params
+                .get("old_string")
+                .and_then(Value::as_str),
+            Some("a </ b")
+        );
+        assert!(outcome.warnings.is_empty());
     }
 
     #[test]
