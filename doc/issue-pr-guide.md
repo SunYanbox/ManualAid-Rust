@@ -41,6 +41,9 @@
 | `wontfix` | 不处理 |
 | `CI/CD` | CI/CD 变更 |
 | `release` | 版本发布 |
+| `prompt` | 提示词优化或更改 |
+
+> `prompt`主要指`crates/i18n/locales/prompts.*.toml`中的更改。
 
 ## PR 检查
 
