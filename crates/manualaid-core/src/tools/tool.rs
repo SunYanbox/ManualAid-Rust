@@ -19,6 +19,10 @@ pub enum ToolCallFormat {
     /// Anthropic 风格的 JSON 代码块。
     #[serde(rename = "json-codeblock")]
     JsonCodeblock,
+    /// Anthropic-style invoke format (`<invoke name="...">`).
+    /// Anthropic 风格 invoke 格式（`<invoke name="...">`）。
+    #[serde(rename = "invoke")]
+    Invoke,
 }
 
 impl ToolCallFormat {
@@ -26,7 +30,7 @@ impl ToolCallFormat {
     /// configuration menus.
     /// 所有已知变体，用于初始化与配置菜单中的迭代。
     pub fn all() -> &'static [Self] {
-        &[Self::Xml, Self::JsonCodeblock]
+        &[Self::Xml, Self::JsonCodeblock, Self::Invoke]
     }
 }
 

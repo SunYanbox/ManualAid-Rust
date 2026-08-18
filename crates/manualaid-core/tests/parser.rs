@@ -777,3 +777,303 @@ fn xml_comments_inside_param_are_ignored() {
         Some("c")
     );
 }
+
+// Invoke format integration tests
+
+fn invoke(input: &str) -> ParseOutcome {
+    manualaid_core::parser::invoke::InvokeParser
+        .try_parse(input, &EnabledToolSet::all())
+        .unwrap()
+}
+
+#[test]
+fn invoke_parses_and_renders_template() {
+    let parser = manualaid_core::parser::invoke::InvokeParser;
+    let outcome = parser
+        .try_parse(
+            "<invoke name=\"read\"><parameter name=\"file_path\">/tmp/a.txt</parameter></invoke>",
+            &EnabledToolSet::all(),
+        )
+        .unwrap();
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(outcome.calls[0].tool_name, "read");
+    assert_eq!(outcome.calls[0].format, ToolCallFormat::Invoke);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some("/tmp/a.txt")
+    );
+
+    let template = parser.tool_call_template(&ToolKind::Edit);
+    assert!(template.contains("<invoke name=\"edit\">"));
+    assert!(template.contains("<parameter name=\"file_path\">"));
+}
+
+#[test]
+fn invoke_keeps_parameter_order() {
+    let parser = manualaid_core::parser::invoke::InvokeParser;
+    let outcome = parser
+        .try_parse(
+            "<invoke name=\"edit\"><parameter name=\"new_string\">B</parameter><parameter name=\"old_string\">A</parameter><parameter name=\"file_path\">/f</parameter></invoke>",
+            &EnabledToolSet::all(),
+        )
+        .unwrap();
+    let keys: Vec<&str> = outcome.calls[0].params.keys().map(String::as_str).collect();
+    assert_eq!(keys, ["new_string", "old_string", "file_path"]);
+}
+
+#[test]
+fn invoke_tolerates_dangling_ampersand() {
+    let outcome = invoke(
+        "<invoke name=\"write\"><parameter name=\"file_path\">/f</parameter><parameter name=\"content\">a & b</parameter></invoke>",
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("content")
+            .and_then(|v| v.as_str()),
+        Some("a & b")
+    );
+}
+
+#[test]
+fn invoke_ignores_formatting_tags_between_calls() {
+    let outcome = invoke(
+        "<invoke name=\"read\"><parameter name=\"file_path\">/a</parameter></invoke><indent>  </indent><invoke name=\"edit\"><parameter name=\"file_path\">/b</parameter><parameter name=\"old_string\">x</parameter><parameter name=\"new_string\">y</parameter></invoke>",
+    );
+    assert_eq!(outcome.calls.len(), 2);
+    assert_eq!(outcome.calls[0].tool_name, "read");
+    assert_eq!(outcome.calls[1].tool_name, "edit");
+}
+
+#[test]
+fn invoke_parses_through_wrapper_elements() {
+    let outcome = invoke(
+        "<wrapper><invoke name=\"read\"><parameter name=\"file_path\">/a</parameter></invoke></wrapper>",
+    );
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(outcome.calls[0].tool_name, "read");
+}
+
+#[test]
+fn invoke_param_value_keeps_other_tool_tags_literal() {
+    let outcome = invoke(
+        "<invoke name=\"edit\"><parameter name=\"file_path\">/f</parameter><parameter name=\"old_string\">if <read> then</parameter><parameter name=\"new_string\">ok</parameter></invoke>",
+    );
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("old_string")
+            .and_then(|v| v.as_str()),
+        Some("if <read> then")
+    );
+    assert!(outcome.warnings.is_empty());
+}
+
+#[test]
+fn invoke_ignores_unknown_tool_elements() {
+    let outcome = invoke("<invoke name=\"nonsense\"><parameter name=\"x\">1</parameter></invoke>");
+    assert!(outcome.calls.is_empty());
+    assert!(outcome.warnings.is_empty());
+}
+
+#[test]
+fn invoke_ignores_unknown_param_tags() {
+    let outcome = invoke(
+        "<invoke name=\"read\"><parameter name=\"file_path\">/a</parameter><parameter name=\"bogus\">zzz</parameter></invoke>",
+    );
+    assert!(!outcome.calls[0].params.contains_key("bogus"));
+}
+
+#[test]
+fn invoke_ignores_nested_tool_inside_call() {
+    let outcome = invoke(
+        "<invoke name=\"read\"><parameter name=\"file_path\">/a</parameter><invoke name=\"edit\"><parameter name=\"new_string\">y</parameter></invoke></invoke>",
+    );
+    // 外层 read 调用被内层 invoke 打断（invoke 闭合标签固定），read 收集了
+    // file_path 参数所以被保留；edit 是独立调用也被解析。
+    assert_eq!(outcome.calls.len(), 2);
+    assert_eq!(outcome.calls[0].tool_name, "read");
+    assert_eq!(outcome.calls[1].tool_name, "edit");
+}
+
+#[test]
+fn invoke_unclosed_param_discarded_with_warning() {
+    let outcome = invoke("<invoke name=\"edit\"><parameter name=\"old_string\">x</invoke>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(outcome.calls[0].tool_name, "edit");
+    assert!(!outcome.calls[0].params.contains_key("old_string"));
+    assert_eq!(outcome.warnings.len(), 1);
+    assert!(outcome.warnings[0].contains("old_string"));
+}
+
+#[test]
+fn invoke_unclosed_tool_is_ignored() {
+    let outcome = invoke("<invoke name=\"edit\"><parameter name=\"old_string\">x</parameter>");
+    assert!(outcome.calls.is_empty());
+    assert!(outcome.warnings.is_empty());
+}
+
+#[test]
+fn invoke_unmatched_close_tag_is_ignored() {
+    let outcome = invoke(
+        "<invoke name=\"read\"><parameter name=\"file_path\">/a</parameter></invoke></wrapper>",
+    );
+    assert_eq!(outcome.calls.len(), 1);
+}
+
+#[test]
+fn invoke_self_closing_param_is_empty_string() {
+    let outcome = invoke("<invoke name=\"read\"><parameter name=\"file_path\"/></invoke>");
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some("")
+    );
+}
+
+#[test]
+fn invoke_self_closing_tool_is_ignored() {
+    let outcome = invoke("<invoke name=\"read\"/>");
+    assert!(outcome.calls.is_empty());
+}
+
+#[test]
+fn invoke_missing_name_attr_on_invoke_is_ignored() {
+    let outcome = invoke("<invoke><parameter name=\"file_path\">/a</parameter></invoke>");
+    assert!(outcome.calls.is_empty());
+}
+
+#[test]
+fn invoke_missing_name_attr_on_parameter_is_ignored() {
+    let outcome = invoke("<invoke name=\"read\"><parameter>/a</parameter></invoke>");
+    assert!(outcome.calls.is_empty());
+}
+
+#[test]
+fn invoke_single_quoted_name_attr_works() {
+    let outcome = invoke("<invoke name='read'><parameter name='file_path'>/a</parameter></invoke>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("file_path")
+            .and_then(|v| v.as_str()),
+        Some("/a")
+    );
+}
+
+#[test]
+fn invoke_keeps_cdata_content_verbatim() {
+    let outcome = invoke(
+        "<invoke name=\"write\"><parameter name=\"file_path\">/f</parameter><parameter name=\"content\"><![CDATA[a<b & c]]></parameter></invoke>",
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("content")
+            .and_then(|v| v.as_str()),
+        Some("a<b & c")
+    );
+}
+
+#[test]
+fn invoke_cdata_mid_value_is_kept_literal() {
+    let outcome = invoke(
+        "<invoke name=\"write\"><parameter name=\"file_path\">/f</parameter><parameter name=\"content\">before <![CDATA[x]]> after</parameter></invoke>",
+    );
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("content")
+            .and_then(|v| v.as_str()),
+        Some("before <![CDATA[x]]> after")
+    );
+}
+
+#[test]
+fn invoke_cdata_close_must_touch_closing_tag() {
+    let outcome = invoke(
+        "<invoke name=\"write\"><parameter name=\"file_path\">/f</parameter><parameter name=\"content\"><![CDATA[x]]>\n</parameter></invoke>",
+    );
+    assert!(outcome.calls.is_empty());
+    assert_eq!(outcome.warnings.len(), 1);
+    assert!(outcome.warnings[0].contains("content"));
+}
+
+#[test]
+fn invoke_decodes_entity_references_in_text() {
+    let outcome = invoke(
+        "<invoke name=\"write\"><parameter name=\"file_path\">/f</parameter><parameter name=\"content\">&lt;tag&gt; &amp; &#65;</parameter></invoke>",
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("content")
+            .and_then(|v| v.as_str()),
+        Some("<tag> & A")
+    );
+}
+
+#[test]
+fn invoke_tolerates_comments_between_tool_calls() {
+    let outcome = invoke(
+        "<invoke name=\"read\"><parameter name=\"file_path\">/a</parameter></invoke><!-- keep going -->",
+    );
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(outcome.calls[0].tool_name, "read");
+}
+
+#[test]
+fn invoke_doc_example_from_todo() {
+    // TODO.md 中的示例
+    let outcome = invoke(
+        "<invoke name=\"shell\">\n<parameter name=\"command\">git ls-files -- \"*.md\" \"doc\"</parameter>\n<parameter name=\"description\">列出仓库中所有 Markdown 文件与 doc 目录内容</parameter>\n</invoke>",
+    );
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(outcome.calls[0].tool_name, "shell");
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("command")
+            .and_then(|v| v.as_str()),
+        Some("git ls-files -- \"*.md\" \"doc\"")
+    );
+    assert_eq!(
+        outcome.calls[0]
+            .params
+            .get("description")
+            .and_then(|v| v.as_str()),
+        Some("列出仓库中所有 Markdown 文件与 doc 目录内容")
+    );
+}
+
+#[test]
+fn registry_auto_detect_finds_invoke_calls() {
+    let registry = FormatRegistry::new();
+    let calls = registry
+        .parse("<invoke name=\"read\"><parameter name=\"file_path\">/a</parameter></invoke>")
+        .unwrap()
+        .calls;
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].tool_name, "read");
+}
+
+#[test]
+fn registry_fixed_mode_switches_to_invoke() {
+    let registry = FormatRegistry::new();
+    registry
+        .set_mode(RegistryMode::Fixed(ToolCallFormat::Invoke))
+        .unwrap();
+    let template = registry
+        .render_tool_call_template(&ToolKind::Write)
+        .unwrap();
+    assert!(template.contains("<invoke name=\"write\">"));
+    assert_eq!(registry.mode().unwrap().label(), "invoke");
+}

@@ -12,6 +12,7 @@
 //! [`FormatRegistry`] 通过 [`RegistryMode`]（自动检测或固定）选择生效的
 //! 解析器。
 
+pub mod invoke;
 pub mod json_codeblock;
 pub mod registry;
 pub mod tool_set;

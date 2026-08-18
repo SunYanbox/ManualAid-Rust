@@ -18,6 +18,7 @@ use std::sync::{Arc, OnceLock, RwLock};
 
 use indexmap::IndexMap;
 
+use super::invoke::InvokeParser;
 use super::json_codeblock::JsonCodeblockParser;
 use super::tool_set::EnabledToolSet;
 use super::traits::{ParseError, ParseOutcome, ToolCallFormatParser};
@@ -48,6 +49,7 @@ impl RegistryMode {
             Self::AutoDetect => "auto",
             Self::Fixed(ToolCallFormat::Xml) => "xml",
             Self::Fixed(ToolCallFormat::JsonCodeblock) => "json-codeblock",
+            Self::Fixed(ToolCallFormat::Invoke) => "invoke",
         }
     }
 
@@ -58,6 +60,7 @@ impl RegistryMode {
             "auto" => Some(Self::AutoDetect),
             "xml" => Some(Self::Fixed(ToolCallFormat::Xml)),
             "json-codeblock" => Some(Self::Fixed(ToolCallFormat::JsonCodeblock)),
+            "invoke" => Some(Self::Fixed(ToolCallFormat::Invoke)),
             _ => None,
         }
     }
@@ -65,7 +68,7 @@ impl RegistryMode {
     /// All labels in cycling order, used by the `/format` command.
     /// 按循环顺序排列的全部标签，供 `/format` 命令使用。
     pub fn all_labels() -> &'static [&'static str] {
-        &["auto", "xml", "json-codeblock"]
+        &["auto", "xml", "json-codeblock", "invoke"]
     }
 }
 
@@ -93,6 +96,7 @@ impl FormatRegistry {
         let mut parsers: IndexMap<String, Box<dyn ToolCallFormatParser>> = IndexMap::new();
         parsers.insert("xml".to_string(), Box::new(XmlParser));
         parsers.insert("json-codeblock".to_string(), Box::new(JsonCodeblockParser));
+        parsers.insert("invoke".to_string(), Box::new(InvokeParser));
         Self {
             parsers: RwLock::new(parsers),
             mode: RwLock::new(RegistryMode::AutoDetect),
@@ -280,6 +284,7 @@ fn format_name(format: ToolCallFormat) -> &'static str {
     match format {
         ToolCallFormat::Xml => "xml",
         ToolCallFormat::JsonCodeblock => "json-codeblock",
+        ToolCallFormat::Invoke => "invoke",
     }
 }
 

@@ -252,13 +252,13 @@ fn finish_call(tool_name: &str, params: IndexMap<String, Value>, offset: usize) 
 }
 
 /// 从 `from` 起下一个 `<` 的位置，不存在时返回 `None`。
-fn next_angle(input: &str, from: usize) -> Option<usize> {
+pub(super) fn next_angle(input: &str, from: usize) -> Option<usize> {
     input[from..].find('<').map(|rel| from + rel)
 }
 
 /// 读取自 `start`（`<` 或 `</` 之后的首个字符）开始的标签名。名称止于
 /// 第一个 `>`、`/` 或空白字符；返回名称及紧随其后的位置。
-fn read_tag_name(input: &str, start: usize) -> (&str, usize) {
+pub(super) fn read_tag_name(input: &str, start: usize) -> (&str, usize) {
     let rest = &input[start..];
     let end = rest
         .find(|c: char| c == '>' || c == '/' || c.is_ascii_whitespace())
@@ -268,7 +268,7 @@ fn read_tag_name(input: &str, start: usize) -> (&str, usize) {
 
 /// 从 `after_name`（名称之后）扫描到标签结束。返回（是否自闭合，`>` 后
 /// 的位置）；属性值内的 `/` 与 `>` 不被误判。
-fn scan_tag_end(input: &str, after_name: usize) -> (bool, usize) {
+pub(super) fn scan_tag_end(input: &str, after_name: usize) -> (bool, usize) {
     let rest = &input[after_name..];
     let mut i = 0usize;
     let mut quote: Option<char> = None;
@@ -300,7 +300,7 @@ fn scan_tag_end(input: &str, after_name: usize) -> (bool, usize) {
 }
 
 /// 自 `p`（指向 `<`）开始的注释结束后的位置。
-fn skip_comment(input: &str, p: usize) -> usize {
+pub(super) fn skip_comment(input: &str, p: usize) -> usize {
     input[p + 4..]
         .find("-->")
         .map(|rel| p + 4 + rel + 3)
@@ -311,7 +311,13 @@ fn skip_comment(input: &str, p: usize) -> usize {
 /// 仅当其后的闭合标签是参数或工具的闭合标签时才视为 CDATA 结束，否则
 /// 作为内容原文继续扫描（模型可能在内容里写出 `]]>`，如提示词示例）。
 /// 返回 CDATA 结束后的偏移（或 `input.len()`）。
-fn append_cdata(input: &str, p: usize, tool: &str, param: &str, value: &mut String) -> usize {
+pub(super) fn append_cdata(
+    input: &str,
+    p: usize,
+    tool: &str,
+    param: &str,
+    value: &mut String,
+) -> usize {
     let mut cursor = p + 9;
     loop {
         let Some(rel) = input[cursor..].find("]]>") else {
@@ -331,7 +337,7 @@ fn append_cdata(input: &str, p: usize, tool: &str, param: &str, value: &mut Stri
 
 /// `]]>`（位于 `end`）之后是否紧贴参数或工具的闭合标签（`]]>` 与 `</`
 /// 之间不允许任何字符，含空白）。
-fn cdata_close_follows(input: &str, end: usize, tool: &str, param: &str) -> bool {
+pub(super) fn cdata_close_follows(input: &str, end: usize, tool: &str, param: &str) -> bool {
     let Some(rest) = input[end + 3..].strip_prefix("</") else {
         return false;
     };
@@ -344,7 +350,7 @@ fn cdata_close_follows(input: &str, end: usize, tool: &str, param: &str) -> bool
 
 /// 解码一段文本中的实体引用：预定义实体与数字引用还原；裸 `&` 与未知
 /// 引用按字面保留（逐引用处理，避免整段因一个裸 `&` 而无法解码）。
-fn decode_text(text: &str) -> String {
+pub(super) fn decode_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(amp) = rest.find('&') {
@@ -369,7 +375,7 @@ fn decode_text(text: &str) -> String {
 }
 
 /// `&` 与 `;` 之间的名称是否为可解码的实体（预定义或数字引用）。
-fn is_entity(name: &str) -> bool {
+pub(super) fn is_entity(name: &str) -> bool {
     matches!(name, "amp" | "lt" | "gt" | "quot" | "apos")
         || name
             .strip_prefix("#x")
@@ -382,7 +388,7 @@ fn is_entity(name: &str) -> bool {
 /// 解码一个完整实体引用（`&amp;` 等预定义实体或 `&#NN;` / `&#xNN;` 数字
 /// 引用）；无法解码的数字引用按字面原样返回。调用方已通过 `is_entity`
 /// 预筛，这里只会收到合法的实体名。
-fn decode_entity(raw: &str) -> String {
+pub(super) fn decode_entity(raw: &str) -> String {
     match raw {
         "&amp;" => "&".to_string(),
         "&lt;" => "<".to_string(),
@@ -394,7 +400,7 @@ fn decode_entity(raw: &str) -> String {
 }
 
 /// 解码数字引用 `&#NN;` / `&#xNN;`；无对应 XML 字符时返回 `None`。
-fn decode_numeric_ref(raw: &str) -> Option<char> {
+pub(super) fn decode_numeric_ref(raw: &str) -> Option<char> {
     let inner = &raw[1..raw.len() - 1];
     let codepoint = inner
         .strip_prefix("#x")
@@ -409,7 +415,7 @@ fn decode_numeric_ref(raw: &str) -> Option<char> {
 }
 
 /// XML 1.0 合法字符（拒绝控制字符与代理区）。
-fn is_xml_char(c: char) -> bool {
+pub(super) fn is_xml_char(c: char) -> bool {
     matches!(
         c as u32,
         0x9 | 0xA | 0xD | 0x20..=0xD7FF | 0xE000..=0xFFFD | 0x10000..=0x10FFFF
