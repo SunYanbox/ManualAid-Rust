@@ -720,4 +720,64 @@ mod tests {
             Some("列出仓库中所有 Markdown 文件与 doc 目录内容")
         );
     }
+
+    #[test]
+    fn format_name_is_invoke() {
+        assert_eq!(InvokeParser.format_name(), "invoke");
+    }
+
+    #[test]
+    fn trailing_bare_less_than_in_param_is_discarded() {
+        let outcome = parse(
+            r#"<invoke name="write"><parameter name="file_path">/f</parameter><parameter name="content">abc<"#,
+        );
+        assert!(outcome.calls.is_empty());
+        assert!(outcome.warnings.is_empty());
+    }
+
+    #[test]
+    fn self_closing_nested_invoke_resets_outer_state() {
+        let outcome = parse(
+            r#"<invoke name="read"><parameter name="file_path">/a</parameter><invoke name="read"/></invoke>"#,
+        );
+        assert_eq!(outcome.calls.len(), 1);
+        assert_eq!(outcome.calls[0].tool_name, "read");
+        assert_eq!(
+            outcome.calls[0]
+                .params
+                .get("file_path")
+                .and_then(Value::as_str),
+            Some("/a")
+        );
+        assert!(outcome.warnings.is_empty());
+    }
+
+    #[test]
+    fn extract_name_attr_space_around_equals() {
+        let input = r#" name = "read""#;
+        assert_eq!(
+            extract_name_attr(input, 0, input.len() + 1).as_deref(),
+            Some("read")
+        );
+    }
+
+    #[test]
+    fn extract_name_attr_whitespace_only_is_none() {
+        assert!(extract_name_attr("   ", 0, 4).is_none());
+    }
+
+    #[test]
+    fn extract_name_attr_without_equals_is_none() {
+        assert!(extract_name_attr(" name", 0, 6).is_none());
+    }
+
+    #[test]
+    fn extract_name_attr_without_quote_is_none() {
+        assert!(extract_name_attr(" name = ", 0, 9).is_none());
+    }
+
+    #[test]
+    fn extract_name_attr_unquoted_value_is_none() {
+        assert!(extract_name_attr(" name=read", 0, 11).is_none());
+    }
 }
