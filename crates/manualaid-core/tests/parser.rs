@@ -187,6 +187,23 @@ fn xml_self_closing_tool_is_ignored() {
 }
 
 #[test]
+fn xml_bug_content_with_bare_less_than_sign_parses_fully() {
+    // Bug.md：content 含“p < target”等裸 `<`，不应吞掉 `</content>`。
+    let input = "<write>\n  <file_path>E:\\ProjectLearn\\LearnAlgo\\learning-records\\0015.md</file_path>\n<content># 0015 Three-Question Derivation Method\n\n## LeetCode 215 示范\n- 问3：p < target 去右边，否则去左边\n</content>\n</write>";
+    let outcome = xml(input);
+    assert_eq!(outcome.calls.len(), 1);
+    assert_eq!(outcome.calls[0].tool_name, "write");
+    assert!(outcome.calls[0].params.contains_key("file_path"));
+    let content = outcome.calls[0]
+        .params
+        .get("content")
+        .and_then(|v| v.as_str())
+        .expect("content must be present");
+    assert!(content.contains("p < target"));
+    assert!(outcome.warnings.is_empty());
+}
+
+#[test]
 fn json_codeblock_parses_object_and_array() {
     let outcome =
         json("```json\n{\"tool_use\": \"read\", \"params\": {\"file_path\": \"/a\"}}\n```");
