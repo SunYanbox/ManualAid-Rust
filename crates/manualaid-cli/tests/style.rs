@@ -37,7 +37,10 @@ fn auto_init_disables_when_stdout_is_piped() {
         .expect("run binary");
     assert!(output.status.success());
     let text = String::from_utf8(output.stdout).expect("utf8 stdout");
-    assert!(text.contains("ManualAid running"));
+    assert!(text.contains(&format!(
+        "ManualAid v{} is running",
+        env!("CARGO_PKG_VERSION")
+    )));
     assert!(!text.contains('\x1b'), "piped stdout must not be styled");
 }
 

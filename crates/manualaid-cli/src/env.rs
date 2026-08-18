@@ -10,10 +10,11 @@ use manualaid_core::user_dir;
 
 use crate::t_fmt;
 
-/// The default startup message.
-/// 默认启动消息。
+/// The default startup message, with the crate version interpolated from the
+/// crate manifest.
+/// 默认启动消息，从 crate 清单中插入 crate 版本。
 pub(crate) fn default_message() -> String {
-    i18n::t_str("manual-aid-running")
+    crate::t_fmt("manual-aid-running", &[("version", env!("CARGO_PKG_VERSION"))])
 }
 
 /// The current working directory, or a localized error message.
