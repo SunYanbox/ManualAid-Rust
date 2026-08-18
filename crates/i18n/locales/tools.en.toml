@@ -1,62 +1,115 @@
 [tool.shell]
-desc = "Execute a shell command and capture its output (stdout, stderr, exit code). Non-whitelisted commands require user approval."
+desc = """
+Execute a shell command and capture its output (stdout, stderr, exit code).
+
+- The specific commands available depend on the user's current terminal; the command syntax must follow the user's terminal format requirements.
+- The working directory persists across calls, but absolute paths are preferred — `cd` in compound commands may trigger permission prompts. Shell state (environment variables, functions) does not persist; the shell is initialized from the user's profile.
+- Important: Unless explicitly instructed or after you have verified that dedicated tools cannot accomplish your task, avoid using this tool to run terminal commands. Instead, use the appropriate dedicated tools, which will provide a better user experience.
+- `timeout` is in milliseconds: default 120000, maximum 600000.
+"""
 
 [tool.shell.param.command]
 desc = "The shell command to execute"
 
 [tool.shell.param.description]
-desc = "Clear, concise description of what the command does in active voice"
+desc = """
+Provide a clear, concise description of what this command does, in active voice. Never use words like "complex" or "risky" in the description — just describe what it does.
+
+For simple commands (git, npm, standard CLI tools), keep it short (5-10 words):
+- ls → "List files in current directory"
+- git status → "Show working tree status"
+- npm install → "Install package dependencies"
+
+For commands that are not immediately obvious (pipelines, obscure flags, etc.), add enough context to clarify:
+- find . -name "*.tmp" -exec rm {} \\; → "Find and recursively delete all .tmp files"
+- git reset --hard origin/main → "Discard all local changes and align with remote main"
+- curl -s url | jq '.data[]' → "Fetch JSON from URL and extract data array elements"
+"""
 
 [tool.shell.param.timeout]
-desc = "Maximum execution time in milliseconds (default: 120000, max: 600000)"
+desc = "Optional timeout in milliseconds (max 600000)"
 
 [tool.read]
-desc = "Read the content of a file from the local filesystem. file_path must be an absolute path."
+desc = """
+Read a file from the local filesystem.
+
+- `file_path` must be an absolute path.
+- You can optionally specify a line offset and limit (especially useful for long files), but it is recommended to read the entire file by omitting these parameters.
+- Reading a directory, a missing file, or an empty file will return an error or system notice, not content.
+- Do not re-read a file you just edited to verify — if the change fails, Edit/Write will report an error, and the system tracks file state for you.
+"""
 
 [tool.read.param.file_path]
 desc = "The absolute path to the file to read"
 
 [tool.read.param.offset]
-desc = "The line number to start reading from. 1-based. Only provide if the file is too large to read at once."
+desc = "The line number to start reading from. Only provide if the file is too large to read at once."
 
 [tool.read.param.limit]
-desc = "The maximum number of lines to read. Only provide if the file is too large to read at once."
+desc = "The number of lines to read. Only provide if the file is too large to read at once."
 
 [tool.read.param.show_line_numbers]
-desc = "Show absolute 1-based line numbers in cat -n format (right-aligned number + `| ` marker). Diagnostic only; do not copy the number prefix into edit parameters."
+desc = "Display absolute 1-based line numbers in cat -n format (right-aligned numbers + `| ` marker). Only provide when detailed line numbers are needed."
 
 [tool.read.param.show_line_endings]
-desc = "Show line endings in cat -E format: `$` for LF, `^M$` for CRLF. Diagnostic only; do not copy the markers into edit parameters."
+desc = "Display line endings in cat -E format: `$` for LF, `^M$` for CRLF. Only provide when you need to confirm file line-ending style."
 
 [tool.edit]
-desc = "Perform an exact string replacement in a file. old_string must match the file content exactly and be unique unless replace_all is true."
+desc = """
+Perform an exact string replacement in a file.
+
+- You must have read the file in this conversation first, otherwise the call will fail.
+- `old_string` must exactly match the file content, including indentation and line endings, and must be unique — otherwise the edit fails.
+- If the Read output includes line numbers or line-ending diagnostics, strip those markers before matching.
+- `replace_all: true` will replace all occurrences of the match.
+"""
 
 [tool.edit.param.file_path]
-desc = "Absolute path to the file to modify"
+desc = "The absolute path to the file to modify"
 
 [tool.edit.param.old_string]
-desc = "The exact text to search for. Must match the file content exactly, including indentation. When replace_all is false, it must be unique in the file — the edit fails otherwise. If the read output included line-number or line-ending diagnostics, strip those markers before copying the text here."
+desc = "The text to replace."
 
 [tool.edit.param.new_string]
-desc = "The replacement text (must be different from old_string)"
+desc = "The replacement text (must differ from old_string)"
 
 [tool.edit.param.replace_all]
-desc = "Replace ALL occurrences of old_string instead of just the first (default: false)"
+desc = "Replace all occurrences of old_string (default: false)"
 
 [tool.write]
-desc = "Create a new file or overwrite an existing one. Parent directories are created automatically if they do not exist."
+desc = """
+Write a file to the local filesystem, overwriting it if it exists.
+
+When to use: Create a new file, or completely replace a file you have read. Overwriting an existing file that you have not read will fail. For partial changes, use Edit.
+"""
 
 [tool.write.param.file_path]
-desc = "**Absolute path** where the file should be written"
+desc = "The absolute path to write the file to (must be an absolute path, not relative)"
 
 [tool.write.param.content]
-desc = "The full content to write to the file"
+desc = "The content to write to the file"
 
 [tool.skill]
-desc = "Load and execute a skill from the available-skills list. Never guess or invent a skill name."
+desc = """
+Execute a skill in the main conversation
+
+When the user asks you to perform a task, check if any available skills match. Skills provide specialized capabilities and domain knowledge.
+
+When the user references "slash commands" or "/<something>", they mean a skill. Use this tool to invoke it.
+
+How to call: set `skill` to the exact name of the available skill (without the leading slash).
+
+Important:
+- Available skills are listed in the system prompt message of the conversation
+- Only invoke skills that appear in that list, or that the user explicitly entered as `/<name>` in their message. Never guess or invent skill names from training data; otherwise do not call this tool
+- When a skill matches the user's request, this is a blocking requirement: call the Skill tool before generating any other response about that task
+- Never mention a skill without actually calling this tool
+- Do not invoke a skill that is already running
+- Do not use this tool for built-in CLI commands (like /help, /clear, etc.)
+"""
 
 [tool.skill.param.skill]
-desc = "The exact name of an available skill (no leading slash)"
+desc = "The skill name from the list of available skills. Do not guess names."
 
 [tool.skill.param.args]
-desc = "Optional arguments to pass to the skill"
+desc = "Optional arguments for the skill"
