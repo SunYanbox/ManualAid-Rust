@@ -10,8 +10,6 @@
 
 A **local-only, human-in-the-loop** copypaste assistant for LLM workflows.
 
-> **Version**: 0.4.1
-
 ## Features
 
 - **Interactive Agent Loop** — Run `manualaid-cli` with no arguments to start an interactive session. The system builds a context-aware prompt (workspace layout, git status, enabled tools, loaded skills), you paste it into an LLM chat, then paste the LLM's tool-call response back. ManualAid parses, audits, executes the tools, and returns the results for the next turn.
