@@ -266,8 +266,8 @@ pub(super) fn mode_label(mode: SessionMode) -> String {
     }
 }
 
-/// Render the approval mode label for the menu prompt, e.g. `[manual]`.
-/// 渲染菜单提示符中的审批模式标签，例如 `[手动]`。
+/// Render the approval mode label for the menu prompt, e.g. `[manual mode]`.
+/// 渲染菜单提示符中的审批模式标签，例如 `[手动模式]`。
 pub(super) fn mode_hint(mode: SessionMode) -> String {
     crate::style::muted(&format!("[{}]", mode_label(mode)))
 }
