@@ -48,7 +48,7 @@ use config::config_menu;
 use handlers::{copy_intent_rule, copy_system_prompt, paste_and_submit};
 use inline::handle_inline_command;
 use utils::{
-    apply_cli_lang, apply_format_mode, clear_screen, format_config_issue, read_line,
+    apply_cli_lang, apply_format_mode, clear_screen, format_config_issue, mode_hint, read_line,
     sync_global_config, t_fmt,
 };
 
@@ -198,12 +198,27 @@ async fn loop_main_at(
     }
 
     let mut should_exit = false;
+    let mut show_help_hint = true;
     while !should_exit {
         if options.clear_screen {
             clear_screen();
         }
         let _ = crate::pager::print_paged(&render_menu());
-        crate::console::out_print!("{}", i18n::t_str("cli.loop.menu_prompt"));
+        // Remind once, after the first menu render, that inline commands
+        // are available behind `/help`.
+        // 首次渲染菜单后提示一次：内联命令可通过 `/help` 查看。
+        if show_help_hint {
+            crate::console::out_println!(
+                "{}",
+                crate::style::muted(&i18n::t_str("cli.loop.help_hint"))
+            );
+            show_help_hint = false;
+        }
+        crate::console::out_print!(
+            "{} {}",
+            mode_hint(options.mode),
+            i18n::t_str("cli.loop.menu_prompt")
+        );
         crate::console::flush();
 
         #[cfg(test)]

@@ -4,6 +4,7 @@
 use std::io::IsTerminal;
 use std::path::Path;
 
+use manualaid_core::audit::SessionMode;
 use manualaid_core::parser::{FormatRegistry, RegistryMode};
 use manualaid_core::tools::ToolResult;
 use manualaid_ws::config::{Config, ConfigIssue, ConfigIssueKind};
@@ -254,6 +255,21 @@ pub fn render_menu() -> String {
     let mut lines: Vec<String> = keys.iter().map(|key| i18n::t_str(key)).collect();
     lines[0] = crate::style::header(&lines[0]);
     lines.join("\n") + "\n"
+}
+
+/// Localized label of the current approval mode.
+/// 当前审批模式的本地化名称。
+pub(super) fn mode_label(mode: SessionMode) -> String {
+    match mode {
+        SessionMode::Manual => i18n::t_str("cli.config.mode_manual"),
+        SessionMode::AcceptEdit => i18n::t_str("cli.config.mode_accept_edit"),
+    }
+}
+
+/// Render the approval mode label for the menu prompt, e.g. `[manual mode]`.
+/// 渲染菜单提示符中的审批模式标签，例如 `[手动模式]`。
+pub(super) fn mode_hint(mode: SessionMode) -> String {
+    crate::style::muted(&format!("[{}]", mode_label(mode)))
 }
 
 /// Cycle the interface language between `en` and `zh-CN`.

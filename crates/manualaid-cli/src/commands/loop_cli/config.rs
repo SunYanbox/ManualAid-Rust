@@ -10,7 +10,7 @@ use manualaid_ws::config::{Config, save_project};
 use manualaid_ws::session::SessionLog;
 
 use super::LoopOptions;
-use super::utils::{apply_format_mode, cycle_format, cycle_lang, read_line, t_fmt};
+use super::utils::{apply_format_mode, cycle_format, cycle_lang, mode_label, read_line, t_fmt};
 
 /// The secondary configuration menu.
 /// 二级配置菜单。
@@ -169,15 +169,6 @@ pub fn render_config_menu(config: &Config, options: &LoopOptions) -> String {
         i18n::t_str("cli.config.back"),
     ]
     .join("\n")
-}
-
-/// Localized label of the current approval mode.
-/// 当前审批模式的本地化名称。
-fn mode_label(mode: SessionMode) -> String {
-    match mode {
-        SessionMode::Manual => i18n::t_str("cli.config.mode_manual"),
-        SessionMode::AcceptEdit => i18n::t_str("cli.config.mode_accept_edit"),
-    }
 }
 
 /// The SKILL enable/disable sub-menu: toggle by index, all on, all off.

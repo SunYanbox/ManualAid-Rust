@@ -47,7 +47,8 @@ fn no_args_prints_running_message_in_english() {
     // `.ManualAid/config.toml`。
     let output = run_in(tmp.path(), tmp.path(), &[]);
     assert!(output.status.success());
-    assert!(stdout(&output).contains("ManualAid running..."));
+    let version = env!("CARGO_PKG_VERSION");
+    assert!(stdout(&output).contains(&format!("ManualAid v{version} is running...")));
 }
 
 #[test]
@@ -55,7 +56,8 @@ fn no_args_prints_running_message_in_chinese() {
     let tmp = common::TempDir::new("no-args-zh");
     let output = run_in(tmp.path(), tmp.path(), &["--lang", "zh-CN"]);
     assert!(output.status.success());
-    assert!(stdout(&output).contains("ManualAid正在运行..."));
+    let version = env!("CARGO_PKG_VERSION");
+    assert!(stdout(&output).contains(&format!("ManualAid v{version} 正在运行...")));
 }
 
 #[test]
