@@ -9,9 +9,15 @@ fn default_message_is_localized() {
     let _guard = LOCALE_LOCK.lock().unwrap();
     let version = env!("CARGO_PKG_VERSION");
     i18n::set_locale("en");
-    assert_eq!(default_message(), format!("ManualAid v{version} is running..."));
+    assert_eq!(
+        default_message(),
+        format!("ManualAid v{version} is running...")
+    );
     i18n::set_locale("zh-CN");
-    assert_eq!(default_message(), format!("ManualAid v{version} 正在运行..."));
+    assert_eq!(
+        default_message(),
+        format!("ManualAid v{version} 正在运行...")
+    );
 }
 
 #[test]

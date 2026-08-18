@@ -14,7 +14,10 @@ use crate::t_fmt;
 /// crate manifest.
 /// 默认启动消息，从 crate 清单中插入 crate 版本。
 pub(crate) fn default_message() -> String {
-    crate::t_fmt("manual-aid-running", &[("version", env!("CARGO_PKG_VERSION"))])
+    crate::t_fmt(
+        "manual-aid-running",
+        &[("version", env!("CARGO_PKG_VERSION"))],
+    )
 }
 
 /// The current working directory, or a localized error message.

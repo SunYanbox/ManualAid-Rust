@@ -171,8 +171,6 @@ pub fn render_config_menu(config: &Config, options: &LoopOptions) -> String {
     .join("\n")
 }
 
-
-
 /// The SKILL enable/disable sub-menu: toggle by index, all on, all off.
 /// SKILL 启用/禁用二级菜单：按索引切换、全部启用、全部禁用。
 pub(super) fn skill_config_menu() {
