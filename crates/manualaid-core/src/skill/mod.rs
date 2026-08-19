@@ -283,5 +283,4 @@ fn reload_skills_impl(project_root: &Path, home: &Path) -> CoreResult<()> {
 }
 
 #[cfg(test)]
-#[path = "skill_tests.rs"]
 mod tests;
