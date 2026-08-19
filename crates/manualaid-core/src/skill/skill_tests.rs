@@ -1,6 +1,10 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use toml::Table;
+
+use super::frontmatter::{Frontmatter, parse_frontmatter};
 use super::*;
 
 fn skill(name: &str, description: &str, body: &str, path: &str, is_global: bool) -> Skill {
