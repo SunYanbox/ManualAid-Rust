@@ -141,15 +141,32 @@ fn path_key_normalizes_backslashes() {
 fn scan_skills_dir_rejects_file_path() {
     // `read_dir` on a file (rather than a directory) is a stable, portable
     // way to exercise the scanner's error branch. The `entry` iteration
-    // error and non-UTF-8 folder name skip in `scan_skills_dir` still depend
-    // on OS state that tests cannot construct portably.
+    // error in `scan_skills_dir` still depends on a concurrent directory
+    // change that tests cannot construct deterministically.
     // 对文件（而非目录）调用 `read_dir` 是稳定且可移植地覆盖扫描器错误
-    // 分支的方式。`scan_skills_dir` 中条目遍历错误与非 UTF-8 文件夹名
-    // 跳过分支仍依赖测试无法跨平台构造的 OS 状态。
+    // 分支的方式。`scan_skills_dir` 中条目遍历错误仍依赖测试无法确定性
+    // 构造的并发目录变更。
     let dir = temp_dir("read-dir-file");
     let file = dir.join("not-a-dir");
     std::fs::write(&file, "content").unwrap();
     let err = scan_skills_dir(&file, false).expect_err("file path is not a directory");
     assert!(matches!(err, CoreError::Io(_)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn scan_skills_dir_skips_non_utf8_folder_names() {
+    use std::os::unix::ffi::OsStringExt;
+
+    // A folder whose name is not valid UTF-8 cannot become a skill name and
+    // is skipped by the scanner.
+    // 名称不是合法 UTF-8 的文件夹无法成为技能名，会被扫描器跳过。
+    let dir = temp_dir("non-utf8-scan");
+    let sub = dir.join(std::ffi::OsString::from_vec(b"bad\xffname".to_vec()));
+    std::fs::create_dir(&sub).unwrap();
+    std::fs::write(sub.join("SKILL.md"), "---\ndescription: d\n---\nbody").unwrap();
+    let skills = scan_skills_dir(&dir, false).expect("scan should succeed");
+    assert!(skills.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }

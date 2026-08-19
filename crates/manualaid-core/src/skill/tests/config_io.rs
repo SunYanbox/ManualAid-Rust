@@ -180,3 +180,34 @@ fn write_enabled_map_replaces_non_table_skill_entry() {
     assert_eq!(table["skill"]["/a/b"], toml::Value::Boolean(true));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[cfg(unix)]
+#[test]
+fn write_enabled_map_fails_when_parent_dir_is_not_writable() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = temp_dir("readonly-parent");
+    let readonly = dir.join("readonly");
+    std::fs::create_dir(&readonly).unwrap();
+    std::fs::set_permissions(&readonly, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    // If the current user can still create entries (e.g. root), this branch
+    // is not exercisable; skip rather than fail.
+    // 若当前用户仍可创建条目（如 root），此分支无法覆盖；跳过而非失败。
+    let probe = readonly.join("probe");
+    if std::fs::create_dir(&probe).is_ok() {
+        let _ = std::fs::remove_dir_all(&probe);
+        let _ =
+            std::fs::set_permissions(&readonly, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        return;
+    }
+
+    let mut map = HashMap::new();
+    map.insert("/a/b".to_string(), true);
+    let path = readonly.join("sub").join("config.toml");
+    let err = write_enabled_map(&path, &map).expect_err("write should fail");
+    assert!(matches!(err, CoreError::Io(_)));
+    let _ = std::fs::set_permissions(&readonly, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+}
