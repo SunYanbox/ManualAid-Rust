@@ -197,8 +197,7 @@ fn write_enabled_map_fails_when_parent_dir_is_not_writable() {
     let probe = readonly.join("probe");
     if std::fs::create_dir(&probe).is_ok() {
         let _ = std::fs::remove_dir_all(&probe);
-        let _ =
-            std::fs::set_permissions(&readonly, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&readonly, std::fs::Permissions::from_mode(0o755)).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
         return;
     }
@@ -208,6 +207,6 @@ fn write_enabled_map_fails_when_parent_dir_is_not_writable() {
     let path = readonly.join("sub").join("config.toml");
     let err = write_enabled_map(&path, &map).expect_err("write should fail");
     assert!(matches!(err, CoreError::Io(_)));
-    let _ = std::fs::set_permissions(&readonly, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::set_permissions(&readonly, std::fs::Permissions::from_mode(0o755)).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 }
