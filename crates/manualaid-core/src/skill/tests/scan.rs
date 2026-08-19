@@ -136,3 +136,20 @@ fn path_key_normalizes_backslashes() {
         "/home/alice/.claude/skills/a"
     );
 }
+
+#[test]
+fn scan_skills_dir_rejects_file_path() {
+    // `read_dir` on a file (rather than a directory) is a stable, portable
+    // way to exercise the scanner's error branch. The `entry` iteration
+    // error and non-UTF-8 folder name skip in `scan_skills_dir` still depend
+    // on OS state that tests cannot construct portably.
+    // 对文件（而非目录）调用 `read_dir` 是稳定且可移植地覆盖扫描器错误
+    // 分支的方式。`scan_skills_dir` 中条目遍历错误与非 UTF-8 文件夹名
+    // 跳过分支仍依赖测试无法跨平台构造的 OS 状态。
+    let dir = temp_dir("read-dir-file");
+    let file = dir.join("not-a-dir");
+    std::fs::write(&file, "content").unwrap();
+    let err = scan_skills_dir(&file, false).expect_err("file path is not a directory");
+    assert!(matches!(err, CoreError::Io(_)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
