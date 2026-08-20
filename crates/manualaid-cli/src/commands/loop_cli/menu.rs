@@ -405,4 +405,45 @@ mod tests {
             Some(MenuAction::Command(LoopCommand::SessionSummary))
         ));
     }
+
+    #[test]
+    fn explicit_key_less_than_next_auto_does_not_update_next_auto() {
+        // 覆盖 menu.rs:117-119
+        let mut menu = Menu::new("m");
+        // 添加一个 auto 项，next_auto 变成 2
+        menu = menu
+            .add(MenuItem::auto(
+                "first".to_string(),
+                MenuAction::Command(command_marker()),
+            ))
+            .unwrap();
+        // next_auto = 2, 添加显式键 "0" (< next_auto)，"0" 未被占用
+        menu = menu
+            .add(MenuItem::keyed(
+                "0",
+                "zero key".to_string(),
+                MenuAction::Command(LoopCommand::Back),
+            ))
+            .unwrap();
+        // 再添加一个 auto 项，应该继续用 key "2"（因为 next_auto 没有被更新）
+        menu = menu
+            .add(MenuItem::auto(
+                "second".to_string(),
+                MenuAction::Command(LoopCommand::SessionSummary),
+            ))
+            .unwrap();
+        let rendered = menu.render();
+        assert!(rendered.contains("1. first"));
+        assert!(rendered.contains("0. zero key"));
+        assert!(rendered.contains("2. second"));
+    }
+
+    #[test]
+    fn resolve_unknown_input_returns_none() {
+        // 覆盖 menu.rs:375 附近 resolve 返回 None 的情况
+        let menu = build_main_menu();
+        assert!(menu.resolve("bogus_input").is_none());
+        assert!(menu.resolve("").is_none());
+        assert!(menu.resolve("999").is_none());
+    }
 }

@@ -373,3 +373,122 @@ pub(super) fn persist_and_confirm(config: &Config, root: &Path, key: &str, value
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use manualaid_core::clipboard::MockClipboard;
+    use manualaid_core::parser::FormatRegistry;
+    use manualaid_ws::config::Config;
+
+    #[test]
+    fn copy_tool_template_write_error_handling() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+
+        let registry = FormatRegistry::new();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+
+        // This should not panic and should print the error to stderr
+        copy_tool_template(&mock, &registry, &ToolKind::Read);
+        // Output capture would show the error message, but we just verify it doesn't panic
+    }
+
+    #[test]
+    fn toggle_tool_persist_error_handling() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+
+        // Use a read-only directory to cause save failure
+        let root = crate::test_support::temp_dir("toggle-persist-error");
+        let config_path = root.join(".ManualAid");
+        std::fs::create_dir_all(&config_path).unwrap();
+        // Make the directory read-only to cause permission error
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let metadata = std::fs::metadata(&config_path).unwrap();
+            let mut perms = metadata.permissions();
+            perms.set_mode(0o444);
+            std::fs::set_permissions(&config_path, perms).unwrap();
+        }
+        #[cfg(windows)]
+        {
+            // On Windows, we can't easily make a directory read-only for the current user,
+            // so we'll use a different approach: create a file where the config directory should be
+            std::fs::write(config_path.join("config.toml"), "content").unwrap();
+            // Then try to write to a subdirectory that doesn't exist - this should fail
+        }
+
+        let mut config = Config::default();
+        // The save will fail, but we just ensure the error path is exercised
+        toggle_tool(&mut config, &root, "shell");
+        // No panic means the error path was exercised
+    }
+
+    #[test]
+    fn switch_lang_out_of_range_index() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+
+        let root = crate::test_support::temp_dir("switch-lang-out");
+        let mut config = Config::default();
+
+        // Index 3 is out of range (only 0 and 1 are valid)
+        switch_lang(&mut config, &root, Some(3));
+        // Should print error message about invalid index
+    }
+
+    #[test]
+    fn switch_format_out_of_range_index() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+
+        let root = crate::test_support::temp_dir("switch-format-out");
+        let registry = FormatRegistry::new();
+        let mut config = Config::default();
+
+        // Index 999 is out of range
+        switch_format(&registry, &mut config, &root, Some(999));
+        // Should print error message about invalid index
+    }
+
+    #[test]
+    fn toggle_context_auto_load_persist_error() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+
+        let root = crate::test_support::temp_dir("toggle-context-error");
+        let mut config = Config::default();
+
+        // Create a file that blocks the config directory
+        let config_dir = root.join(".ManualAid");
+        std::fs::write(&config_dir, "not a directory").unwrap();
+
+        // This should trigger the error path in persist_and_confirm
+        config.context_auto_load = !config.context_auto_load;
+        persist_and_confirm(&config, &root, "cli.config.saved", "");
+    }
+
+    #[test]
+    fn toggle_tool_unknown_tool_branch() {
+        let root = crate::test_support::temp_dir("toggle-unknown-branch");
+        let mut config = Config::default();
+        // Unknown tool name should hit the `_ => return` branch
+        toggle_tool(&mut config, &root, "unknown_tool");
+        // Config should not have been modified
+        assert_eq!(config.shell, true); // default
+        assert_eq!(config.read, true);
+        assert_eq!(config.write, true);
+        assert_eq!(config.edit, true);
+        assert_eq!(config.skill, true);
+        // And no config file should have been created
+        assert!(!root.join(".ManualAid").join("config.toml").exists());
+    }
+}

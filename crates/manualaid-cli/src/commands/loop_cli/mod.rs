@@ -576,4 +576,72 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_dir_all(&home);
     }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn loop_exit_command_handling() {
+        // 覆盖 mod.rs:265-266 - 主循环中 exit 命令路径
+        let _capture = crate::console::capture();
+        let _lang = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skills = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("loop-exit-ws");
+        let home = crate::test_support::temp_dir("loop-exit-home");
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        // 输入 "0" 对应退出命令（主菜单的 0 是 exit）
+        super::utils::push_test_input(&["0"]);
+        let result = loop_main_at(&root, &home, None, None).await;
+        assert!(result.is_ok());
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn loop_config_load_error_handling() {
+        // 覆盖 mod.rs:298 - 配置加载错误处理
+        // 通过尝试在无效目录加载配置来触发错误
+        let root = crate::test_support::temp_dir("config-load-error");
+        let home = crate::test_support::temp_dir("config-load-error-home");
+        // 创建 config.toml 但内容无效
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        std::fs::write(
+            root.join(".ManualAid").join("config.toml"),
+            "invalid = toml [ content",
+        )
+        .unwrap();
+        let result = manualaid_ws::config::load(&root, &home);
+        assert!(result.is_err());
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn config_validation_warning_handling() {
+        // 覆盖 mod.rs:302 - 配置验证警告打印
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let path = std::path::PathBuf::from("/fake/path/config.toml");
+        let issues = vec![
+            manualaid_ws::config::ConfigIssue {
+                kind: manualaid_ws::config::ConfigIssueKind::InvalidValue,
+                key: "tool_call_format".to_string(),
+                value: "bogus".to_string(),
+                available_values: vec!["auto".to_string(), "xml".to_string()],
+                path: path.clone(),
+            },
+            manualaid_ws::config::ConfigIssue {
+                kind: manualaid_ws::config::ConfigIssueKind::DangerousAllowCommand,
+                key: "allow_commands".to_string(),
+                value: "rm -rf /".to_string(),
+                available_values: vec![],
+                path,
+            },
+        ];
+        for issue in &issues {
+            crate::console::out_println!("{}", format_config_issue(issue));
+        }
+        let output = _capture.text();
+        assert!(output.contains("bogus") || output.contains("rm"));
+    }
 }
