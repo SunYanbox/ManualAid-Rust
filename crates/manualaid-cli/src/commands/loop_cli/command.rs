@@ -14,8 +14,11 @@ use manualaid_ws::session::SessionLog;
 
 use super::LoopOptions;
 use super::handlers::{
-    copy_intent_rule_with_provider, copy_round_result_with_provider,
-    copy_system_prompt_with_provider, input_and_submit, paste_and_submit_with_provider,
+    copy_enabled_tools_with_provider, copy_intent_rule_with_provider,
+    copy_line_ending_rule_with_provider, copy_plan_mode_rule_with_provider,
+    copy_round_result_with_provider, copy_switch_mode_rule_with_provider,
+    copy_system_prompt_with_provider, copy_task_planning_rule_with_provider,
+    copy_tool_format_with_provider, input_and_submit, paste_and_submit_with_provider,
     print_session_summary, show_tool_history,
 };
 use super::utils::{
@@ -60,6 +63,13 @@ pub(super) enum LoopCommand {
     SessionSummary,
     ToolHistory,
     CopyIntentRule,
+    CopyPromptMenu,
+    CopyToolFormat,
+    CopyEnabledTools,
+    CopyLineEndingRule,
+    CopyPlanModeRule,
+    CopySwitchModeRule,
+    CopyTaskPlanningRule,
     Exit,
     ToggleMode,
     SwitchLang(Option<usize>),
@@ -159,6 +169,37 @@ pub(super) async fn run_command<P: ClipboardProvider>(
         }
         LoopCommand::CopyIntentRule => {
             copy_intent_rule_with_provider(provider);
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopyPromptMenu => {
+            // Handled by the caller because entering this menu from inside
+            // `run_command` would create an async recursion cycle.
+            // 由调用方处理：若在这里进入菜单，会与菜单循环形成 async
+            // 递归环。
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopyToolFormat => {
+            copy_tool_format_with_provider(provider, config, registry);
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopyEnabledTools => {
+            copy_enabled_tools_with_provider(provider, config);
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopyLineEndingRule => {
+            copy_line_ending_rule_with_provider(provider);
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopyPlanModeRule => {
+            copy_plan_mode_rule_with_provider(provider);
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopySwitchModeRule => {
+            copy_switch_mode_rule_with_provider(provider);
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopyTaskPlanningRule => {
+            copy_task_planning_rule_with_provider(provider);
             CommandOutcome::Continue
         }
         LoopCommand::Exit => CommandOutcome::ExitLoop,

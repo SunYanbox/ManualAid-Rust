@@ -72,6 +72,62 @@ pub fn copy_intent_rule_with_provider<P: ClipboardProvider>(provider: &P) {
     }
 }
 
+/// Copy the current tool-calling format description to the clipboard.
+/// 将当前工具调用格式说明复制到剪贴板。
+pub fn copy_tool_format_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    config: &Config,
+    registry: &FormatRegistry,
+) {
+    let text = manualaid_ws::prompt::tool_calling_format_description(config, registry);
+    write_copied(provider, &text);
+}
+
+/// Copy the names of the currently enabled tools to the clipboard.
+/// 将当前已启用工具的名称复制到剪贴板。
+pub fn copy_enabled_tools_with_provider<P: ClipboardProvider>(provider: &P, config: &Config) {
+    let tools = config.enabled_tool_names().join(", ");
+    let text = t_fmt("prompt.copy.enabled-tools", &[("tools", &tools)]);
+    write_copied(provider, &text);
+}
+
+/// Copy the line-ending handling prompt to the clipboard.
+/// 将行尾处理提示词复制到剪贴板。
+pub fn copy_line_ending_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+    let text = i18n::t_str("prompt.copy.line-ending-rule");
+    write_copied(provider, &text);
+}
+
+/// Copy the plan-mode prompt to the clipboard.
+/// 将计划模式提示词复制到剪贴板。
+pub fn copy_plan_mode_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+    let text = i18n::t_str("prompt.copy.plan-mode-rule");
+    write_copied(provider, &text);
+}
+
+/// Copy the switch-execution-mode prompt to the clipboard.
+/// 将切换执行模式提示词复制到剪贴板。
+pub fn copy_switch_mode_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+    let text = i18n::t_str("prompt.copy.switch-mode-rule");
+    write_copied(provider, &text);
+}
+
+/// Copy the task-planning prompt to the clipboard.
+/// 将任务规划提示词复制到剪贴板。
+pub fn copy_task_planning_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+    let text = i18n::t_str("prompt.copy.task-planning-rule");
+    write_copied(provider, &text);
+}
+
+/// Write prompt text to the clipboard and print the shared confirmation.
+/// 将提示词文本写入剪贴板并打印统一的确认信息。
+fn write_copied<P: ClipboardProvider>(provider: &P, text: &str) {
+    match provider.write(text) {
+        Ok(()) => print_muted_block(&[i18n::t_str("cli.loop.copied")]),
+        Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
+    }
+}
+
 /// Read the clipboard and submit its text as one round.
 /// 读取剪贴板并把其文本作为一轮提交。
 pub async fn paste_and_submit_with_provider<P: ClipboardProvider>(

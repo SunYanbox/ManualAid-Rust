@@ -1,10 +1,13 @@
 use crate::common;
 use crate::{LOCALE_LOCK, STYLE_LOCK};
 use manualaid_cli::commands::loop_cli::{
-    LoopOptions, ask_copy, copy_intent_rule_with_provider, copy_round_result,
-    copy_round_result_with_provider, copy_system_prompt_with_provider, input_and_submit,
-    paste_and_submit_with_provider, print_session_summary, push_test_input, show_tool_history,
-    submit_text, submit_text_with_provider, truncate_preview_lines,
+    LoopOptions, ask_copy, copy_enabled_tools_with_provider, copy_intent_rule_with_provider,
+    copy_line_ending_rule_with_provider, copy_plan_mode_rule_with_provider, copy_round_result,
+    copy_round_result_with_provider, copy_switch_mode_rule_with_provider,
+    copy_system_prompt_with_provider, copy_task_planning_rule_with_provider,
+    copy_tool_format_with_provider, input_and_submit, paste_and_submit_with_provider,
+    print_session_summary, push_test_input, show_tool_history, submit_text,
+    submit_text_with_provider, truncate_preview_lines,
 };
 use manualaid_core::audit::{Auditor, SessionMode};
 use manualaid_core::clipboard::{ClipboardProvider, MockClipboard};
@@ -385,6 +388,114 @@ fn copy_intent_rule_with_write_error_does_not_panic() {
     mock.set_write_error("mock write failure");
     copy_intent_rule_with_provider(&mock);
     assert!(mock.read().unwrap().is_empty());
+}
+
+#[test]
+#[allow(clippy::await_holding_lock)]
+fn copy_tool_format_writes_current_format_to_clipboard() {
+    let _capture = manualaid_cli::console::capture();
+    let _lock = LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
+    let mock = MockClipboard::new();
+    let registry = FormatRegistry::new();
+    copy_tool_format_with_provider(&mock, &Config::default(), &registry);
+    let clipboard = mock.read().unwrap();
+    assert!(clipboard.contains(&i18n::t_str("cli.prompt.func_calls_notes")));
+    assert!(clipboard.contains("<read>"));
+}
+
+#[test]
+#[allow(clippy::await_holding_lock)]
+fn copy_enabled_tools_writes_names_only_to_clipboard() {
+    let _capture = manualaid_cli::console::capture();
+    let _lock = LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
+    let mock = MockClipboard::new();
+    copy_enabled_tools_with_provider(&mock, &Config::default());
+    let clipboard = mock.read().unwrap();
+    assert!(clipboard.contains("read"));
+    assert!(clipboard.contains("edit"));
+    assert!(clipboard.contains("write"));
+    assert!(clipboard.contains("shell"));
+    assert!(!clipboard.contains("**Parameters:**"));
+}
+
+#[test]
+#[allow(clippy::await_holding_lock)]
+fn copy_enabled_tools_respects_disabled_switch() {
+    let _capture = manualaid_cli::console::capture();
+    let _lock = LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
+    let mock = MockClipboard::new();
+    let config = Config {
+        shell: false,
+        ..Config::default()
+    };
+    copy_enabled_tools_with_provider(&mock, &config);
+    let clipboard = mock.read().unwrap();
+    assert!(!clipboard.contains("shell"));
+    assert!(clipboard.contains("read"));
+}
+
+#[test]
+#[allow(clippy::await_holding_lock)]
+fn copy_rule_prompts_write_expected_text_to_clipboard() {
+    let _capture = manualaid_cli::console::capture();
+    let _lock = LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
+    let cases = [
+        (
+            copy_line_ending_rule_with_provider as fn(&MockClipboard),
+            i18n::t_str("prompt.copy.line-ending-rule"),
+        ),
+        (
+            copy_plan_mode_rule_with_provider as fn(&MockClipboard),
+            i18n::t_str("prompt.copy.plan-mode-rule"),
+        ),
+        (
+            copy_switch_mode_rule_with_provider as fn(&MockClipboard),
+            i18n::t_str("prompt.copy.switch-mode-rule"),
+        ),
+        (
+            copy_task_planning_rule_with_provider as fn(&MockClipboard),
+            i18n::t_str("prompt.copy.task-planning-rule"),
+        ),
+    ];
+    for (copy_fn, expected) in cases {
+        let mock = MockClipboard::new();
+        copy_fn(&mock);
+        assert_eq!(mock.read().unwrap(), expected);
+    }
+}
+
+#[test]
+#[allow(clippy::await_holding_lock)]
+fn copy_rule_prompts_with_write_error_do_not_panic() {
+    let _capture = manualaid_cli::console::capture();
+    let _lock = LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
+    let copy_fns = [
+        copy_line_ending_rule_with_provider as fn(&MockClipboard),
+        copy_plan_mode_rule_with_provider as fn(&MockClipboard),
+        copy_switch_mode_rule_with_provider as fn(&MockClipboard),
+        copy_task_planning_rule_with_provider as fn(&MockClipboard),
+    ];
+    for copy_fn in copy_fns {
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+        copy_fn(&mock);
+        assert!(mock.read().unwrap().is_empty());
+    }
 }
 
 #[tokio::test]

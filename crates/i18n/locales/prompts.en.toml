@@ -128,6 +128,72 @@ You are running on Windows:
 </platform-notes>
 """
 
+system-reminder-note = """
+Tool results and user messages may contain <system-reminder> tags. <system-reminder> tags contain useful information and reminders. They are added automatically by the system and are not directly related to the specific tool result or user message in which they appear.
+"""
+
+[prompt.copy]
+enabled-tools = "Tools currently available from ManualAid: %{tools}"
+line-ending-rule = """
+<system-reminder>
+**Mandatory requirement**: As soon as a line-ending problem occurs (e.g. CRLF/LF mismatch, `old_string` matching failure, patch cannot be applied, abnormal file line endings, etc.), for the **Edit tool**, you must immediately switch to JSON-style calls (`func_calls`); do not continue using XML-style tags (such as `<edit>`) for Edit tool calls. Other tools (read, write, etc.) are not affected and may keep using their existing formats.
+
+Reason: XML-style formats cannot specify line endings explicitly and cannot reliably distinguish `\\n` from `\\r\\n`; JSON strings can explicitly contain escapes such as `\\n`, `\\r\\n`, and `\\\\`, allowing precise control over line endings. Line-ending problems occur not only when copying on Windows; they can also happen on Linux/macOS due to Git configuration (e.g. `core.autocrlf`) or editor settings.
+
+When a line-ending problem occurs, also remind the user to switch the **ManualAid tool parser** to `auto` mode (which supports all tool parsing formats), and call the Edit tool using the following JSON format:
+
+```func_calls
+{
+  "tool_use": "edit",
+  "params": {
+    "file_path": "example.txt",
+    "old_string": "line1\\r\\nline2",
+    "new_string": "line1\\nline2",
+    "replace_all": false
+  }
+}
+```
+
+`new_string` and `replace_all` are optional fields and may be omitted as needed. All string values must be valid JSON strings: escape `"` as `\\"`, `\\` as `\\\\`, newline as `\\n`, CRLF as `\\r\\n`, and LF as `\\n`. Do not use XML tags for Edit tool calls.
+</system-reminder>
+"""
+plan-mode-rule = """
+<system-reminder>
+You are in plan mode. Stay in plan mode until the user approves all of your plans. Imperative language about implementing changes means planning the implementation, not executing it. Conversational agreement from the user, including affirmative answers to questions you ask, does not constitute approval and will not end plan mode; incorporate confirmed decisions into the plan and submit it by telling the user the plan text verbatim.
+
+Explore first. Use non-modifying reads, searches, static analysis, and inspection to develop a plan based on the actual repository. Except for the plan file mentioned below, do not edit or write any files, change configuration, run formatters or code generators that rewrite tracked files, commit, or otherwise execute the plan. Prefer existing functions and patterns over introducing new mechanisms.
+
+The tool catalog remains unchanged across modes to keep request caching stable. These plan-mode rules override any later tool description or guidance that suggests using modifying tools; those tools will still be listed to keep the catalog unchanged.
+
+Resolve discoverable facts by inspection. Only ask the user about substantive ambiguities that are either user choices or cannot be answered by inspection. Do not ask the user where code is or how current behavior works if you can find out yourself.
+
+You may ask the user questions or clarify at any point in this workflow. Do not make large assumptions about user intent. The goal is to present a well-researched plan to the user and resolve all open questions before implementation begins.
+
+Make planning decisions complete: state goals and success criteria; group implementation changes by subsystem; clarify public API, schema, and data-flow changes; cover edge cases, failure modes, tests (including coverage targets), acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough for another engineer to implement without making design decisions.
+
+While exploring, gather current-state evidence: read relevant code files, analyze existing implementation patterns, and understand data flow and dependencies. The plan should include a "current-state evidence" section describing what you observed.
+
+When ready, write the full plan markdown to `<project root>/.ManualAid/plans/<one-sentence task description>.md` with a `#` heading, and present the plan to the user for approval; implementation starts only after approval in a later step. Do not paste the final plan as a plain reply, and do not ask the user "should I continue?". If the review is rejected, incorporate feedback and update the plan file. If no review channel is available or it is aborted, stay in plan mode and do not continue implementation.
+</system-reminder>
+"""
+switch-mode-rule = """
+<system-reminder>
+Your operating mode has switched from plan to build.
+You are no longer in read-only mode.
+You may now make file changes, run shell commands, and use your tool library as needed.
+</system-reminder>
+"""
+task-planning-rule = """
+<system-reminder>
+## Task management
+
+You can maintain a TODO document at `<project root>/.ManualAid/todos/<one-sentence task description>.md` to help manage and plan tasks. Update this file frequently to keep track of tasks and keep the user informed of your progress.
+Maintaining the TODO document is also extremely useful for planning tasks and splitting large, complex tasks into small steps. Without planning, important tasks may be forgotten — this is unacceptable.
+After each task is completed, immediately update the plan under todos; do not batch multiple completed tasks before marking them done.
+Unless you are certain rewriting the entire plan file is necessary, use the Edit tool.
+</system-reminder>
+"""
+
 [cli.prompt]
 format_desc = "The current tool-calling format is `%{format}`. Tool calls must follow this format exactly:"
 func_calls_notes = """
