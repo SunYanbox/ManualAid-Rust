@@ -483,11 +483,11 @@ mod tests {
         // Unknown tool name should hit the `_ => return` branch
         toggle_tool(&mut config, &root, "unknown_tool");
         // Config should not have been modified
-        assert_eq!(config.shell, true); // default
-        assert_eq!(config.read, true);
-        assert_eq!(config.write, true);
-        assert_eq!(config.edit, true);
-        assert_eq!(config.skill, true);
+        assert!(config.shell); // default
+        assert!(config.read);
+        assert!(config.write);
+        assert!(config.edit);
+        assert!(config.skill);
         // And no config file should have been created
         assert!(!root.join(".ManualAid").join("config.toml").exists());
     }
