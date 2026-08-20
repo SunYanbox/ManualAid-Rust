@@ -111,6 +111,7 @@ shell = "Shell tool (current: %{state})"
 skill = "SKILL tool (current: %{state})"
 skill_list = "SKILL enable/disable list"
 title = "Configuration"
+tools_list = "Tools enable/disable list"
 write = "Write tool (current: %{state})"
 
 [cli.context]
@@ -169,6 +170,9 @@ summary_rounds = "Rounds: %{count}"
 summary_title = "Session summary"
 summary_tool_calls = "Tool calls: %{count}"
 global_config_changed = "Default config changed via %{path}: %{key} = %{value} (default: %{default})"
+
+[cli.tool_config]
+title = "Tools enable/disable"
 
 [cli.skill_config]
 item = "[%{state}] %{name} (%{unique_name})"

@@ -44,6 +44,9 @@ pub(super) async fn config_menu<P: ClipboardProvider>(
             }
         };
         match command {
+            super::command::LoopCommand::ToolMenu => {
+                tool_menu(provider, config, registry, root, options, session).await;
+            }
             super::command::LoopCommand::SkillMenu => {
                 skill_menu(provider, config, registry, root, options, session).await;
             }
@@ -94,28 +97,8 @@ fn build_config_menu(config: &Config, options: &LoopOptions) -> Menu {
         ))
         .expect("unique menu key")
         .add(MenuItem::auto(
-            t_fmt("cli.config.shell", &[("state", &state(config.shell))]),
-            MenuAction::Command(LoopCommand::ToggleShell),
-        ))
-        .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.read", &[("state", &state(config.read))]),
-            MenuAction::Command(LoopCommand::ToggleRead),
-        ))
-        .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.write", &[("state", &state(config.write))]),
-            MenuAction::Command(LoopCommand::ToggleWrite),
-        ))
-        .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.edit", &[("state", &state(config.edit))]),
-            MenuAction::Command(LoopCommand::ToggleEdit),
-        ))
-        .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.skill", &[("state", &state(config.skill))]),
-            MenuAction::Command(LoopCommand::ToggleSkill),
+            i18n::t_str("cli.config.tools_list"),
+            MenuAction::Command(LoopCommand::ToolMenu),
         ))
         .expect("unique menu key")
         .add(MenuItem::auto(
@@ -155,6 +138,102 @@ fn build_config_menu(config: &Config, options: &LoopOptions) -> Menu {
         .add(MenuItem::auto(
             i18n::t_str("cli.config.memory"),
             MenuAction::Command(LoopCommand::ShowMemoryUsage),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::keyed_alias(
+            "0",
+            &["q", "quit", "exit"],
+            i18n::t_str("cli.config.back"),
+            MenuAction::Command(LoopCommand::Back),
+        ))
+        .expect("unique menu key")
+}
+
+/// The tool enable/disable sub-menu: toggle each tool switch by index.
+/// 工具启用/禁用子菜单：按索引切换各工具开关。
+pub(super) async fn tool_menu<P: ClipboardProvider>(
+    provider: &P,
+    config: &mut Config,
+    registry: &FormatRegistry,
+    root: &Path,
+    options: &mut LoopOptions,
+    session: &mut SessionLog,
+) {
+    let executor = super::build_executor(root, config, options.mode);
+    loop {
+        let menu = build_tool_menu(config);
+        crate::console::out_println!("{}", menu.render());
+        let line = super::utils::read_line().unwrap_or_default();
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        let Some(action) = menu.resolve(trimmed) else {
+            crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+            continue;
+        };
+        let command = match action {
+            super::menu::MenuAction::Command(command) => command,
+            super::menu::MenuAction::Submenu(_) => {
+                crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+                continue;
+            }
+        };
+        match command {
+            super::command::LoopCommand::Back => break,
+            other => {
+                let mut ctx = super::command::CommandContext {
+                    provider,
+                    executor: &executor,
+                    registry,
+                    config,
+                    options,
+                    root,
+                    session,
+                };
+                let outcome = super::command::run_command(other, &mut ctx).await;
+                if matches!(outcome, super::command::CommandOutcome::ExitLoop) {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+/// Build the tool enable/disable submenu from the current tool switches.
+/// 从当前工具开关构建工具启用/禁用子菜单。
+fn build_tool_menu(config: &Config) -> Menu {
+    let state = |enabled: bool| {
+        if enabled {
+            crate::style::success(&i18n::t_str("cli.config.enabled"))
+        } else {
+            crate::style::muted(&i18n::t_str("cli.config.disabled"))
+        }
+    };
+    Menu::new(i18n::t_str("cli.tool_config.title"))
+        .add(MenuItem::auto(
+            t_fmt("cli.config.shell", &[("state", &state(config.shell))]),
+            MenuAction::Command(LoopCommand::ToggleShell),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            t_fmt("cli.config.read", &[("state", &state(config.read))]),
+            MenuAction::Command(LoopCommand::ToggleRead),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            t_fmt("cli.config.write", &[("state", &state(config.write))]),
+            MenuAction::Command(LoopCommand::ToggleWrite),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            t_fmt("cli.config.edit", &[("state", &state(config.edit))]),
+            MenuAction::Command(LoopCommand::ToggleEdit),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            t_fmt("cli.config.skill", &[("state", &state(config.skill))]),
+            MenuAction::Command(LoopCommand::ToggleSkill),
         ))
         .expect("unique menu key")
         .add(MenuItem::keyed_alias(
@@ -273,6 +352,12 @@ pub fn render_config_menu(config: &Config, options: &LoopOptions) -> String {
     build_config_menu(config, options).render()
 }
 
+/// Render the tool enable/disable menu with current states.
+/// 渲染带当前状态的工具启用/禁用菜单。
+pub fn render_tool_menu(config: &Config) -> String {
+    build_tool_menu(config).render()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -299,6 +384,7 @@ mod tests {
         assert!(menu.contains("auto"));
         assert!(menu.contains(&i18n::t_str("cli.config.enabled")));
         assert!(menu.contains(&i18n::t_str("cli.config.disabled")));
+        assert!(menu.contains(&i18n::t_str("cli.config.tools_list")));
         assert!(menu.contains(&i18n::t_str("cli.config.skill_list")));
         assert!(menu.contains(&i18n::t_str("cli.config.mode_manual")));
         // The rendered line replaces `%{state}` with styled text, so only
@@ -416,7 +502,7 @@ mod tests {
         let mut config = Config::default();
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
-        push_test_input(&["8", "9", "_", "0"]);
+        push_test_input(&["4", "5", "_", "0"]);
         let mut session = SessionLog::new();
         config_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
@@ -441,7 +527,7 @@ mod tests {
         let mut config = Config::default();
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
-        push_test_input(&["11", "0"]);
+        push_test_input(&["7", "0"]);
         let mut session = SessionLog::new();
         config_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
@@ -466,7 +552,7 @@ mod tests {
         let mut config = Config::default();
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
-        push_test_input(&["12", "0"]);
+        push_test_input(&["8", "0"]);
         let mut session = SessionLog::new();
         config_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
@@ -522,7 +608,7 @@ mod tests {
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
         let mut session = SessionLog::new();
-        push_test_input(&["13", "0"]);
+        push_test_input(&["9", "0"]);
         config_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
             &mut config,
@@ -536,6 +622,97 @@ mod tests {
         assert!(output.contains("In-memory session footprint"));
         assert!(output.contains("Metadata:"));
         crate::style::set_enabled(false);
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn tool_menu_toggles_each_tool_and_persists() {
+        let _capture = crate::console::capture();
+        let root = crate::test_support::temp_dir("tool-menu-persist");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["1", "2", "3", "4", "5", "0"]);
+        let mut session = SessionLog::new();
+        tool_menu(
+            &manualaid_core::clipboard::MockClipboard::new(),
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &mut session,
+        )
+        .await;
+        assert!(!config.shell);
+        assert!(!config.read);
+        assert!(!config.write);
+        assert!(!config.edit);
+        assert!(!config.skill);
+        let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
+        assert!(content.contains("[tools]"));
+    }
+
+    #[test]
+    fn render_tool_menu_shows_five_tools_and_back() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let rendered = render_tool_menu(&Config::default());
+        for key in [
+            "cli.tool_config.title",
+            "cli.config.shell",
+            "cli.config.read",
+            "cli.config.write",
+            "cli.config.edit",
+            "cli.config.skill",
+            "cli.config.back",
+        ] {
+            assert!(rendered.contains(i18n::t_str(key).split("%{state}").next().unwrap()));
+        }
+        assert!(rendered.contains("0."));
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn tool_menu_empty_input_returns() {
+        let _capture = crate::console::capture();
+        let root = crate::test_support::temp_dir("tool-menu-empty");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["", "0"]);
+        let mut session = SessionLog::new();
+        tool_menu(
+            &manualaid_core::clipboard::MockClipboard::new(),
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &mut session,
+        )
+        .await;
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn tool_menu_invalid_input_rejected() {
+        let _capture = crate::console::capture();
+        let root = crate::test_support::temp_dir("tool-menu-invalid");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        push_test_input(&["xyz", "0"]);
+        let mut session = SessionLog::new();
+        tool_menu(
+            &manualaid_core::clipboard::MockClipboard::new(),
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &mut session,
+        )
+        .await;
+        let output = _capture.text();
+        assert!(output.contains(&i18n::t_str("cli.loop.menu_invalid")));
     }
 
     #[allow(clippy::await_holding_lock)]

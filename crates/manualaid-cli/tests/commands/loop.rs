@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use manualaid_cli::commands::loop_cli::{
     Approval, LoopOptions, cycle_format, cycle_lang, execute_round_with_approval,
-    format_round_summary, parse_round_index, render_config_menu, render_menu,
+    format_round_summary, parse_round_index, render_config_menu, render_menu, render_tool_menu,
 };
 use manualaid_core::audit::{Auditor, SessionMode};
 use manualaid_core::executor::Executor;
@@ -275,6 +275,18 @@ fn config_menu_shows_current_states() {
     let menu = render_config_menu(&config, &LoopOptions::default());
     assert!(menu.contains(&i18n::t_str("cli.config.disabled")));
     assert!(menu.contains(&i18n::t_str("cli.config.enabled")));
+}
+
+#[test]
+fn tool_menu_shows_shell_disabled_state() {
+    let config = Config {
+        shell: false,
+        ..Config::default()
+    };
+    let menu = render_tool_menu(&config);
+    assert!(menu.contains(&i18n::t_str("cli.config.disabled")));
+    assert!(menu.contains(&i18n::t_str("cli.config.enabled")));
+    assert!(menu.contains(&i18n::t_str("cli.tool_config.title")));
 }
 
 #[test]

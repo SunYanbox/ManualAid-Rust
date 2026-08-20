@@ -111,6 +111,7 @@ shell = "Shell 工具（当前：%{state}）"
 skill = "SKILL 工具（当前：%{state}）"
 skill_list = "SKILL 启用/禁用列表"
 title = "配置"
+tools_list = "工具启用/禁用列表"
 write = "Write 工具（当前：%{state}）"
 
 [cli.context]
@@ -169,6 +170,9 @@ summary_rounds = "批次：%{count}"
 summary_title = "会话摘要"
 summary_tool_calls = "工具调用：%{count}"
 global_config_changed = "已通过配置文件 %{path} 更改默认配置：%{key} = %{value}（默认：%{default}）"
+
+[cli.tool_config]
+title = "工具启用/禁用"
 
 [cli.skill_config]
 item = "[%{state}] %{name}（%{unique_name}）"
