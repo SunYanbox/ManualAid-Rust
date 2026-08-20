@@ -71,6 +71,7 @@ pub(super) enum LoopCommand {
     ToggleSkill,
     ToggleAutoCopy,
     ToggleClearScreen,
+    ToolMenu,
     SkillMenu,
     ToggleContextAutoLoad,
     ShowMemoryUsage,
@@ -199,6 +200,13 @@ pub(super) async fn run_command<P: ClipboardProvider>(
         }
         LoopCommand::ToggleClearScreen => {
             options.clear_screen = !options.clear_screen;
+            CommandOutcome::Continue
+        }
+        LoopCommand::ToolMenu => {
+            // Handled by the configuration menu loop to avoid an async
+            // recursion cycle between run_command and menu loops.
+            // 由配置菜单循环处理，避免 run_command 与菜单循环之间的
+            // async 递归环。
             CommandOutcome::Continue
         }
         LoopCommand::SkillMenu => {

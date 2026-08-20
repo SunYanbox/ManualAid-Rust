@@ -29,7 +29,7 @@ mod preview;
 pub(crate) mod utils;
 
 pub use approval::execute_round_with_approval;
-pub use config::render_config_menu;
+pub use config::{render_config_menu, render_tool_menu};
 pub use preview::approval_preview;
 pub use utils::{
     cycle_format, cycle_lang, format_round_detail, format_round_header, format_round_summary,
