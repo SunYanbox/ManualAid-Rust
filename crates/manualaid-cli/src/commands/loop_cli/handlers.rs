@@ -24,10 +24,6 @@ use tokenx_rs;
 /// selection question is only asked when the prompt is actually generated.
 /// 结合所选上下文文件生成系统提示词并复制到剪贴板。上下文文件在此刻解析，因此只在真正
 /// 生成提示词时才询问选择。
-pub(super) fn copy_system_prompt(config: &Config, root: &Path, registry: &FormatRegistry) {
-    copy_system_prompt_with_provider(&RealClipboard, config, root, registry);
-}
-
 pub fn copy_system_prompt_with_provider<P: ClipboardProvider>(
     provider: &P,
     config: &Config,
@@ -68,10 +64,6 @@ pub fn copy_system_prompt_with_provider<P: ClipboardProvider>(
 /// Copy the intent-output-rule text to the clipboard so the user can
 /// paste it into an external LLM chat to re-emphasise the rule mid-session.
 /// 将意图规则文本复制到剪贴板，方便用户在外部 LLM 聊天中途重新强调该规则。
-pub(super) fn copy_intent_rule() {
-    copy_intent_rule_with_provider(&RealClipboard);
-}
-
 pub fn copy_intent_rule_with_provider<P: ClipboardProvider>(provider: &P) {
     let text = i18n::t_str("prompt.system.intent-output-rule");
     match provider.write(&text) {
@@ -82,24 +74,6 @@ pub fn copy_intent_rule_with_provider<P: ClipboardProvider>(provider: &P) {
 
 /// Read the clipboard and submit its text as one round.
 /// 读取剪贴板并把其文本作为一轮提交。
-pub(super) async fn paste_and_submit(
-    executor: &Executor,
-    registry: &FormatRegistry,
-    session: &mut SessionLog,
-    options: &mut LoopOptions,
-    max_result_chars: usize,
-) {
-    paste_and_submit_with_provider(
-        &RealClipboard,
-        executor,
-        registry,
-        session,
-        options,
-        max_result_chars,
-    )
-    .await;
-}
-
 pub async fn paste_and_submit_with_provider<P: ClipboardProvider>(
     provider: &P,
     executor: &Executor,

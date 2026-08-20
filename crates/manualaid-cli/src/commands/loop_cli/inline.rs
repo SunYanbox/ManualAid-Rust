@@ -3,20 +3,19 @@
 
 use std::path::Path;
 
+use manualaid_core::clipboard::{ClipboardProvider, RealClipboard};
 use manualaid_core::parser::{FormatRegistry, RegistryMode};
 use manualaid_core::tools::ToolKind;
 use manualaid_ws::config::Config;
 use manualaid_ws::session::SessionLog;
 
-use super::config::persist_and_confirm;
+use super::LoopOptions;
+use super::command;
 use super::handlers::{
     copy_round_index_with_provider, copy_round_result_with_provider,
     copy_system_prompt_with_provider,
 };
-use super::utils::{
-    apply_format_mode, cycle_format, cycle_lang, parse_round_index, print_muted_block, t_fmt,
-};
-use manualaid_core::clipboard::{ClipboardProvider, RealClipboard};
+use super::utils::{parse_round_index, t_fmt};
 
 /// Handle an inline `/command` typed at the menu prompt.
 /// 处理在菜单提示符输入的内置 `/命令`。
@@ -25,9 +24,18 @@ pub(super) fn handle_inline_command(
     registry: &FormatRegistry,
     root: &Path,
     session: &mut SessionLog,
+    options: &mut LoopOptions,
     line: &str,
 ) {
-    handle_inline_command_with_provider(&RealClipboard, config, registry, root, session, line);
+    handle_inline_command_with_provider(
+        &RealClipboard,
+        config,
+        registry,
+        root,
+        session,
+        options,
+        line,
+    );
 }
 
 pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
@@ -36,6 +44,7 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
     registry: &FormatRegistry,
     root: &Path,
     session: &mut SessionLog,
+    options: &mut LoopOptions,
     line: &str,
 ) {
     let parts: Vec<&str> = line.split_whitespace().collect();
@@ -43,27 +52,35 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
         return;
     }
     let cmd = parts[0];
+
+    // Command aliases that take no arguments.
+    // 无参数的命令别名。
     match cmd {
-        // `|`表示匹配任意一个
         "/help" | "/?" | "/h" => {
             crate::console::out_println!("{}", i18n::t_str("cli.help.text"));
             return;
         }
         "/history" | "/H" => {
-            super::show_tool_history(session);
+            super::handlers::show_tool_history(session);
             return;
         }
         "/summary" | "/s" => {
-            super::print_session_summary(config, session);
+            super::handlers::print_session_summary(config, session);
             return;
         }
         "/clear" | "/cls" => {
-            super::clear_screen();
+            super::utils::clear_screen();
+            return;
+        }
+        "/mode" | "/m" => {
+            command::toggle_mode(options);
             return;
         }
         _ => {}
     }
-    // `[]`表示匹配格式完全一样的
+
+    // Commands with optional positional arguments.
+    // 带可选位置参数的命令。
     match parts.as_slice() {
         ["/ws"] => copy_system_prompt_with_provider(provider, config, root, registry),
         ["/tools"] => {
@@ -86,71 +103,32 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
         }
         ["/c", "t", tool_name] => {
             if let Some(tool) = ToolKind::from_name(tool_name) {
-                match registry.render_tool_call_template(&tool) {
-                    Ok(template) => match provider.write(&template) {
-                        Ok(()) => print_muted_block(&[i18n::t_str("cli.loop.copied")]),
-                        Err(e) => {
-                            eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]))
-                        }
-                    },
-                    Err(e) => eprintln!("{e}"),
-                }
+                command::copy_tool_template(provider, registry, &tool);
             } else {
                 crate::console::out_println!("Unknown tool `{tool_name}`");
             }
         }
-        ["/lang"] => {
-            config.lang = cycle_lang(&config.lang);
-            i18n::set_locale(&config.lang);
-            persist_and_confirm(config, root, "cli.config.lang_switched", &config.lang);
-        }
+        ["/lang"] => command::switch_lang(config, root, None),
         ["/lang", index] => {
-            const LANGS: [&str; 2] = ["en", "zh-CN"];
-            if let Ok(index) = index.parse::<usize>()
-                && let Some(lang) = LANGS.get(index.saturating_sub(1))
-            {
-                config.lang = (*lang).to_string();
-                i18n::set_locale(&config.lang);
-                persist_and_confirm(config, root, "cli.config.lang_switched", &config.lang);
+            if let Ok(index) = index.parse::<usize>() {
+                command::switch_lang(config, root, Some(index));
             } else {
                 crate::console::out_println!(
                     "{}",
-                    t_fmt(
-                        "cli.error.invalid_index",
-                        &[("count", &LANGS.len().to_string())]
-                    )
+                    t_fmt("cli.error.invalid_index", &[("count", &2.to_string())])
                 );
             }
         }
-        ["/format"] => {
-            config.tool_call_format = cycle_format(&config.tool_call_format);
-            let _ = apply_format_mode(registry, config);
-            persist_and_confirm(
-                config,
-                root,
-                "cli.config.format_switched",
-                &config.tool_call_format,
-            );
-        }
+        ["/format"] => command::switch_format(registry, config, root, None),
         ["/format", index] => {
-            let labels = RegistryMode::all_labels();
-            if let Ok(index) = index.parse::<usize>()
-                && let Some(label) = labels.get(index.saturating_sub(1))
-            {
-                config.tool_call_format = (*label).to_string();
-                let _ = apply_format_mode(registry, config);
-                persist_and_confirm(
-                    config,
-                    root,
-                    "cli.config.format_switched",
-                    &config.tool_call_format,
-                );
+            if let Ok(index) = index.parse::<usize>() {
+                command::switch_format(registry, config, root, Some(index));
             } else {
                 crate::console::out_println!(
                     "{}",
                     t_fmt(
                         "cli.error.invalid_index",
-                        &[("count", &labels.len().to_string())]
+                        &[("count", &RegistryMode::all_labels().len().to_string())]
                     )
                 );
             }
@@ -167,13 +145,20 @@ mod tests {
     use manualaid_ws::config::Config;
     use manualaid_ws::session::RoundStats;
 
-    fn setup() -> (Config, FormatRegistry, std::path::PathBuf, SessionLog) {
+    fn setup() -> (
+        Config,
+        FormatRegistry,
+        std::path::PathBuf,
+        SessionLog,
+        LoopOptions,
+    ) {
         let root = crate::test_support::temp_dir("inline");
         (
             Config::default(),
             FormatRegistry::new(),
             root,
             SessionLog::new(),
+            LoopOptions::default(),
         )
     }
 
@@ -182,7 +167,7 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup();
+        let (mut config, registry, root, mut session, mut options) = setup();
         let mock = MockClipboard::new();
         handle_inline_command_with_provider(
             &mock,
@@ -190,6 +175,7 @@ mod tests {
             &registry,
             &root,
             &mut session,
+            &mut options,
             "/c t read",
         );
         let clipboard = mock.read().unwrap();
@@ -201,7 +187,7 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup();
+        let (mut config, registry, root, mut session, mut options) = setup();
         let mock = MockClipboard::new();
         mock.set_write_error("mock write failure");
         handle_inline_command_with_provider(
@@ -210,19 +196,26 @@ mod tests {
             &registry,
             &root,
             &mut session,
+            &mut options,
             "/c t read",
         );
         assert!(mock.read().unwrap().is_empty());
     }
 
-    fn setup_with_rounds() -> (Config, FormatRegistry, std::path::PathBuf, SessionLog) {
-        let (config, registry, root, mut session) = setup();
+    fn setup_with_rounds() -> (
+        Config,
+        FormatRegistry,
+        std::path::PathBuf,
+        SessionLog,
+        LoopOptions,
+    ) {
+        let (config, registry, root, mut session, options) = setup();
         session.push(
             vec![],
             vec![ToolResult::success("read", "file content here", true)],
             RoundStats::default(),
         );
-        (config, registry, root, session)
+        (config, registry, root, session, options)
     }
 
     #[test]
@@ -230,7 +223,7 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup_with_rounds();
+        let (mut config, registry, root, mut session, mut options) = setup_with_rounds();
         let mock = MockClipboard::new();
         handle_inline_command_with_provider(
             &mock,
@@ -238,6 +231,7 @@ mod tests {
             &registry,
             &root,
             &mut session,
+            &mut options,
             "/c 1",
         );
         let clipboard = mock.read().unwrap();
@@ -249,7 +243,7 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup_with_rounds();
+        let (mut config, registry, root, mut session, mut options) = setup_with_rounds();
         let mock = MockClipboard::new();
         mock.set_write_error("mock write failure");
         handle_inline_command_with_provider(
@@ -258,6 +252,7 @@ mod tests {
             &registry,
             &root,
             &mut session,
+            &mut options,
             "/c 1",
         );
         assert!(mock.read().unwrap().is_empty());
@@ -266,16 +261,29 @@ mod tests {
     #[test]
     fn inline_tools_renders_tool_list() {
         let _capture = crate::console::capture();
-        let (config, registry, root, mut session) = setup();
-        let mut config = config;
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/tools");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/tools",
+        );
     }
 
     #[test]
     fn inline_lang_cycles_and_persists() {
         let _capture = crate::console::capture();
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/lang");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/lang",
+        );
         assert_eq!(config.lang, "zh-CN");
         let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
         assert!(content.contains("lang = \"zh-CN\""));
@@ -286,20 +294,48 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/lang 2");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/lang 2",
+        );
         assert_eq!(config.lang, "zh-CN");
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/lang 9");
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/lang 9",
+        );
         assert_eq!(config.lang, "zh-CN");
     }
 
     #[test]
     fn inline_format_cycles_and_applies_index() {
         let _capture = crate::console::capture();
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/format");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/format",
+        );
         assert_eq!(config.tool_call_format, "xml");
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/format 3");
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/format 3",
+        );
         assert_eq!(config.tool_call_format, "json-codeblock");
     }
 
@@ -308,8 +344,15 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/format 9");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/format 9",
+        );
         assert_eq!(config.tool_call_format, "auto");
     }
 
@@ -318,10 +361,31 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/c 9");
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/c t bogus");
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/c");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/c 9",
+        );
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/c t bogus",
+        );
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/c",
+        );
     }
 
     #[test]
@@ -329,26 +393,47 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup();
+        let (mut config, registry, root, mut session, mut options) = setup();
         // An empty session returns before any clipboard access; a valid
         // index would write to the clipboard and is not exercised.
         // 空会话在触碰剪贴板前就返回；有效索引会写入剪贴板，不做测试。
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/c");
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/c",
+        );
     }
 
     #[test]
     fn inline_unknown_command_prints_invalid() {
         let _capture = crate::console::capture();
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/xyz");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/xyz",
+        );
     }
 
     #[test]
     fn inline_empty_command_does_nothing() {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "",
+        );
         let output = _capture.text();
         // The function returns immediately with no output; trim to ignore whitespace.
         assert!(output.trim().is_empty());
@@ -359,8 +444,15 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/help");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/help",
+        );
         let output = _capture.text();
         // Help text should list available commands, e.g. "/mode" is always present.
         assert!(output.contains("/mode") || output.contains("/help"));
@@ -371,8 +463,15 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup_with_rounds();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/history");
+        let (mut config, registry, root, mut session, mut options) = setup_with_rounds();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/history",
+        );
         let output = _capture.text();
         // History should show the tool name from the round.
         assert!(output.contains("read"));
@@ -383,8 +482,15 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let (mut config, registry, root, mut session) = setup_with_rounds();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/summary");
+        let (mut config, registry, root, mut session, mut options) = setup_with_rounds();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/summary",
+        );
         let output = _capture.text();
         // Summary should mention the tool used.
         assert!(output.contains("read"));
@@ -394,21 +500,14 @@ mod tests {
     fn inline_clear_command_clears_screen() {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/clear");
-        let output = _capture.text();
-        // On Windows, clear may use `cls` which doesn't write to stdout;
-        // on Unix, it usually prints ANSI escape sequences. Accept either.
-        assert!(output.contains("\x1B[2J\x1B[1;1H") || output.is_empty());
-    }
-
-    #[test]
-    fn inline_clear_command_with_alias_cls() {
-        let _capture = crate::console::capture();
-        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
-        let (mut config, registry, root, mut session) = setup();
-        handle_inline_command(&mut config, &registry, &root, &mut session, "/cls");
-        let output = _capture.text();
-        assert!(output.contains("\x1B[2J\x1B[1;1H") || output.is_empty());
+        let (mut config, registry, root, mut session, mut options) = setup();
+        handle_inline_command(
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/clear",
+        );
     }
 }
