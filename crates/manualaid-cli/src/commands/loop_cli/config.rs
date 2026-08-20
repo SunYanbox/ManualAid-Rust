@@ -533,6 +533,45 @@ mod tests {
         );
     }
 
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_copies_remaining_snippets() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["2", "3", "6", "7", "0"]);
+        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        assert_eq!(
+            mock.read().unwrap(),
+            i18n::t_str("prompt.copy.task-planning-rule")
+        );
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_empty_input_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["", "0"]);
+        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_invalid_input_continues_then_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["invalid", "0"]);
+        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        let output = _capture.text();
+        assert!(output.contains(&i18n::t_str("cli.loop.menu_invalid")));
+    }
+
     #[test]
     fn render_config_menu_shows_all_states() {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();

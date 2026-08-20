@@ -27,6 +27,7 @@ use super::utils::{
 
 /// The result of running a command.
 /// 执行命令的结果。
+#[derive(Debug, PartialEq, Eq)]
 pub(super) enum CommandOutcome {
     /// Keep the current menu loop running.
     /// 继续当前菜单循环。
@@ -425,10 +426,15 @@ pub(super) fn persist_and_confirm(config: &Config, root: &Path, key: &str, value
 
 #[cfg(test)]
 mod tests {
+    use super::LoopOptions;
     use super::*;
+    use manualaid_core::audit::{Auditor, SessionMode};
     use manualaid_core::clipboard::MockClipboard;
+    use manualaid_core::executor::Executor;
     use manualaid_core::parser::FormatRegistry;
     use manualaid_ws::config::Config;
+    use manualaid_ws::session::SessionLog;
+    use std::sync::Arc;
 
     #[test]
     fn copy_tool_template_write_error_handling() {
@@ -539,5 +545,47 @@ mod tests {
         assert!(config.skill);
         // And no config file should have been created
         assert!(!root.join(".ManualAid").join("config.toml").exists());
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn run_command_covers_new_copy_prompt_branches() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+
+        let mock = MockClipboard::new();
+        let registry = FormatRegistry::new();
+        let root = crate::test_support::temp_dir("run-copy-prompt");
+        let mut config = Config::default();
+        let mut options = LoopOptions::default();
+        let mut session = SessionLog::new();
+        let executor = Executor::new(
+            Auditor::new(root.to_path_buf()).with_mode(SessionMode::AcceptEdit),
+            Arc::new(None),
+        );
+
+        let commands = [
+            LoopCommand::CopyPromptMenu,
+            LoopCommand::CopyToolFormat,
+            LoopCommand::CopyEnabledTools,
+            LoopCommand::CopyLineEndingRule,
+            LoopCommand::CopyPlanModeRule,
+            LoopCommand::CopySwitchModeRule,
+            LoopCommand::CopyTaskPlanningRule,
+        ];
+        for cmd in &commands {
+            let mut ctx = CommandContext {
+                provider: &mock,
+                executor: &executor,
+                registry: &registry,
+                config: &mut config,
+                options: &mut options,
+                root: &root,
+                session: &mut session,
+            };
+            let outcome = run_command(cmd, &mut ctx).await;
+            assert_eq!(outcome, CommandOutcome::Continue);
+        }
     }
 }
