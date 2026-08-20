@@ -199,10 +199,30 @@ fn loop_binary_copies_intent_rule_to_clipboard() {
     // 通过复制成功后的确认输出断言，而非轮询系统剪贴板：子进程阻塞等待
     // stdin 时剪贴板所有者可能无法响应，导致无头 CI 与 Windows 上轮询
     // 剪贴板不稳定。
-    let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["8", "0"]);
+    // Script: enter the copy-prompt submenu (8), copy the intent rule (1),
+    // leave the submenu (0), and exit the main loop (0).
+    // 脚本：进入复制提示词二级菜单（8），复制意图规则（1），退出二级菜单
+    // （0），再退出主循环（0）。
+    let output =
+        common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["8", "1", "0", "0"]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains(&i18n::t_str("cli.message.intent_rule_copied")));
+}
+
+#[test]
+fn loop_binary_copy_prompt_menu_returns_to_main_menu() {
+    let dir = common::TempDir::new("loop-flow-copy-prompt-return");
+    let home = common::TempDir::new("loop-flow-copy-prompt-return-home");
+    // Enter the copy-prompt submenu and return directly without copying;
+    // assert the submenu title via stdout instead of polling the system
+    // clipboard, which may not answer while the child waits on stdin.
+    // 进入复制提示词二级菜单后直接返回；通过 stdout 断言二级菜单标题，
+    // 而非轮询系统剪贴板（子进程等待 stdin 时剪贴板可能无法响应）。
+    let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["8", "0", "0"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains(&i18n::t_str("cli.copy_prompt.title")));
 }
 
 #[test]

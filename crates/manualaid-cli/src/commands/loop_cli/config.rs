@@ -13,6 +13,110 @@ use super::command::LoopCommand;
 use super::menu::{Menu, MenuAction, MenuItem};
 use super::utils::{mode_label, t_fmt};
 
+/// The copy-prompt submenu: copy reusable prompt snippets to the clipboard.
+/// 复制提示词二级菜单：将可复用的提示词片段复制到剪贴板。
+pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
+    provider: &P,
+    config: &Config,
+    registry: &FormatRegistry,
+) {
+    loop {
+        let menu = build_copy_prompt_menu();
+        crate::console::out_println!("{}", menu.render());
+        let line = super::utils::read_line().unwrap_or_default();
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        let Some(action) = menu.resolve(trimmed) else {
+            crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+            continue;
+        };
+        let command = match action {
+            super::menu::MenuAction::Command(command) => command,
+            super::menu::MenuAction::Submenu(_) => {
+                crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+                continue;
+            }
+        };
+        match command {
+            super::command::LoopCommand::Back => break,
+            super::command::LoopCommand::CopyIntentRule => {
+                super::handlers::copy_intent_rule_with_provider(provider);
+            }
+            super::command::LoopCommand::CopyToolFormat => {
+                super::handlers::copy_tool_format_with_provider(provider, config, registry);
+            }
+            super::command::LoopCommand::CopyEnabledTools => {
+                super::handlers::copy_enabled_tools_with_provider(provider, config);
+            }
+            super::command::LoopCommand::CopyLineEndingRule => {
+                super::handlers::copy_line_ending_rule_with_provider(provider);
+            }
+            super::command::LoopCommand::CopyPlanModeRule => {
+                super::handlers::copy_plan_mode_rule_with_provider(provider);
+            }
+            super::command::LoopCommand::CopySwitchModeRule => {
+                super::handlers::copy_switch_mode_rule_with_provider(provider);
+            }
+            super::command::LoopCommand::CopyTaskPlanningRule => {
+                super::handlers::copy_task_planning_rule_with_provider(provider);
+            }
+            _ => {
+                crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+            }
+        }
+    }
+}
+
+/// Build the copy-prompt submenu with automatic numeric keys.
+/// 构建自动编号的复制提示词二级菜单。
+fn build_copy_prompt_menu() -> Menu {
+    Menu::new(i18n::t_str("cli.copy_prompt.title"))
+        .add(MenuItem::auto(
+            i18n::t_str("cli.copy_prompt.intent_rule"),
+            MenuAction::Command(LoopCommand::CopyIntentRule),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            i18n::t_str("cli.copy_prompt.tool_format"),
+            MenuAction::Command(LoopCommand::CopyToolFormat),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            i18n::t_str("cli.copy_prompt.enabled_tools"),
+            MenuAction::Command(LoopCommand::CopyEnabledTools),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            i18n::t_str("cli.copy_prompt.line_ending"),
+            MenuAction::Command(LoopCommand::CopyLineEndingRule),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            i18n::t_str("cli.copy_prompt.plan_mode"),
+            MenuAction::Command(LoopCommand::CopyPlanModeRule),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            i18n::t_str("cli.copy_prompt.switch_mode"),
+            MenuAction::Command(LoopCommand::CopySwitchModeRule),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::auto(
+            i18n::t_str("cli.copy_prompt.task_planning"),
+            MenuAction::Command(LoopCommand::CopyTaskPlanningRule),
+        ))
+        .expect("unique menu key")
+        .add(MenuItem::keyed_alias(
+            "0",
+            &["q", "quit", "exit"],
+            i18n::t_str("cli.config.back"),
+            MenuAction::Command(LoopCommand::Back),
+        ))
+        .expect("unique menu key")
+}
+
 /// The secondary configuration menu.
 /// 二级配置菜单。
 pub(super) async fn config_menu<P: ClipboardProvider>(
@@ -373,6 +477,99 @@ mod tests {
             format!("---\nname: {name}\ndescription: test skill\n---\n# {name}\n"),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn render_copy_prompt_menu_shows_all_entries() {
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let menu = build_copy_prompt_menu();
+        let rendered = menu.render();
+        for key in [
+            "cli.copy_prompt.title",
+            "cli.copy_prompt.intent_rule",
+            "cli.copy_prompt.tool_format",
+            "cli.copy_prompt.enabled_tools",
+            "cli.copy_prompt.line_ending",
+            "cli.copy_prompt.plan_mode",
+            "cli.copy_prompt.switch_mode",
+            "cli.copy_prompt.task_planning",
+            "cli.config.back",
+        ] {
+            assert!(rendered.contains(&i18n::t_str(key)));
+        }
+        assert!(rendered.contains("0."));
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_copies_intent_rule_and_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["1", "0"]);
+        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        assert_eq!(
+            mock.read().unwrap(),
+            i18n::t_str("prompt.system.intent-output-rule")
+        );
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_copies_line_ending_and_plan_mode_rules() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["4", "5", "0"]);
+        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        // The last copied text is the plan-mode rule because the line-ending
+        // rule was written first and then overwritten.
+        assert_eq!(
+            mock.read().unwrap(),
+            i18n::t_str("prompt.copy.plan-mode-rule")
+        );
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_copies_remaining_snippets() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["2", "3", "6", "7", "0"]);
+        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        assert_eq!(
+            mock.read().unwrap(),
+            i18n::t_str("prompt.copy.task-planning-rule")
+        );
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_empty_input_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["", "0"]);
+        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_invalid_input_continues_then_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["invalid", "0"]);
+        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        let output = _capture.text();
+        assert!(output.contains(&i18n::t_str("cli.loop.menu_invalid")));
     }
 
     #[test]

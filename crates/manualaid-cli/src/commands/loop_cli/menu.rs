@@ -213,8 +213,8 @@ pub(super) fn build_main_menu() -> Menu {
         ))
         .expect("unique menu key")
         .add(MenuItem::auto(
-            i18n::t_str("cli.loop.menu_intent_rule"),
-            MenuAction::Command(LoopCommand::CopyIntentRule),
+            i18n::t_str("cli.loop.menu_copy_prompt"),
+            MenuAction::Command(LoopCommand::CopyPromptMenu),
         ))
         .expect("unique menu key")
         .add(MenuItem::keyed_alias(

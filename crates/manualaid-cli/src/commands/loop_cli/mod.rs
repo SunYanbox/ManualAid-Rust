@@ -40,8 +40,11 @@ pub use utils::{
 // handlers 重导出供 tests/commands/handlers.rs 集成测试使用；
 // 不带 provider 的薄包装保持私有。
 pub use handlers::{
-    ask_copy, copy_intent_rule_with_provider, copy_round_result, copy_round_result_with_provider,
-    copy_system_prompt_with_provider, input_and_submit, paste_and_submit_with_provider,
+    ask_copy, copy_enabled_tools_with_provider, copy_intent_rule_with_provider,
+    copy_line_ending_rule_with_provider, copy_plan_mode_rule_with_provider, copy_round_result,
+    copy_round_result_with_provider, copy_switch_mode_rule_with_provider,
+    copy_system_prompt_with_provider, copy_task_planning_rule_with_provider,
+    copy_tool_format_with_provider, input_and_submit, paste_and_submit_with_provider,
     print_session_summary, show_tool_history, submit_text, submit_text_with_provider,
     truncate_preview_lines,
 };
@@ -280,6 +283,15 @@ async fn loop_main_at(
             if options.mode != mode_before {
                 executor = build_executor(current_dir, &config, options.mode);
             }
+            continue;
+        }
+        if matches!(command, command::LoopCommand::CopyPromptMenu) {
+            config::copy_prompt_menu(
+                &manualaid_core::clipboard::RealClipboard,
+                &config,
+                &registry,
+            )
+            .await;
             continue;
         }
         let mode_before = options.mode;

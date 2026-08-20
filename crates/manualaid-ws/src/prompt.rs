@@ -34,21 +34,15 @@ pub fn build_system_prompt(
         ..config.clone()
     };
     let tools_list = render_tools_list(&effective, registry);
-    let format_desc = format!(
-        "{}\n```func_calls\n{}\n```\n{}\n",
-        t_fmt(
-            "cli.prompt.format_desc",
-            &[("format", &config.tool_call_format)]
-        ),
-        registry
-            .render_tool_call_template(&ToolKind::Read)
-            .unwrap_or_default(),
-        i18n::t_str("cli.prompt.func_calls_notes")
-    );
+    let format_desc = tool_calling_format_description(config, registry);
 
     let mut out = String::new();
     out.push_str("<system_prompt>\n");
     out.push_str(&i18n::t_str("prompt.system.capabilities"));
+    out.push('\n');
+    out.push_str(&i18n::t_str("prompt.system.system-reminder-note"));
+    out.push('\n');
+    out.push_str(&i18n::t_str("prompt.copy.task-planning-rule"));
     out.push('\n');
     let intent_output_rule = i18n::t_str("prompt.system.intent-output-rule");
     out.push_str(&t_fmt(
@@ -87,6 +81,26 @@ pub fn build_system_prompt(
     ));
     out.push_str("\n</system_prompt>");
     out
+}
+
+/// Render the current tool-calling-format description: the localized
+/// format preamble, a single default tool call template (`read`) and the
+/// plain-text formatting notes. Shared by the system prompt builder and the
+/// copy-prompt submenu.
+/// 渲染当前工具调用格式说明：本地化的格式前言、单个默认工具调用模板
+/// （`read`）与纯文本格式说明。系统提示词构建器与复制提示词二级菜单共用。
+pub fn tool_calling_format_description(config: &Config, registry: &FormatRegistry) -> String {
+    format!(
+        "{}\n```func_calls\n{}\n```\n{}\n",
+        t_fmt(
+            "cli.prompt.format_desc",
+            &[("format", &config.tool_call_format)]
+        ),
+        registry
+            .render_tool_call_template(&ToolKind::Read)
+            .unwrap_or_default(),
+        i18n::t_str("cli.prompt.func_calls_notes")
+    )
 }
 
 /// Render the `<available-tools>`-style section for the enabled tools,
@@ -524,6 +538,24 @@ mod tests {
         assert!(prompt.ends_with("</system_prompt>"));
         assert!(prompt.contains("<workspace_root>"));
         assert!(prompt.contains("<shell_environment>"));
+    }
+
+    #[test]
+    fn system_prompt_contains_system_reminder_note_and_task_planning_rule() {
+        let config = Config::default();
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(&config, Path::new("/ws"), &registry, &[], &[]);
+        assert!(prompt.contains(&i18n::t_str("prompt.system.system-reminder-note")));
+        assert!(prompt.contains(&i18n::t_str("prompt.copy.task-planning-rule")));
+    }
+
+    #[test]
+    fn tool_calling_format_description_contains_read_template_and_notes() {
+        let config = Config::default();
+        let registry = FormatRegistry::new();
+        let description = tool_calling_format_description(&config, &registry);
+        assert!(description.contains(&i18n::t_str("cli.prompt.func_calls_notes")));
+        assert!(description.contains("<read>"));
     }
 
     #[test]
