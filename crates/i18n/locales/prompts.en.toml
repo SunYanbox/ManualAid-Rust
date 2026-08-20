@@ -140,7 +140,7 @@ line-ending-rule = """
 
 Reason: XML-style formats cannot specify line endings explicitly and cannot reliably distinguish `\\n` from `\\r\\n`; JSON strings can explicitly contain escapes such as `\\n`, `\\r\\n`, and `\\\\`, allowing precise control over line endings. Line-ending problems occur not only when copying on Windows; they can also happen on Linux/macOS due to Git configuration (e.g. `core.autocrlf`) or editor settings.
 
-When a line-ending problem occurs, also remind the user to switch the **ManualAid tool parser** to `auto` mode (which supports all tool parsing formats), and call the Edit tool using the following JSON format:
+When a line-ending problem occurs, also remind the user to switch the **ManualAid tool parser** to `auto` mode. In `auto` mode, the JSON tool-call format below is an explicitly and absolutely valid call format and can coexist with the other formats specified in the system prompt (such as XML); even if the system prompt currently shows an XML example, JSON remains valid. For the **Edit tool**, XML-style formats are unsuitable because they cannot specify line endings explicitly and must be replaced by the JSON format below; for other tools, their existing formats remain usable.
 
 ```func_calls
 {
