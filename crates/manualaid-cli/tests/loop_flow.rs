@@ -141,35 +141,43 @@ fn loop_binary_drives_menu_inline_commands_and_typed_round() {
     let target = dir.path().join("target.txt");
     std::fs::write(&target, "hello").unwrap();
     let read_call = read_call(&target);
-    let output = common::run_binary_scripted(
-        dir.path(),
-        Some(home.path()),
-        &[],
-        &[
-            "/tools",
-            "/format 2",
-            "4",
-            "5",
-            "9",
-            "11",
-            "0",
-            "3",
-            &read_call,
-            "/end",
-            "n",
-            "6",
-            "x",
-            "0",
-        ],
-    );
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("ManualAid CLI Agent Copy-Paste Loop"));
-    assert!(stdout.contains("[read]"));
-    assert!(stdout.contains("hello"));
-    let content = std::fs::read_to_string(config_path(dir.path())).unwrap();
-    assert!(content.contains("lang = \"zh-CN\""));
-    assert!(content.contains("tool_call_format = \"xml\""));
+    // The loop auto-copies round results to the clipboard by default; wrap
+    // with lock and restore so stale clipboard content does not leak into
+    // subsequent clipboard-dependent tests.
+    // loop 默认将轮次结果自动复制到剪贴板；用锁和恢复包装，避免残留剪贴板
+    // 内容泄漏到后续的剪贴板依赖测试。
+    let _clipboard_lock = ClipboardLock::acquire();
+    with_clipboard_restored(|| {
+        let output = common::run_binary_scripted(
+            dir.path(),
+            Some(home.path()),
+            &[],
+            &[
+                "/tools",
+                "/format 2",
+                "4",
+                "5",
+                "9",
+                "11",
+                "0",
+                "3",
+                &read_call,
+                "/end",
+                "n",
+                "6",
+                "x",
+                "0",
+            ],
+        );
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("ManualAid CLI Agent Copy-Paste Loop"));
+        assert!(stdout.contains("[read]"));
+        assert!(stdout.contains("hello"));
+        let content = std::fs::read_to_string(config_path(dir.path())).unwrap();
+        assert!(content.contains("lang = \"zh-CN\""));
+        assert!(content.contains("tool_call_format = \"xml\""));
+    });
 }
 
 #[test]
