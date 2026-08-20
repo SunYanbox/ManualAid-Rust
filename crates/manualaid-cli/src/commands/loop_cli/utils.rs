@@ -240,21 +240,7 @@ pub(super) fn apply_format_mode(registry: &FormatRegistry, config: &Config) -> R
 /// Render the main menu text.
 /// 渲染主菜单文本。
 pub fn render_menu() -> String {
-    let keys = [
-        "cli.loop.menu_title",
-        "cli.loop.menu_generate",
-        "cli.loop.menu_paste",
-        "cli.loop.menu_input",
-        "cli.loop.menu_copy",
-        "cli.loop.menu_config",
-        "cli.loop.menu_summary",
-        "cli.loop.menu_history",
-        "cli.loop.menu_intent_rule",
-        "cli.loop.menu_exit",
-    ];
-    let mut lines: Vec<String> = keys.iter().map(|key| i18n::t_str(key)).collect();
-    lines[0] = crate::style::header(&lines[0]);
-    lines.join("\n") + "\n"
+    crate::commands::loop_cli::menu::render_main_menu()
 }
 
 /// Localized label of the current approval mode.

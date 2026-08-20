@@ -18,11 +18,13 @@ use manualaid_ws::config::Config;
 use manualaid_ws::session::SessionLog;
 
 mod approval;
+mod command;
 mod config;
 mod context;
 mod diff;
 mod handlers;
 mod inline;
+mod menu;
 mod preview;
 pub(crate) mod utils;
 
@@ -44,9 +46,9 @@ pub use handlers::{
     truncate_preview_lines,
 };
 
-use config::config_menu;
-use handlers::{copy_intent_rule, copy_system_prompt, paste_and_submit};
+use command::{CommandOutcome, run_command};
 use inline::handle_inline_command;
+use menu::{MenuAction, build_main_menu};
 use utils::{
     apply_cli_lang, apply_format_mode, clear_screen, format_config_issue, mode_hint, read_line,
     sync_global_config, t_fmt,
@@ -197,6 +199,7 @@ async fn loop_main_at(
         crate::console::out_println!("{message}");
     }
 
+    let main_menu = build_main_menu();
     let mut should_exit = false;
     let mut show_help_hint = true;
     while !should_exit {
@@ -234,61 +237,69 @@ async fn loop_main_at(
         let trimmed = line.trim();
 
         if trimmed.starts_with('/') {
-            if trimmed == "/mode" || trimmed == "/m" {
-                options.mode = match options.mode {
-                    SessionMode::Manual => SessionMode::AcceptEdit,
-                    SessionMode::AcceptEdit => SessionMode::Manual,
-                };
+            let mode_before = options.mode;
+            handle_inline_command(
+                &mut config,
+                &registry,
+                current_dir,
+                &mut session,
+                &mut options,
+                trimmed,
+            );
+            if options.mode != mode_before {
                 executor = build_executor(current_dir, &config, options.mode);
-                let mode_name = if options.mode == SessionMode::Manual {
-                    i18n::t_str("cli.config.mode_manual")
-                } else {
-                    i18n::t_str("cli.config.mode_accept_edit")
-                };
-                crate::console::out_println!(
-                    "{}",
-                    t_fmt("cli.config.mode_switched", &[("mode", &mode_name)])
-                );
-                continue;
             }
-            handle_inline_command(&mut config, &registry, current_dir, &mut session, trimmed);
             continue;
         }
-        match trimmed {
-            "1" => copy_system_prompt(&config, current_dir, &registry),
-            "2" => {
-                paste_and_submit(
-                    &executor,
-                    &registry,
-                    &mut session,
-                    &mut options,
-                    config.max_result_chars,
-                )
-                .await
+
+        let Some(action) = main_menu.resolve(trimmed) else {
+            crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+            if !should_exit && options.clear_screen {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
-            "3" => {
-                input_and_submit(
-                    &executor,
-                    &registry,
-                    &mut session,
-                    &mut options,
-                    config.max_result_chars,
-                )
-                .await
+            continue;
+        };
+        let command = match action {
+            MenuAction::Command(command) => command,
+            MenuAction::Submenu(_) => {
+                crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+                continue;
             }
-            "4" => copy_round_result(&session, config.max_result_chars),
-            "5" => {
-                let mode_before = options.mode;
-                config_menu(&mut config, &registry, current_dir, &mut options, &session);
-                if options.mode != mode_before {
-                    executor = build_executor(current_dir, &config, options.mode);
-                }
+        };
+        if matches!(command, command::LoopCommand::ConfigMenu) {
+            let mode_before = options.mode;
+            config::config_menu(
+                &manualaid_core::clipboard::RealClipboard,
+                &mut config,
+                &registry,
+                current_dir,
+                &mut options,
+                &mut session,
+            )
+            .await;
+            if options.mode != mode_before {
+                executor = build_executor(current_dir, &config, options.mode);
             }
-            "6" => print_session_summary(&config, &session),
-            "7" => show_tool_history(&session),
-            "8" => copy_intent_rule(),
-            "0" => should_exit = true,
-            _ => crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid")),
+            continue;
+        }
+        let mode_before = options.mode;
+        let provider = manualaid_core::clipboard::RealClipboard;
+        let mut ctx = command::CommandContext {
+            provider: &provider,
+            executor: &executor,
+            registry: &registry,
+            config: &mut config,
+            options: &mut options,
+            root: current_dir,
+            session: &mut session,
+        };
+        match run_command(command, &mut ctx).await {
+            CommandOutcome::Continue => {}
+            CommandOutcome::Exit => {}
+            CommandOutcome::ExitLoop => should_exit = true,
+        }
+        if !should_exit && options.mode != mode_before {
+            executor = build_executor(current_dir, &config, options.mode);
         }
         if !should_exit && options.clear_screen {
             // Keep the previous action's output readable before the next
