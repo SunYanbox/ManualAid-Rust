@@ -443,7 +443,7 @@ fn registry_set_enabled_tools_ignores_unknown_names() {
 fn registry_default_and_auto_render() {
     let registry = FormatRegistry::default();
     let template = registry.render_tool_call_template(&ToolKind::Read).unwrap();
-    assert!(template.contains("<read>"));
+    assert!(template.contains("\"tool_use\": \"read\""));
 }
 
 #[test]

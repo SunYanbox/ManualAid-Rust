@@ -5,14 +5,14 @@
 //!
 //! # Test notes
 //! The "No parser registered for format" error branch of the fixed mode is
-//! unreachable: [`RegistryMode::Fixed`] only accepts the two formats that
-//! are always registered (`xml` and `json-codeblock`). It stays as a
-//! defensive guard for future formats and is not required to have high test
-//! coverage.
+//! unreachable: [`RegistryMode::Fixed`] only accepts the three formats that
+//! are always registered (`json-codeblock`, `invoke`, and `xml`). It stays
+//! as a defensive guard for future formats and is not required to have high
+//! test coverage.
 //! # 测试说明
 //! 固定模式下“未注册该格式的解析器”错误分支不可达：[`RegistryMode::Fixed`]
-//! 只接受始终注册的两种格式（`xml` 与 `json-codeblock`）。该分支保留为
-//! 面向未来格式的防御性检查，不要求高测试覆盖率。
+//! 只接受始终注册的三种格式（`json-codeblock`、`invoke` 与 `xml`）。该
+//! 分支保留为面向未来格式的防御性检查，不要求高测试覆盖率。
 
 use std::sync::{Arc, OnceLock, RwLock};
 
@@ -94,9 +94,9 @@ impl FormatRegistry {
     /// 创建一个新的注册表，预填充两个内置解析器。
     pub fn new() -> Self {
         let mut parsers: IndexMap<String, Box<dyn ToolCallFormatParser>> = IndexMap::new();
-        parsers.insert("xml".to_string(), Box::new(XmlParser));
         parsers.insert("json-codeblock".to_string(), Box::new(JsonCodeblockParser));
         parsers.insert("invoke".to_string(), Box::new(InvokeParser));
+        parsers.insert("xml".to_string(), Box::new(XmlParser));
         Self {
             parsers: RwLock::new(parsers),
             mode: RwLock::new(RegistryMode::AutoDetect),
