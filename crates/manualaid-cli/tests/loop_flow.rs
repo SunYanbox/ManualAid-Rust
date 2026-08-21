@@ -76,7 +76,7 @@ fn loop_binary_drives_menu_inline_commands_and_typed_round() {
         &[],
         &[
             "/tools",
-            "/format 2",
+            "/format 4",
             "4",
             "5",
             "9",

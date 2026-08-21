@@ -321,7 +321,7 @@ fn copy_system_prompt_writes_prompt_to_clipboard() {
         &FormatRegistry::new(),
     );
     let clipboard = mock.read().unwrap();
-    assert!(clipboard.contains("<read>"));
+    assert!(clipboard.contains("\"tool_use\": \"read\""));
 }
 
 #[test]
@@ -403,7 +403,7 @@ fn copy_tool_format_writes_current_format_to_clipboard() {
     copy_tool_format_with_provider(&mock, &Config::default(), &registry);
     let clipboard = mock.read().unwrap();
     assert!(clipboard.contains(&i18n::t_str("cli.prompt.func_calls_notes")));
-    assert!(clipboard.contains("<read>"));
+    assert!(clipboard.contains("\"tool_use\": \"read\""));
 }
 
 #[test]
