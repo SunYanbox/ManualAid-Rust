@@ -4,11 +4,11 @@ members = ["crates/i18n","crates/manualaid-core","crates/manualaid-cli","crates/
 
 [workspace.dependencies]
 chrono = "0.4.45"
-i18n = { version = "0.1.5", path = "crates/i18n" }
+i18n = { version = "0.1.6", path = "crates/i18n" }
 indexmap = "2.14.0"
 log = "0.4.33"
-manualaid-core = { version = "0.5.0", path = "crates/manualaid-core" }
-manualaid-ws = { version = "0.4.0", path = "crates/manualaid-ws" }
+manualaid-core = { version = "0.6.0", path = "crates/manualaid-core" }
+manualaid-ws = { version = "0.5.0", path = "crates/manualaid-ws" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 similar = "3.1.2"
