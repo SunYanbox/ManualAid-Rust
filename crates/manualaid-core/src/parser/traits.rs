@@ -30,6 +30,16 @@ pub struct ParsedToolCall {
     /// Source text span (character offset) for error reporting.
     /// 源文本跨度（字符偏移量），用于错误报告。
     pub source_offset: Option<usize>,
+    /// Whether an unclosed parameter was detected (its captured text was
+    /// discarded).
+    /// 是否检测到参数未闭合（其捕获的文本被丢弃）。
+    #[serde(default)]
+    pub unclosed_param: bool,
+    /// Whether the tool tag was unclosed to EOF while at least one valid
+    /// parameter tag had been scanned.
+    /// 在已扫描到至少一个合法参数标签的情况下，工具标签是否未闭合到 EOF。
+    #[serde(default)]
+    pub unclosed_tool: bool,
 }
 
 /// Errors that can occur during tool-call parsing.

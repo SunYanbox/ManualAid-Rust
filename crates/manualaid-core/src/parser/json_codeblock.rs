@@ -213,6 +213,8 @@ fn tool_call_from_object(
         params,
         format: ToolCallFormat::JsonCodeblock,
         source_offset: Some(offset),
+        unclosed_param: false,
+        unclosed_tool: false,
     })
 }
 

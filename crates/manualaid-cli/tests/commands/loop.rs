@@ -171,16 +171,23 @@ async fn pre_failed_call_skips_approval_while_others_are_asked() {
 }
 
 #[tokio::test]
-async fn malformed_call_is_a_parse_error() {
+async fn unclosed_tool_call_is_a_failed_result() {
+    // 工具未闭合但已扫描到合法参数标签的调用保留为失败结果，不再作为
+    // 解析错误整体丢弃。
     let registry = FormatRegistry::new();
-    let result = execute_round_with_approval(
+    let (calls, results, _) = execute_round_with_approval(
         &executor(&std::env::temp_dir()),
         &registry,
         "<write><file_path>Z:/a.txt</file_path>",
         |_| Approval::Approve,
     )
-    .await;
-    assert!(result.is_err());
+    .await
+    .unwrap();
+    assert_eq!(calls.len(), 1);
+    assert!(calls[0].unclosed_tool);
+    assert_eq!(results.len(), 1);
+    assert!(!results[0].success);
+    assert!(results[0].output.contains("Unclosed tool call"));
 }
 
 #[tokio::test]

@@ -45,8 +45,49 @@ async fn execute_failed_paths_keep_zero_duration() {
         params: IndexMap::new(),
         format: crate::tools::ToolCallFormat::Xml,
         source_offset: None,
+        unclosed_param: false,
+        unclosed_tool: false,
     };
     let result = executor.execute(call).await;
     assert!(!result.success);
     assert_eq!(result.execution_duration_ms, 0);
+}
+
+#[tokio::test]
+async fn unclosed_flags_fail_before_execution() {
+    let executor = Executor::new(Auditor::new(std::env::temp_dir()), Arc::new(None));
+    let base = crate::parser::ParsedToolCall {
+        tool_name: "read".to_string(),
+        params: IndexMap::new(),
+        format: crate::tools::ToolCallFormat::Xml,
+        source_offset: None,
+        unclosed_param: false,
+        unclosed_tool: false,
+    };
+
+    let cases = [
+        (
+            true,
+            false,
+            "Unclosed tool call `read` (missing closing tag)",
+        ),
+        (false, true, "Unclosed parameter in tool call `read`"),
+        (
+            true,
+            true,
+            "Unclosed tool call `read` and an unclosed parameter",
+        ),
+    ];
+    for (unclosed_tool, unclosed_param, expected) in cases {
+        let call = crate::parser::ParsedToolCall {
+            unclosed_tool,
+            unclosed_param,
+            ..base.clone()
+        };
+        let pre = executor.pre_check(&call).await;
+        assert!(pre.is_some());
+        let result = executor.execute(call).await;
+        assert!(!result.success);
+        assert!(result.output.contains(expected), "{}", result.output);
+    }
 }

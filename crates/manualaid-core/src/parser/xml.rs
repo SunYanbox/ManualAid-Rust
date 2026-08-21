@@ -3,11 +3,13 @@
 //! kept as literal value text, so model output only needs to escape the
 //! tool's own tags (a bare `&` is also kept verbatim). A tool call that is
 //! unclosed or carries no defined parameter is ignored and scanning resumes
-//! right after its start tag.
+//! right after its start tag, unless the unclosed tool had at least one
+//! valid parameter tag — then it is kept as a failed call.
 //! XML 线格式解析器：`<tool><param>value</param></tool>`。只解析已定义的
 //! 工具与参数标签；其余标签被忽略或作为参数原文保留，模型只需转义工具
 //! 自身的标签（裸 `&` 也原样保留）。未闭合或不含任何已定义参数的工具
-//! 调用被忽略，扫描从其开始标签之后继续。CDATA 包裹扫描到文件末尾仍未
+//! 调用被忽略，扫描从其开始标签之后继续；但若未闭合工具已扫描到至少
+//! 一个合法参数标签，则保留为失败调用。CDATA 包裹扫描到文件末尾仍未
 //! 闭合时，参数标签视为未正确闭合并写入软警告。
 
 use indexmap::IndexMap;
@@ -38,19 +40,33 @@ impl ToolCallFormatParser for XmlParser {
 
         loop {
             let Some(p) = next_angle(input, pos) else {
-                // EOF：未闭合的工具调用整体忽略，并从其开始标签之后重新
-                // 扫描，使后续内容（如其他工具调用）仍能正常解析。CDATA
-                // 包裹扫描到 EOF 仍未闭合（`]]>` 后从未紧贴闭合标签）时，
-                // 参数标签视为未正确闭合，写入软警告而不是静默丢弃。
+                // EOF：未闭合的工具调用若已扫描到至少一个合法参数标签，
+                // 保留为失败调用并从其开始标签之后重新扫描，使后续内容
+                // 仍能正常解析；否则整体忽略。参数捕获仍在进行时，同时
+                // 标记参数未闭合并写入软警告。CDATA 包裹扫描到 EOF 仍未
+                // 闭合也统一在此处理，不再单独区分。
                 let Some(open) = tool.take() else {
                     break;
                 };
-                if let Some(cap) = param.take()
-                    && cap.is_cdata_wrapped
-                {
+                if open.had_params {
+                    let mut unclosed_param = false;
+                    if let Some(cap) = param.take() {
+                        unclosed_param = true;
+                        warnings.push(format!(
+                            "Unclosed parameter <{}> of tool <{}> discarded (missing </{}>)",
+                            cap.name, open.name, cap.name
+                        ));
+                    }
                     warnings.push(format!(
-                        "Unclosed parameter <{}> of tool <{}> discarded (missing </{}>)",
-                        cap.name, open.name, cap.name
+                        "Unclosed tool <{name}> kept as failed call (missing </{name}>)",
+                        name = open.name
+                    ));
+                    calls.push(finish_call(
+                        &open.name,
+                        open.params,
+                        open.open_offset,
+                        unclosed_param,
+                        true,
                     ));
                 }
                 pos = open.open_end;
@@ -152,6 +168,8 @@ impl ToolCallFormatParser for XmlParser {
                                 &open.name,
                                 std::mem::take(&mut open.params),
                                 open.open_offset,
+                                false,
+                                false,
                             ));
                         }
                         tool = None;
@@ -185,6 +203,8 @@ impl ToolCallFormatParser for XmlParser {
                             &open.name,
                             std::mem::take(&mut open.params),
                             open.open_offset,
+                            true,
+                            false,
                         ));
                         tool = None;
                         param = None;
@@ -242,12 +262,20 @@ struct ParamCapture {
 }
 
 /// 完成一个工具调用并入队。
-fn finish_call(tool_name: &str, params: IndexMap<String, Value>, offset: usize) -> ParsedToolCall {
+fn finish_call(
+    tool_name: &str,
+    params: IndexMap<String, Value>,
+    offset: usize,
+    unclosed_param: bool,
+    unclosed_tool: bool,
+) -> ParsedToolCall {
     ParsedToolCall {
         tool_name: tool_name.to_string(),
         params,
         format: ToolCallFormat::Xml,
         source_offset: Some(offset),
+        unclosed_param,
+        unclosed_tool,
     }
 }
 

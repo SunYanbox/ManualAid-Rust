@@ -43,18 +43,33 @@ impl ToolCallFormatParser for InvokeParser {
 
         loop {
             let Some(p) = super::xml::next_angle(input, pos) else {
-                // EOF：未闭合的工具调用整体忽略，并从其开始标签之后重新
-                // 扫描，使后续内容仍能正常解析。CDATA 包裹扫描到 EOF
-                // 仍未闭合时，参数标签视为未正确闭合，写入软警告。
+                // EOF：未闭合的工具调用若已扫描到至少一个合法参数标签，
+                // 保留为失败调用并从其开始标签之后重新扫描，使后续内容
+                // 仍能正常解析；否则整体忽略。参数捕获仍在进行时，同时
+                // 标记参数未闭合并写入软警告。CDATA 包裹扫描到 EOF 仍未
+                // 闭合也统一在此处理，不再单独区分。
                 let Some(open) = tool.take() else {
                     break;
                 };
-                if let Some(cap) = param.take()
-                    && cap.is_cdata_wrapped
-                {
+                if open.had_params {
+                    let mut unclosed_param = false;
+                    if let Some(cap) = param.take() {
+                        unclosed_param = true;
+                        warnings.push(format!(
+                            "Unclosed parameter <{PARAM_TAG} name=\"{}\"> of tool <{TOOL_TAG} name=\"{}\"> discarded (missing </{PARAM_TAG}>)",
+                            cap.name, open.name
+                        ));
+                    }
                     warnings.push(format!(
-                        "Unclosed parameter <{PARAM_TAG} name=\"{}\"> of tool <{TOOL_TAG} name=\"{}\"> discarded (missing </{PARAM_TAG}>)",
-                        cap.name, open.name
+                        "Unclosed tool <{TOOL_TAG} name=\"{name}\"> kept as failed call (missing </{TOOL_TAG}>)",
+                        name = open.name
+                    ));
+                    calls.push(finish_call(
+                        &open.name,
+                        open.params,
+                        open.open_offset,
+                        unclosed_param,
+                        true,
                     ));
                 }
                 pos = open.open_end;
@@ -145,6 +160,8 @@ impl ToolCallFormatParser for InvokeParser {
                                 &open.name,
                                 std::mem::take(&mut open.params),
                                 open.open_offset,
+                                false,
+                                false,
                             ));
                         }
                         if !self_closing
@@ -185,6 +202,8 @@ impl ToolCallFormatParser for InvokeParser {
                                 &open.name,
                                 std::mem::take(&mut open.params),
                                 open.open_offset,
+                                false,
+                                false,
                             ));
                         }
                         tool = None;
@@ -213,6 +232,8 @@ impl ToolCallFormatParser for InvokeParser {
                             &open.name,
                             std::mem::take(&mut open.params),
                             open.open_offset,
+                            true,
+                            false,
                         ));
                         tool = None;
                         param = None;
@@ -270,12 +291,20 @@ struct ParamCapture {
 }
 
 /// 完成一个工具调用并入队。
-fn finish_call(tool_name: &str, params: IndexMap<String, Value>, offset: usize) -> ParsedToolCall {
+fn finish_call(
+    tool_name: &str,
+    params: IndexMap<String, Value>,
+    offset: usize,
+    unclosed_param: bool,
+    unclosed_tool: bool,
+) -> ParsedToolCall {
     ParsedToolCall {
         tool_name: tool_name.to_string(),
         params,
         format: ToolCallFormat::Invoke,
         source_offset: Some(offset),
+        unclosed_param,
+        unclosed_tool,
     }
 }
 
