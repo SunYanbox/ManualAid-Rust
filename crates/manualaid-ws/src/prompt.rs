@@ -160,19 +160,42 @@ fn is_enabled(config: &Config, tool: &ToolKind) -> bool {
 /// Windows; empty on other platforms.
 /// 仅在 Windows 平台上构建提示词时渲染的 Windows 专属提示；其他平台为空。
 fn platform_notes_text() -> String {
-    platform_notes_text_for(cfg!(windows))
+    // Detect the Microsoft CoreUtils extension by its well-known install
+    // path; the probe is compiled only on Windows. A `Path::is_file()` check
+    // is cheaper and more reliable than spawning a command, and the prompt
+    // build is a synchronous path.
+    // 通过官方安装路径探测微软 CoreUtils 扩展；该探测仅在 Windows 下编译。
+    // `Path::is_file()` 检查比 spawn 命令更廉价可靠，且提示词构建是同步路径。
+    #[cfg(windows)]
+    let coreutils_installed = Path::new("C:/Program Files/coreutils/coreutils.exe").is_file();
+    #[cfg(not(windows))]
+    let coreutils_installed = false;
+    platform_notes_text_for(cfg!(windows), coreutils_installed)
 }
 
-/// The Windows guidance for an explicit platform decision, split out so
-/// tests can exercise both branches on any host platform.
-/// 按显式平台决策返回 Windows 提示文本；拆出独立函数以便测试在任意
-/// 宿主平台上显式覆盖两个分支。
-fn platform_notes_text_for(is_windows: bool) -> String {
-    if is_windows {
-        i18n::t_str("prompt.system.platform-notes")
-    } else {
-        String::new()
+/// The Windows guidance for an explicit platform decision and CoreUtils
+/// availability, split out so tests can exercise every branch on any host.
+/// 按显式平台决策与 CoreUtils 可用性返回 Windows 提示文本；拆出独立函数
+/// 以便测试在任意宿主平台上显式覆盖所有分支。
+fn platform_notes_text_for(is_windows: bool, coreutils_installed: bool) -> String {
+    if !is_windows {
+        return String::new();
     }
+    let notes = i18n::t_str("prompt.system.platform-notes");
+    if !coreutils_installed {
+        return notes;
+    }
+    // Insert the CoreUtils paragraph just before the closing tag so both
+    // parts share one <platform-notes> block; without CoreUtils the note
+    // never appears.
+    // 在闭合标签前插入 CoreUtils 段落，使两部分共处于同一个
+    // <platform-notes> 块中；未安装 CoreUtils 时不出现该备注。
+    let coreutils = i18n::t_str("prompt.system.coreutils-notes");
+    notes.replacen(
+        "</platform-notes>",
+        &format!("\n\n{coreutils}\n</platform-notes>"),
+        1,
+    )
 }
 
 /// Append a blank line followed by `section` to `out` when `section` is
@@ -560,10 +583,36 @@ mod tests {
 
     #[test]
     fn platform_notes_text_for_covers_both_platform_decisions() {
-        let windows_notes = platform_notes_text_for(true);
+        let windows_notes = platform_notes_text_for(true, false);
         assert!(windows_notes.starts_with("<platform-notes>"));
         assert!(windows_notes.contains("Windows"));
-        assert!(platform_notes_text_for(false).is_empty());
+        assert!(!windows_notes.contains("CoreUtils"));
+        assert!(platform_notes_text_for(false, true).is_empty());
+        assert!(platform_notes_text_for(false, false).is_empty());
+    }
+
+    #[test]
+    fn platform_notes_text_for_appends_coreutils_note_when_installed() {
+        let with_note = platform_notes_text_for(true, true);
+        assert!(with_note.starts_with("<platform-notes>"));
+        assert!(with_note.contains("</platform-notes>"));
+        assert!(with_note.contains("CoreUtils"));
+        assert!(with_note.contains("coreutils.exe"));
+        // The injected note must sit inside the block, between the Windows
+        // bullets and the closing tag.
+        // 注入的备注必须位于块内：在 Windows 条目与闭合标签之间。
+        let windows_idx = with_note.find("Windows").unwrap();
+        let coreutils_idx = with_note.find("CoreUtils").unwrap();
+        let closing_idx = with_note.find("</platform-notes>").unwrap();
+        assert!(windows_idx < coreutils_idx);
+        assert!(coreutils_idx < closing_idx);
+    }
+
+    #[test]
+    fn platform_notes_text_for_omits_coreutils_note_when_not_installed() {
+        let without_note = platform_notes_text_for(true, false);
+        assert!(!without_note.contains("CoreUtils"));
+        assert!(!without_note.contains("coreutils.exe"));
     }
 
     #[cfg(windows)]
