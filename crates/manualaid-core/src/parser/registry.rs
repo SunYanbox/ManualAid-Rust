@@ -41,9 +41,9 @@ pub enum RegistryMode {
 }
 
 impl RegistryMode {
-    /// The configuration label of this mode (`auto`, `xml`,
-    /// `json-codeblock`).
-    /// 此模式的配置标签（`auto`、`xml`、`json-codeblock`）。
+    /// The configuration label of this mode (`auto`,
+    /// `json-codeblock`, `invoke`, `xml`).
+    /// 此模式的配置标签（`auto`、`json-codeblock`、`invoke`、`xml`）。
     pub fn label(&self) -> &'static str {
         match self {
             Self::AutoDetect => "auto",
@@ -68,7 +68,7 @@ impl RegistryMode {
     /// All labels in cycling order, used by the `/format` command.
     /// 按循环顺序排列的全部标签，供 `/format` 命令使用。
     pub fn all_labels() -> &'static [&'static str] {
-        &["auto", "xml", "json-codeblock", "invoke"]
+        &["auto", "json-codeblock", "invoke", "xml"]
     }
 }
 

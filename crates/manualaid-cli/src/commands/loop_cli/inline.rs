@@ -179,7 +179,7 @@ mod tests {
             "/c t read",
         );
         let clipboard = mock.read().unwrap();
-        assert!(clipboard.contains("<read>"));
+        assert!(clipboard.contains("\"tool_use\": \"read\""));
     }
 
     #[test]
@@ -327,7 +327,7 @@ mod tests {
             &mut options,
             "/format",
         );
-        assert_eq!(config.tool_call_format, "xml");
+        assert_eq!(config.tool_call_format, "json-codeblock");
         handle_inline_command(
             &mut config,
             &registry,
@@ -336,7 +336,7 @@ mod tests {
             &mut options,
             "/format 3",
         );
-        assert_eq!(config.tool_call_format, "json-codeblock");
+        assert_eq!(config.tool_call_format, "invoke");
     }
 
     #[test]

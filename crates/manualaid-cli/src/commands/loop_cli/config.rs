@@ -786,10 +786,10 @@ mod tests {
             &mut session,
         )
         .await;
-        assert_eq!(config.tool_call_format, "xml");
-        assert_eq!(registry.mode().unwrap().label(), "xml");
+        assert_eq!(config.tool_call_format, "json-codeblock");
+        assert_eq!(registry.mode().unwrap().label(), "json-codeblock");
         let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
-        assert!(content.contains("tool_call_format = \"xml\""));
+        assert!(content.contains("tool_call_format = \"json-codeblock\""));
     }
 
     #[allow(clippy::await_holding_lock)]

@@ -419,11 +419,11 @@ mod tests {
 
     #[test]
     fn cycle_format_wraps_around() {
-        assert_eq!(cycle_format("auto"), "xml");
-        assert_eq!(cycle_format("xml"), "json-codeblock");
+        assert_eq!(cycle_format("auto"), "json-codeblock");
         assert_eq!(cycle_format("json-codeblock"), "invoke");
-        assert_eq!(cycle_format("invoke"), "auto");
-        assert_eq!(cycle_format("bogus"), "xml");
+        assert_eq!(cycle_format("invoke"), "xml");
+        assert_eq!(cycle_format("xml"), "auto");
+        assert_eq!(cycle_format("bogus"), "json-codeblock");
     }
 
     #[test]
