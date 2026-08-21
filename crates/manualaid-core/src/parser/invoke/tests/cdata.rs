@@ -34,9 +34,12 @@ fn cdata_close_must_touch_closing_tag() {
     let outcome = parse(
         "<invoke name=\"write\"><parameter name=\"file_path\">/f</parameter><parameter name=\"content\"><![CDATA[x]]>\n</parameter></invoke>",
     );
-    assert!(outcome.calls.is_empty());
-    assert_eq!(outcome.warnings.len(), 1);
-    assert!(outcome.warnings[0].contains("content"));
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(outcome.calls[0].unclosed_param);
+    assert_eq!(outcome.warnings.len(), 2);
+    assert!(outcome.warnings.iter().any(|w| w.contains("content")));
+    assert!(outcome.warnings.iter().any(|w| w.contains("Unclosed tool")));
 }
 
 #[test]

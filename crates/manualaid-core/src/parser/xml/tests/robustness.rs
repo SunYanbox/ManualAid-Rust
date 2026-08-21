@@ -112,8 +112,14 @@ fn unclosed_param_discarded_with_warning() {
 
 #[test]
 fn unclosed_tool_is_ignored() {
-    // EOF 时仍未闭合的工具调用整体忽略，不产生错误。
+    // EOF 时仍未闭合但已扫描到合法参数标签的工具调用保留为失败调用；
+    // 无合法参数标签的未闭合工具仍整体忽略，不产生错误。
     let outcome = parse("<edit><old_string>x</old_string>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(!outcome.calls[0].unclosed_param);
+    assert!(!outcome.warnings.is_empty());
+    let outcome = parse("<edit>");
     assert!(outcome.calls.is_empty());
     assert!(outcome.warnings.is_empty());
 }
@@ -126,9 +132,16 @@ fn unmatched_close_tag_is_ignored() {
 
 #[test]
 fn unclosed_tool_at_eof_is_ignored_without_panicking() {
-    // EOF 处工具未闭合（含参数内孤立 `<` 的输入）整体忽略，不 panic。
-    assert!(parse("<edit><old_string>x").calls.is_empty());
-    assert!(parse("<edit><old_string>a <").calls.is_empty());
+    // EOF 处工具未闭合且参数同时未闭合：保留为失败调用并置两标记；
+    // 参数内孤立 `<` 的输入同样不 panic。
+    let outcome = parse("<edit><old_string>x");
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(outcome.calls[0].unclosed_param);
+    let outcome = parse("<edit><old_string>a <");
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(outcome.calls[0].unclosed_param);
 }
 
 #[test]
@@ -146,8 +159,12 @@ fn tag_attributes_do_not_break_param_capture() {
 
 #[test]
 fn unterminated_tag_at_eof_is_ignored() {
-    // 未闭合到 `>` 的标签在 EOF 处结束扫描，工具调用被忽略。
-    assert!(parse("<read><file_path").calls.is_empty());
+    // 未闭合到 `>` 的参数标签在 EOF 处结束扫描：该工具因已扫描到参数
+    // 标签被保留为失败调用（工具与参数均未闭合）。
+    let outcome = parse("<read><file_path");
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(outcome.calls[0].unclosed_param);
 }
 
 #[test]

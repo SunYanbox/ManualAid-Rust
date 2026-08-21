@@ -32,6 +32,8 @@ fn call(tool_name: &str, pairs: &[(&str, &str)]) -> ParsedToolCall {
             .collect::<IndexMap<_, _>>(),
         format: ToolCallFormat::Xml,
         source_offset: None,
+        unclosed_param: false,
+        unclosed_tool: false,
     }
 }
 

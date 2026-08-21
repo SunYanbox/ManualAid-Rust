@@ -78,6 +78,10 @@ impl Executor {
     /// 任何阶段的错误都会被折叠到返回的 [`ToolResult`] 中（该方法本身
     /// 不会失败）。
     pub async fn execute(&self, call: ParsedToolCall) -> ToolResult {
+        if let Some(failure) = unclosed_failure(&call) {
+            return failure;
+        }
+
         let tool_name = &call.tool_name;
 
         let Some(tool) = ToolKind::from_name(tool_name) else {
@@ -145,6 +149,10 @@ impl Executor {
     /// 预检解析后的工具调用，判断其是否必然失败，而不执行它。调用必然
     /// 失败时返回 `Some(失败结果)`，可正常推进时返回 `None`。
     pub async fn pre_check(&self, call: &ParsedToolCall) -> Option<ToolResult> {
+        if let Some(failure) = unclosed_failure(call) {
+            return Some(failure);
+        }
+
         let tool = ToolKind::from_name(&call.tool_name)?;
 
         let coerced_params = coerce_params(&call.params, tool);
@@ -203,6 +211,32 @@ impl Executor {
             }
         }
     }
+}
+
+/// Build the failure result for a parsed tool call whose tool or parameter
+/// tag was unclosed. Returns `None` when both flags are clear.
+/// 为工具或参数标签未闭合的解析调用构建失败结果。两个标记均未设置时
+/// 返回 `None`。
+fn unclosed_failure(call: &ParsedToolCall) -> Option<ToolResult> {
+    let message = match (call.unclosed_tool, call.unclosed_param) {
+        (true, true) => format!(
+            "Unclosed tool call `{tool}` and an unclosed parameter",
+            tool = call.tool_name
+        ),
+        (true, false) => format!(
+            "Unclosed tool call `{tool}` (missing closing tag)",
+            tool = call.tool_name
+        ),
+        (false, true) => format!(
+            "Unclosed parameter in tool call `{tool}`",
+            tool = call.tool_name
+        ),
+        (false, false) => return None,
+    };
+    Some(
+        ToolResult::failure(&call.tool_name, message)
+            .with_params_summary(params_summary_of(&call.params)),
+    )
 }
 
 /// Restore masked placeholders on every string parameter.

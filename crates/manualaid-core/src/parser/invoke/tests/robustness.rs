@@ -28,7 +28,14 @@ fn unclosed_param_discarded_with_warning() {
 
 #[test]
 fn unclosed_tool_is_ignored() {
+    // 工具未闭合但已扫描到合法参数标签时保留为失败调用。
     let outcome = parse("<invoke name=\"edit\"><parameter name=\"old_string\">x</parameter>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(!outcome.calls[0].unclosed_param);
+    assert!(!outcome.warnings.is_empty());
+    // 未闭合且无任何合法参数标签的工具仍整体忽略，不产生噪音。
+    let outcome = parse("<invoke name=\"read\">");
     assert!(outcome.calls.is_empty());
     assert!(outcome.warnings.is_empty());
 }
@@ -134,8 +141,10 @@ fn trailing_bare_less_than_in_param_is_discarded() {
     let outcome = parse(
         r#"<invoke name="write"><parameter name="file_path">/f</parameter><parameter name="content">abc<"#,
     );
-    assert!(outcome.calls.is_empty());
-    assert!(outcome.warnings.is_empty());
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(outcome.calls[0].unclosed_param);
+    assert!(!outcome.warnings.is_empty());
 }
 
 #[test]

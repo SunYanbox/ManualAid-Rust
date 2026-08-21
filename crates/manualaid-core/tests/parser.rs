@@ -130,6 +130,8 @@ fn xml_unclosed_param_discarded_with_warning() {
     let outcome = xml("<edit><old_string>x</edit>");
     assert_eq!(outcome.calls.len(), 1);
     assert_eq!(outcome.calls[0].tool_name, "edit");
+    assert!(outcome.calls[0].unclosed_param);
+    assert!(!outcome.calls[0].unclosed_tool);
     assert!(!outcome.calls[0].params.contains_key("old_string"));
     assert_eq!(outcome.warnings.len(), 1);
     assert!(outcome.warnings[0].contains("<old_string>"));
@@ -137,10 +139,12 @@ fn xml_unclosed_param_discarded_with_warning() {
 
 #[test]
 fn xml_unclosed_tool_is_ignored() {
-    // EOF 时仍未闭合的工具调用整体忽略，不产生错误。
+    // EOF 时仍未闭合但已扫描到合法参数标签的工具保留为失败调用。
     let outcome = xml("<edit><old_string>x</old_string>");
-    assert!(outcome.calls.is_empty());
-    assert!(outcome.warnings.is_empty());
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(!outcome.calls[0].unclosed_param);
+    assert!(!outcome.warnings.is_empty());
 }
 
 #[test]
@@ -686,10 +690,12 @@ fn xml_doc_example_cdata_close_with_whitespace_warns() {
            <file_path><![CDATA[README.md]]> </file_path>\n\
            <old_string>abcdefg,hijklmn</old_string>\n\
          </edit>");
-    assert!(outcome.calls.is_empty());
-    assert_eq!(outcome.warnings.len(), 1);
-    assert!(outcome.warnings[0].contains("<file_path>"));
-    assert!(outcome.warnings[0].contains("<edit>"));
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(outcome.calls[0].unclosed_param);
+    assert_eq!(outcome.warnings.len(), 2);
+    assert!(outcome.warnings.iter().any(|w| w.contains("<file_path>")));
+    assert!(outcome.warnings.iter().any(|w| w.contains("Unclosed tool")));
 }
 
 #[test]
@@ -749,13 +755,19 @@ fn xml_cdata_close_must_touch_closing_tag() {
     // 严格紧跟：`]]>` 与闭合标签之间有空白就不结束 CDATA，内容原文累积
     // 到 EOF，参数标签视为未正确闭合：工具调用不识别，写入软警告。
     let outcome = xml("<write><file_path>/f</file_path><content><![CDATA[x]]>\n</content></write>");
-    assert!(outcome.calls.is_empty());
-    assert_eq!(outcome.warnings.len(), 1);
-    assert!(outcome.warnings[0].contains("<content>"));
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(outcome.calls[0].unclosed_param);
+    assert_eq!(outcome.warnings.len(), 2);
+    assert!(outcome.warnings.iter().any(|w| w.contains("<content>")));
+    assert!(outcome.warnings.iter().any(|w| w.contains("Unclosed tool")));
     let outcome = xml("<write><file_path>/f</file_path><content><![CDATA[x]]> </content></write>");
-    assert!(outcome.calls.is_empty());
-    assert_eq!(outcome.warnings.len(), 1);
-    assert!(outcome.warnings[0].contains("<content>"));
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(outcome.calls[0].unclosed_param);
+    assert_eq!(outcome.warnings.len(), 2);
+    assert!(outcome.warnings.iter().any(|w| w.contains("<content>")));
+    assert!(outcome.warnings.iter().any(|w| w.contains("Unclosed tool")));
 }
 
 #[test]
@@ -905,6 +917,8 @@ fn invoke_unclosed_param_discarded_with_warning() {
     let outcome = invoke("<invoke name=\"edit\"><parameter name=\"old_string\">x</invoke>");
     assert_eq!(outcome.calls.len(), 1);
     assert_eq!(outcome.calls[0].tool_name, "edit");
+    assert!(outcome.calls[0].unclosed_param);
+    assert!(!outcome.calls[0].unclosed_tool);
     assert!(!outcome.calls[0].params.contains_key("old_string"));
     assert_eq!(outcome.warnings.len(), 1);
     assert!(outcome.warnings[0].contains("old_string"));
@@ -913,6 +927,12 @@ fn invoke_unclosed_param_discarded_with_warning() {
 #[test]
 fn invoke_unclosed_tool_is_ignored() {
     let outcome = invoke("<invoke name=\"edit\"><parameter name=\"old_string\">x</parameter>");
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(!outcome.calls[0].unclosed_param);
+    assert!(!outcome.warnings.is_empty());
+    // 未闭合且无任何合法参数标签的工具仍整体忽略，不产生噪音。
+    let outcome = invoke("<invoke name=\"read\">");
     assert!(outcome.calls.is_empty());
     assert!(outcome.warnings.is_empty());
 }
@@ -1002,9 +1022,12 @@ fn invoke_cdata_close_must_touch_closing_tag() {
     let outcome = invoke(
         "<invoke name=\"write\"><parameter name=\"file_path\">/f</parameter><parameter name=\"content\"><![CDATA[x]]>\n</parameter></invoke>",
     );
-    assert!(outcome.calls.is_empty());
-    assert_eq!(outcome.warnings.len(), 1);
-    assert!(outcome.warnings[0].contains("content"));
+    assert_eq!(outcome.calls.len(), 1);
+    assert!(outcome.calls[0].unclosed_tool);
+    assert!(outcome.calls[0].unclosed_param);
+    assert_eq!(outcome.warnings.len(), 2);
+    assert!(outcome.warnings.iter().any(|w| w.contains("content")));
+    assert!(outcome.warnings.iter().any(|w| w.contains("Unclosed tool")));
 }
 
 #[test]
