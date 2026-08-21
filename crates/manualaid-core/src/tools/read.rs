@@ -41,11 +41,22 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
     let show_line_numbers = get_bool(params, "show_line_numbers").unwrap_or(false);
     let show_line_endings = get_bool(params, "show_line_endings").unwrap_or(false);
 
-    let output = if show_line_numbers || show_line_endings {
+    let mut output = if show_line_numbers || show_line_endings {
         decorate(&sliced, offset, show_line_numbers, show_line_endings)
     } else {
         sliced
     };
+
+    // Append the range/count marker as a separate line so the model can
+    // tell how much of the file was returned and how to continue.
+    // 将范围/行数标记作为独立行追加，使模型知道返回了文件的多少内容以及如何继续。
+    let footer = read_footer(&content, offset, limit);
+    if !output.is_empty() && !output.ends_with('\n') {
+        output.push('\n');
+    }
+    output.push_str(&footer);
+    output.push('\n');
+
     ToolResult::success("read", output, true)
 }
 
@@ -64,6 +75,49 @@ pub(crate) async fn pre_check(params: &IndexMap<String, Value>) -> Result<(), St
         .await
         .map(|_| ())
         .map_err(|e| e.to_string())
+}
+
+/// Count non-empty lines using `split('\n')`: a trailing newline yields one
+/// extra empty segment, so it is removed before counting.
+/// 使用 `split('\n')` 统计非空行数：末尾换行会多出一个空段，因此先移除再计数。
+fn line_count(content: &str) -> usize {
+    let trimmed = content.trim_end_matches('\n');
+    if trimmed.is_empty() {
+        return 0;
+    }
+    trimmed.split('\n').count()
+}
+
+/// Build the trailing range/count marker appended to a read result.
+/// 构造追加在读取结果末尾的范围/行数标记。
+fn read_footer(content: &str, offset: i64, limit: i64) -> String {
+    let total = line_count(content) as i64;
+
+    if offset == 0 && limit == 0 {
+        return format!("(End of file - total {total} lines)");
+    }
+
+    let start = if offset > 0 { offset } else { 1 };
+    let end = if limit > 0 {
+        (start + limit - 1).min(total)
+    } else {
+        total
+    };
+    let has_more = offset > 0 && end < total;
+
+    if has_more {
+        format!(
+            "(Showing lines {start}-{end} of {total} lines. Use offset={} to continue.)",
+            end + 1
+        )
+    } else {
+        // Includes `limit` extending past the end, `offset > 0, limit == 0`
+        // reading to the end, and `limit` without an offset, none of which
+        // have a meaningful next offset to continue to.
+        // 包括 `limit` 超出末尾、`offset > 0, limit == 0` 读到末尾，以及
+        // 只给 `limit` 的情况；这些场景都不存在可继续的下一个 offset。
+        format!("(Showing lines {start}-{end} of {total} lines)")
+    }
 }
 
 /// Slice `content` by 1-based `offset` and optional `limit`.

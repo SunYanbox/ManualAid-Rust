@@ -3,6 +3,7 @@
 //! 核心工具类型：统一定义与执行的 [`ToolKind`] 枚举、参数描述符
 //! [`ToolParam`]，以及统一结果结构 [`ToolResult`]。
 
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::audit::AuditDecision;
@@ -299,6 +300,17 @@ impl ToolKind {
         matches!(self, Self::Read | Self::Skill)
     }
 
+    /// Names of the parameters that matter most when identifying a call
+    /// in result text; results show only these to keep summaries short.
+    /// 结果文本中最能标识一次调用的参数名；为保持摘要简短，结果只展示这些。
+    pub fn important_params(&self) -> &'static [&'static str] {
+        match self {
+            Self::Shell => &["command"],
+            Self::Read | Self::Edit | Self::Write => &["file_path"],
+            Self::Skill => &["skill"],
+        }
+    }
+
     /// Execute this tool with the given parameter map.
     /// 使用给定参数映射执行此工具。
     pub async fn run(&self, params: &indexmap::IndexMap<String, serde_json::Value>) -> ToolResult {
@@ -336,9 +348,11 @@ pub struct ToolResult {
     /// 附加到此执行的审计决策（空 = 已允许）。
     #[serde(default)]
     pub audit_decisions: Vec<(String, AuditDecision)>,
-    /// Parameter summary (JSON, at most 75 chars) for distinguishing tool
-    /// calls within a round.
-    /// 参数摘要（JSON，至多 75 字符），用于区分一轮中的工具调用。
+    /// Parameter summary for distinguishing tool calls within a round.
+    /// Known tools include only `important_params` (untruncated); unknown
+    /// tools fall back to the full parameter map, truncated for safety.
+    /// 参数摘要，用于区分一轮中的工具调用。已知工具只包含
+    /// `important_params`（不截断）；未知工具回退为完整参数映射并截断。
     #[serde(default)]
     pub params_summary: String,
     /// Execution duration in milliseconds (excluding audit/approval time).
@@ -402,12 +416,38 @@ impl ToolResult {
 /// 参数摘要的最大字符数。
 const PARAMS_SUMMARY_MAX_CHARS: usize = 75;
 
-/// Serialize a parameter map into a truncated JSON summary. The summary is
-/// based on the raw parsed parameters (masked placeholders are not restored)
-/// so sensitive data never leaks into result text.
-/// 将参数映射序列化为截断的 JSON 摘要。摘要基于解析后的原始参数
-/// （不还原掩码占位符），避免敏感数据进入结果文本。
-pub fn params_summary_of(params: &indexmap::IndexMap<String, serde_json::Value>) -> String {
-    let json = serde_json::to_string(params).unwrap_or_default();
-    json.chars().take(PARAMS_SUMMARY_MAX_CHARS).collect()
+/// Serialize a parameter map into a JSON summary. For a known tool only its
+/// [`ToolKind::important_params`] are included, without truncation; for an
+/// unknown tool the full map is kept and truncated so failures remain
+/// diagnosable without unbounded growth. The summary is based on the raw
+/// parsed parameters (masked placeholders are not restored) so sensitive
+/// data never leaks into result text.
+/// 将参数映射序列化为 JSON 摘要。已知工具只包含其
+/// [`ToolKind::important_params`]，且不截断；未知工具保留完整映射并截断，
+/// 以保持可诊断性且避免无界增长。摘要基于解析后的原始参数（不还原掩码
+/// 占位符），避免敏感数据进入结果文本。
+pub fn params_summary_of(
+    tool: Option<ToolKind>,
+    params: &indexmap::IndexMap<String, serde_json::Value>,
+) -> String {
+    let summary: IndexMap<_, _> = match tool {
+        Some(tool) => {
+            let important = tool.important_params();
+            params
+                .iter()
+                .filter(|(name, _)| important.contains(&name.as_str()))
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect()
+        }
+        // Unknown tool: keep the full-JSON fallback so failures for
+        // unrecognised tools still show everything, but cap its length.
+        // 未知工具：保留完整 JSON 回退，使未识别工具的错误仍显示全部参数，
+        // 但限制其长度。
+        None => params.clone(),
+    };
+    let json = serde_json::to_string(&summary).unwrap_or_default();
+    match tool {
+        Some(_) => json,
+        None => json.chars().take(PARAMS_SUMMARY_MAX_CHARS).collect(),
+    }
 }

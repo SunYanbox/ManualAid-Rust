@@ -264,26 +264,25 @@ fn format_results_joins_multiple_results() {
         ToolResult::failure("edit", "b"),
     ];
     let text = format_results(&results, MAX);
-    assert_eq!(text.matches("<tool_result").count(), 2);
-    assert!(text.contains("success=\"true\""));
-    assert!(text.contains("success=\"false\""));
+    assert_eq!(text.matches("[TOOL_RESULT").count(), 2);
+    assert!(text.contains("success=true"));
+    assert!(text.contains("success=false"));
 }
 
 #[test]
-fn format_results_escapes_attribute_values() {
+fn format_results_embeds_summary_verbatim() {
     let result = ToolResult::success("read", "content", true)
         .with_params_summary("{\"file_path\":\"/a.txt\"}".into());
     let text = format_results(&[result], MAX);
-    assert!(text.contains("<tool_result name=\"read\""));
-    assert!(text.contains("&quot;file_path&quot;"));
-    assert!(text.contains("success=\"true\""));
+    assert!(text.contains("[TOOL_RESULT read success=true params={\"file_path\":\"/a.txt\"}]"));
+    assert!(text.contains("success=true"));
 }
 
 #[test]
 fn format_results_omits_empty_summary() {
     let result = ToolResult::success("shell", "done", false);
     let text = format_results(&[result], MAX);
-    assert!(text.contains("<tool_result name=\"shell\" success=\"true\">"));
+    assert!(text.contains("[TOOL_RESULT shell success=true]"));
     assert!(!text.contains("params="));
 }
 
@@ -301,8 +300,8 @@ fn format_results_within_limit_is_unchanged() {
     let text = format_results(&results, MAX);
     assert_eq!(
         text,
-        "<tool_result name=\"read\" success=\"true\">\nhello\n</tool_result>\n\n\
-         <tool_result name=\"edit\" success=\"false\">\nworld\n</tool_result>"
+        "[TOOL_RESULT read success=true]\nhello\n[END TOOL_RESULT read]\n\n\
+         [TOOL_RESULT edit success=false]\nworld\n[END TOOL_RESULT edit]"
     );
 }
 
@@ -310,7 +309,7 @@ fn format_results_within_limit_is_unchanged() {
 fn format_results_preserves_whitespace_of_slices() {
     let result = ToolResult::success("read", "    indented\n  second  \n", true);
     let text = format_results(&[result], MAX);
-    assert!(text.contains("    indented\n  second  \n\n</tool_result>"));
+    assert!(text.contains("    indented\n  second  \n\n[END TOOL_RESULT read]"));
 }
 
 #[test]
@@ -380,7 +379,7 @@ fn format_results_all_short_drops_whole_results_from_the_end() {
         let text = format_results(&results, 1_000);
         // Nothing can be shortened, so whole results are dropped from the end.
         // 没有可缩短的结果，从末尾整块丢弃。
-        assert_eq!(text.matches("<tool_result").count(), 2);
+        assert_eq!(text.matches("[TOOL_RESULT").count(), 2);
         assert_eq!(text.matches('χ').count(), 500);
         assert_eq!(text.matches('λ').count(), 500);
         assert_eq!(text.matches('π').count(), 0);
