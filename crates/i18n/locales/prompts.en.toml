@@ -128,6 +128,10 @@ You are running on Windows:
 </platform-notes>
 """
 
+coreutils-notes = """
+Microsoft's CoreUtils extension is installed, so you can run common Unix commands (e.g. `find`, `grep`) directly in the Shell tool; the full list of available functions can be shown via `"C:/Program Files/coreutils/coreutils.exe" --list`. Note that some commands share names with CMD or PowerShell built-ins (e.g. `find`, `sort`); which one actually runs depends on the shell environment, the PATH order, and PowerShell's alias table.
+"""
+
 system-reminder-note = """
 Tool results and user messages may contain <system-reminder> tags. <system-reminder> tags contain useful information and reminders. These tags are added automatically by the system and are not directly related to the specific tool result or user message in which they appear.
 """

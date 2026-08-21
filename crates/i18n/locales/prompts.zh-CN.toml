@@ -124,6 +124,10 @@ platform-notes = """
 </platform-notes>
 """
 
+coreutils-notes = """
+用户当前已安装微软 CoreUtils 扩展，你可以直接在 Shell 工具中执行 `find`、`grep` 等常见 Unix 命令；完整可用的命令列表可通过 `"C:/Program Files/coreutils/coreutils.exe" --list` 查看。注意：部分命令与 CMD 或 PowerShell 的内置命令重名（如 `find`、`sort`），实际调用哪一个取决于 Shell 环境、PATH 环境变量的顺序以及 PowerShell 的别名表设置。
+"""
+
 system-reminder-note = """
 工具结果和用户消息可能包含 <system-reminder> 标签。<system-reminder> 标签包含有用的信息和提醒。这些标签由系统自动添加，与它们所在的具体工具结果或用户消息本身没有直接关系。
 """
