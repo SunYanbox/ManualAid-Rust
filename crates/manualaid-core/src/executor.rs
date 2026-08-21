@@ -89,13 +89,14 @@ impl Executor {
                 tool_name,
                 format!("Unknown tool `{tool_name}` — not in the available-tools list"),
             )
-            .with_params_summary(params_summary_of(&call.params));
+            .with_params_summary(params_summary_of(None, &call.params));
         };
+
+        let summary = params_summary_of(Some(tool), &call.params);
 
         let coerced_params = coerce_params(&call.params, tool);
         if let Err(error) = validate_params(&coerced_params, tool) {
-            return ToolResult::failure(tool_name, error.message)
-                .with_params_summary(params_summary_of(&call.params));
+            return ToolResult::failure(tool_name, error.message).with_params_summary(summary);
         }
 
         let audit_results = self.auditor.check(&coerced_params, tool);
@@ -113,7 +114,7 @@ impl Executor {
                     hard_denials.join(", ")
                 ),
             )
-            .with_params_summary(params_summary_of(&call.params));
+            .with_params_summary(summary);
         }
 
         let restored_params = restore_params(&coerced_params, &self.prompt_mapping);
@@ -127,7 +128,7 @@ impl Executor {
         result.execution_duration_ms = exec_start.elapsed().as_millis() as u64;
         result.audit_decisions = audit_results;
         self.post_process(&mut result, tool);
-        result.with_params_summary(params_summary_of(&call.params))
+        result.with_params_summary(summary)
     }
 
     /// Audit a parsed tool call without executing it, so the caller can
@@ -159,7 +160,7 @@ impl Executor {
         if let Err(error) = validate_params(&coerced_params, tool) {
             return Some(
                 ToolResult::failure(&call.tool_name, error.message)
-                    .with_params_summary(params_summary_of(&call.params)),
+                    .with_params_summary(params_summary_of(Some(tool), &call.params)),
             );
         }
 
@@ -173,7 +174,7 @@ impl Executor {
         } {
             return Some(
                 ToolResult::failure(&call.tool_name, message)
-                    .with_params_summary(params_summary_of(&call.params)),
+                    .with_params_summary(params_summary_of(Some(tool), &call.params)),
             );
         }
 
@@ -233,9 +234,10 @@ fn unclosed_failure(call: &ParsedToolCall) -> Option<ToolResult> {
         ),
         (false, false) => return None,
     };
+    let tool = ToolKind::from_name(&call.tool_name);
     Some(
         ToolResult::failure(&call.tool_name, message)
-            .with_params_summary(params_summary_of(&call.params)),
+            .with_params_summary(params_summary_of(tool, &call.params)),
     )
 }
 

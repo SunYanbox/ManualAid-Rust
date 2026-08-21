@@ -1,8 +1,8 @@
 //! System prompt building: renders the enabled-tools section with the
 //! active wire format, the workspace context and the enabled-skills list,
-//! plus the XML-wrapped result text copied back to the clipboard.
+//! plus the bracket-wrapped result text copied back to the clipboard.
 //! 系统提示词构建：按当前线格式渲染已启用工具区块、工作区上下文与
-//! 已启用技能列表；并提供复制回剪贴板的 XML 包裹结果文本。
+//! 已启用技能列表；并提供复制回剪贴板的方括号包裹结果文本。
 
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -371,22 +371,13 @@ pub fn format_results(results: &[ToolResult], max_result_chars: usize) -> String
     let parts: Vec<ResultPart> = results
         .iter()
         .map(|result| {
-            let params_attr = if result.params_summary.is_empty() {
-                String::new()
-            } else {
-                format!(" params=\"{}\"", xml_escape(&result.params_summary))
-            };
-            let header = format!(
-                "<tool_result name=\"{}\"{params_attr} success=\"{}\">\n",
-                result.tool_name, result.success
-            );
             ResultPart {
-                header,
+                header: result_header(result),
                 // Keep the tool output verbatim: trimming would drop trailing
                 // spaces that can be significant in read slices or code blocks.
                 // 保留工具输出原文：trim 会丢失 read 切片或代码块中可能有意义的尾部空格。
                 content: result.output.to_string(),
-                footer: "\n</tool_result>".to_string(),
+                footer: result_footer(result),
             }
         })
         .collect();
@@ -506,14 +497,27 @@ pub fn format_results(results: &[ToolResult], max_result_chars: usize) -> String
     result
 }
 
-/// Escape XML special characters in an attribute value.
-/// 转义 XML 属性值中的特殊字符。
-fn xml_escape(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('"', "&quot;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
+/// Render the opening bracket line of a tool result. The parameter summary
+/// is already a single-line truncated JSON string, so no escaping is needed.
+/// 渲染工具结果的开括号行。参数摘要已是单行截断 JSON 字符串，无需转义。
+fn result_header(result: &ToolResult) -> String {
+    let params_attr = if result.params_summary.is_empty() {
+        String::new()
+    } else {
+        format!(" params={}", result.params_summary)
+    };
+    format!(
+        "[TOOL_RESULT {tool} success={success}{params_attr}]\n",
+        tool = result.tool_name,
+        success = result.success,
+        params_attr = params_attr,
+    )
+}
+
+/// Render the closing bracket line of a tool result.
+/// 渲染工具结果的闭括号行。
+fn result_footer(result: &ToolResult) -> String {
+    format!("\n[END TOOL_RESULT {}]", result.tool_name)
 }
 
 /// Translate `key` and replace `%{name}` placeholders.
@@ -640,8 +644,25 @@ mod tests {
     }
 
     #[test]
-    fn xml_escape_handles_all_specials() {
-        assert_eq!(xml_escape("a<b>&\"c\""), "a&lt;b&gt;&amp;&quot;c&quot;");
+    fn result_header_includes_summary_when_present() {
+        let result = ToolResult::success("read", "content", true)
+            .with_params_summary("{\"file_path\":\"/a.txt\"}".into());
+        assert_eq!(
+            result_header(&result),
+            "[TOOL_RESULT read success=true params={\"file_path\":\"/a.txt\"}]\n"
+        );
+    }
+
+    #[test]
+    fn result_header_omits_summary_when_empty() {
+        let result = ToolResult::success("shell", "done", false);
+        assert_eq!(result_header(&result), "[TOOL_RESULT shell success=true]\n");
+    }
+
+    #[test]
+    fn result_footer_closes_with_tool_name() {
+        let result = ToolResult::failure("edit", "boom");
+        assert_eq!(result_footer(&result), "\n[END TOOL_RESULT edit]");
     }
 
     #[test]

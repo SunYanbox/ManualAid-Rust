@@ -6,7 +6,7 @@ use std::time::Duration;
 use manualaid_core::audit::{AuditDecision, AuditQueueItem};
 use manualaid_core::executor::Executor;
 use manualaid_core::parser::{FormatRegistry, ParsedToolCall};
-use manualaid_core::tools::{ToolResult, params_summary_of};
+use manualaid_core::tools::{ToolKind, ToolResult, params_summary_of};
 use manualaid_ws::session::RoundStats;
 
 use super::Approval;
@@ -217,8 +217,10 @@ pub(super) fn denied_result(
             _ => i18n::t_str("cli.approval.denied_result"),
         }
     };
-    ToolResult::failure(&call.tool_name, output)
-        .with_params_summary(params_summary_of(&call.params))
+    ToolResult::failure(&call.tool_name, output).with_params_summary(params_summary_of(
+        ToolKind::from_name(&call.tool_name),
+        &call.params,
+    ))
 }
 
 /// Ask the user whether to approve one operation (`y` / `n` / `t`).

@@ -86,7 +86,8 @@ async fn read_inside_workspace_executes_immediately() {
         .execute(call("read", &[("file_path", path.to_str().unwrap())]))
         .await;
     assert!(result.success);
-    assert_eq!(result.output, "exec content");
+    assert!(result.output.starts_with("exec content\n"));
+    assert!(result.output.contains("(End of file - total 1 lines)"));
     assert!(result.read_only);
     let _ = std::fs::remove_file(&path);
 }
@@ -103,7 +104,8 @@ async fn masked_placeholders_are_restored_before_execution() {
         .execute(call("read", &[("file_path", path.to_str().unwrap())]))
         .await;
     assert!(result.success);
-    assert_eq!(result.output, "masked [PRV_EMAIL_1]");
+    assert!(result.output.starts_with("masked [PRV_EMAIL_1]\n"));
+    assert!(result.output.contains("(End of file - total 1 lines)"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -227,8 +229,8 @@ async fn empty_output_is_substituted() {
         .execute(call("read", &[("file_path", path.to_str().unwrap())]))
         .await;
     assert!(result.success);
-    assert!(result.is_fallback);
-    assert!(result.output.contains("no output"));
+    assert!(!result.is_fallback);
+    assert!(result.output.contains("(End of file - total 0 lines)"));
     let _ = std::fs::remove_file(&path);
 }
 

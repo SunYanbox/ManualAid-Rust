@@ -86,8 +86,9 @@ async fn write_then_read_round_trip() {
 
     let read_params = params_for(&[("file_path", path.to_str().unwrap())]);
     let result = ToolKind::Read.run(&read_params).await;
-    assert!(result.success);
-    assert_eq!(result.output, "hello\nworld");
+    assert!(result.success, "{}", result.output);
+    assert!(result.output.starts_with("hello\nworld\n"));
+    assert!(result.output.contains("(End of file - total 2 lines)"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -103,8 +104,13 @@ async fn read_supports_offset_and_limit() {
     params.insert("offset".to_string(), Value::from(2));
     params.insert("limit".to_string(), Value::from(2));
     let result = ToolKind::Read.run(&params).await;
-    assert!(result.success);
-    assert_eq!(result.output, "b\nc\n");
+    assert!(result.success, "{}", result.output);
+    assert!(result.output.starts_with("b\nc\n"));
+    assert!(
+        result
+            .output
+            .contains("(Showing lines 2-3 of 4 lines. Use offset=4 to continue.)")
+    );
     let _ = std::fs::remove_file(&path);
 }
 
@@ -121,7 +127,8 @@ async fn read_decorates_with_diagnostic_flags() {
     params.insert("show_line_endings".to_string(), Value::Bool(true));
     let result = ToolKind::Read.run(&params).await;
     assert!(result.success, "{}", result.output);
-    assert_eq!(result.output, "1| a$\n2| b");
+    assert!(result.output.starts_with("1| a$\n2| b\n"));
+    assert!(result.output.contains("(End of file - total 2 lines)"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -506,12 +513,35 @@ async fn skill_tool_reports_unknown_skill() {
 }
 
 #[test]
-fn params_summary_is_truncated_json() {
+fn important_params_match_spec() {
+    assert_eq!(ToolKind::Shell.important_params(), &["command"]);
+    assert_eq!(ToolKind::Read.important_params(), &["file_path"]);
+    assert_eq!(ToolKind::Edit.important_params(), &["file_path"]);
+    assert_eq!(ToolKind::Write.important_params(), &["file_path"]);
+    assert_eq!(ToolKind::Skill.important_params(), &["skill"]);
+}
+
+#[test]
+fn params_summary_keeps_only_important_params_for_known_tools() {
+    let mut params = IndexMap::new();
+    params.insert(
+        "file_path".to_string(),
+        Value::String("/tmp/a.txt".to_string()),
+    );
+    params.insert("content".to_string(), Value::String("x".repeat(200)));
+    let summary = params_summary_of(Some(ToolKind::Read), &params);
+    assert!(summary.starts_with('{'));
+    assert!(summary.contains("file_path"));
+    assert!(!summary.contains("content"));
+}
+
+#[test]
+fn params_summary_falls_back_to_full_json_for_unknown_tool() {
     let mut params = IndexMap::new();
     params.insert("content".to_string(), Value::String("x".repeat(200)));
-    let summary = params_summary_of(&params);
+    let summary = params_summary_of(None, &params);
     assert!(summary.starts_with('{'));
-    assert!(summary.chars().count() <= 75);
+    assert!(summary.contains("content"));
 }
 
 #[test]
