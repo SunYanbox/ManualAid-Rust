@@ -537,7 +537,7 @@ mod tests {
         let list = render_tools_list(&config, &registry);
         assert!(list.contains("## read"));
         assert!(list.contains("Call template"));
-        assert!(list.contains("<read>"));
+        assert!(list.contains("\"tool_use\": \"read\""));
         assert!(!list.contains("## shell") || config.shell);
     }
 
@@ -578,7 +578,7 @@ mod tests {
         let registry = FormatRegistry::new();
         let description = tool_calling_format_description(&config, &registry);
         assert!(description.contains(&i18n::t_str("cli.prompt.func_calls_notes")));
-        assert!(description.contains("<read>"));
+        assert!(description.contains("\"tool_use\": \"read\""));
     }
 
     #[test]
