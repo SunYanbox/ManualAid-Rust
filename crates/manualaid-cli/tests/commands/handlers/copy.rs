@@ -209,7 +209,7 @@ async fn copy_round_result_copies_selected_round() {
     let mock = MockClipboard::new();
     let root = common::TempDir::new("copy-valid");
     let session = super::session_with_round(root.path()).await;
-    manualaid_cli::commands::loop_cli::push_test_input(&["1"]);
+    manualaid_cli::commands::loop_cli::push_test_input(&[super::LATEST_ROUND_INDEX]);
     copy_round_result_with_provider(&mock, &session, 100);
     let clipboard = mock.read().unwrap();
     assert!(clipboard.contains("hello"));
@@ -222,7 +222,7 @@ async fn copy_round_result_with_write_error_does_not_panic() {
     mock.set_write_error("mock write failure");
     let root = common::TempDir::new("copy-err");
     let session = super::session_with_round(root.path()).await;
-    manualaid_cli::commands::loop_cli::push_test_input(&["1"]);
+    manualaid_cli::commands::loop_cli::push_test_input(&[super::LATEST_ROUND_INDEX]);
     copy_round_result_with_provider(&mock, &session, 100);
     assert!(mock.read().unwrap().is_empty());
 }
@@ -237,13 +237,23 @@ async fn copy_round_result_rejects_out_of_range_index() {
     i18n::set_locale("en");
     let root = common::TempDir::new("copy-index");
     let session = super::session_with_round(root.path()).await;
-    manualaid_cli::commands::loop_cli::push_test_input(&["9"]);
+    manualaid_cli::commands::loop_cli::push_test_input(&[super::OUT_OF_RANGE_INDEX]);
     copy_round_result(&session, 100);
+    assert!(_capture.text().contains("Invalid round index"));
 }
 
 #[test]
 fn copy_round_result_without_rounds_prints_notice() {
     let _capture = manualaid_cli::console::capture();
+    let _lock = LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
     let session = manualaid_ws::session::SessionLog::new();
     copy_round_result(&session, 100);
+    assert!(
+        _capture
+            .text()
+            .contains("No parse rounds available to copy")
+    );
 }

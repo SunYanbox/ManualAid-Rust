@@ -25,6 +25,11 @@ async fn print_session_summary_lists_stats() {
     let root = common::TempDir::new("summary");
     let session = super::session_with_round(root.path()).await;
     print_session_summary(&Config::default(), &session);
+    let text = _capture.text();
+    assert!(text.contains("Session summary"));
+    assert!(text.contains("Rounds: 1"));
+    assert!(text.contains("Tool calls: 1"));
+    assert!(text.contains("Enabled tools:"));
 }
 
 #[test]
@@ -62,9 +67,10 @@ async fn copy_preview_is_indented_and_collapsed() {
     let _locale_lock = LOCALE_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _style_guard = super::StyleGuard::new();
     manualaid_cli::style::set_enabled(false);
     i18n::set_locale("en");
-    push_test_input(&["1"]);
+    push_test_input(&[super::LATEST_ROUND_INDEX]);
     copy_round_result_with_provider(&mock, &session, 100);
     let output = _capture.text();
     // Every preview line is indented by two spaces (the tool line
@@ -77,7 +83,6 @@ async fn copy_preview_is_indented_and_collapsed() {
     assert!(!output.contains("[[read]]"));
     assert!(output.contains("success  exec"));
     assert!(output.contains("  hello"));
-    manualaid_cli::style::set_enabled(false);
 }
 
 #[tokio::test]
@@ -90,6 +95,7 @@ async fn show_tool_history_lists_newest_first() {
     let _locale_lock = LOCALE_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _style_guard = super::StyleGuard::new();
     manualaid_cli::style::set_enabled(false);
     i18n::set_locale("en");
     let root = common::TempDir::new("history");
@@ -113,5 +119,4 @@ async fn show_tool_history_lists_newest_first() {
     // 60 ms each. 标题行显示会话总计：2 轮 × 100 tokens、60 ms。
     assert!(output.contains("200 tokens"));
     assert!(output.contains("120.000000 ms"));
-    manualaid_cli::style::set_enabled(false);
 }
