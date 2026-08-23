@@ -5,10 +5,24 @@ use i18n::{set_locale, t_str};
 /// Serializes tests that mutate the process-wide i18n locale.
 static LOCALE_LOCK: Mutex<()> = Mutex::new(());
 
-fn locale_guard() -> MutexGuard<'static, ()> {
-    LOCALE_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+/// Restores the process-wide locale to `en` on drop.
+/// 在 drop 时将进程级 locale 恢复为 `en`。
+struct LocaleGuard {
+    _guard: MutexGuard<'static, ()>,
+}
+
+fn locale_guard() -> LocaleGuard {
+    LocaleGuard {
+        _guard: LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    }
+}
+
+impl Drop for LocaleGuard {
+    fn drop(&mut self) {
+        set_locale("en");
+    }
 }
 
 #[test]
@@ -48,7 +62,7 @@ fn test_empty_key() {
 fn test_special_characters() {
     let _guard = locale_guard();
     set_locale("en");
-    // 测试包含特殊字符的 key
-    let result = t_str("key_with_!@#$%");
-    assert!(!result.is_empty());
+    // Missing keys are passed through verbatim, including special characters.
+    // 缺失键按原样透传，包括特殊字符。
+    assert_eq!(t_str("key_with_!@#$%"), "key_with_!@#$%");
 }
