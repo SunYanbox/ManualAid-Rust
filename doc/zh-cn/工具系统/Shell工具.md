@@ -37,7 +37,7 @@ Shell 工具对应 `ToolKind::Shell`，参数如下：
 | 参数 | 类型 | 必填 | semantic | 说明 |
 |------|------|------|----------|------|
 | `command` | string | 是 | `Command` | 要执行的命令；需匹配白名单，非白名单进入审核列表 |
-| `description` | string | 否 | `None` | 命令用途说明，用于审核展示 |
+| `description` | string | 是 | `None` | 命令用途说明，用于审核展示与白名单语义辅助 |
 | `timeout` | integer | 否 | `None` | 最大执行毫秒数（默认 120000，最大 600000） |
 
 工作目录不通过参数指定：Shell 工具始终在进程当前工作目录（cwd）下执行，用户通过 `cd path` 指定工作区后再启动 loop。
