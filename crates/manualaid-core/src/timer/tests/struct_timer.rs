@@ -11,7 +11,7 @@ fn timer_elapsed_is_monotonic() {
 #[test]
 fn timer_elapsed_nanos_matches_duration_within_tolerance() {
     let timer = Timer::start();
-    std::thread::sleep(Duration::from_millis(20));
+    std::thread::sleep(SLEEP);
     // The two readings are taken microseconds apart, so they must agree
     // within a small tolerance rather than exactly.
     let duration_nanos = timer.elapsed().as_nanos();
@@ -22,18 +22,17 @@ fn timer_elapsed_nanos_matches_duration_within_tolerance() {
 #[test]
 fn timer_elapsed_after_sleep_is_at_least_sleep() {
     let timer = Timer::start();
-    let sleep = Duration::from_millis(20);
-    std::thread::sleep(sleep);
-    assert!(timer.elapsed() >= sleep);
+    std::thread::sleep(SLEEP);
+    assert!(timer.elapsed() >= SLEEP);
 }
 
 #[test]
 fn timer_reset_restarts_measurement() {
     let mut timer = Timer::start();
-    std::thread::sleep(Duration::from_millis(20));
-    assert!(timer.elapsed() >= Duration::from_millis(20));
+    std::thread::sleep(SLEEP);
+    assert!(timer.elapsed() >= SLEEP);
 
     timer.reset();
-    std::thread::sleep(Duration::from_millis(20));
-    assert!(timer.elapsed() >= Duration::from_millis(20));
+    std::thread::sleep(SLEEP);
+    assert!(timer.elapsed() >= SLEEP);
 }
