@@ -28,6 +28,7 @@ pub(super) enum MenuAction {
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct MenuItem {
     key: String,
+    unique_key: Option<String>,
     aliases: Vec<String>,
     label: String,
     action: MenuAction,
@@ -39,10 +40,23 @@ impl MenuItem {
     pub(super) fn auto(label: String, action: MenuAction) -> Self {
         Self {
             key: String::new(),
+            unique_key: None,
             aliases: Vec::new(),
             label,
             action,
         }
+    }
+
+    /// Attach a stable unique key (slug) as an additional input entry, so
+    /// callers and tests can select this item without depending on its
+    /// auto-assigned numeric key. The slug is registered by [`Menu::add`]
+    /// and rejected on duplicates like any other key.
+    /// 附加稳定唯一键（slug）作为额外输入入口，使调用方与测试无需依赖
+    /// 自动分配的数字键即可选择该项；slug 由 [`Menu::add`] 注册，重复时
+    /// 与其他键一样被拒绝。
+    pub(super) fn unique(mut self, slug: &str) -> Self {
+        self.unique_key = Some(slug.to_string());
+        self
     }
 
     /// Build an item with an explicit primary key and no aliases. Kept for
@@ -53,6 +67,7 @@ impl MenuItem {
     pub(super) fn keyed(key: &str, label: String, action: MenuAction) -> Self {
         Self {
             key: key.to_string(),
+            unique_key: None,
             aliases: Vec::new(),
             label,
             action,
@@ -69,10 +84,18 @@ impl MenuItem {
     ) -> Self {
         Self {
             key: key.to_string(),
+            unique_key: None,
             aliases: aliases.iter().map(|alias| (*alias).to_string()).collect(),
             label,
             action,
         }
+    }
+
+    /// The stable unique key, when one was attached via [`Self::unique`].
+    /// 通过 [`Self::unique`] 附加的稳定唯一键（若存在）。
+    #[cfg(test)]
+    pub(super) fn unique_key(&self) -> Option<&str> {
+        self.unique_key.as_deref()
     }
 }
 
@@ -137,8 +160,12 @@ impl Menu {
         for alias in &item.aliases {
             self.insert_key(alias, item_index)?;
         }
+        if let Some(slug) = &item.unique_key {
+            self.insert_key(slug, item_index)?;
+        }
         self.items.push(MenuItem {
             key: primary_key,
+            unique_key: item.unique_key,
             aliases: item.aliases,
             label: item.label,
             action: item.action,
@@ -171,58 +198,93 @@ impl Menu {
         let item_index = self.key_index.get(input)?;
         self.items.get(*item_index).map(|item| &item.action)
     }
+
+    /// The registered items, in registration order. Used by tests to assert
+    /// that every item carries its stable unique key.
+    /// 已注册的菜单项（按注册顺序），供测试断言每项都带稳定唯一键。
+    #[cfg(test)]
+    pub(super) fn items(&self) -> &[MenuItem] {
+        &self.items
+    }
 }
 
 /// Build the main loop menu.
 /// 构建主循环菜单。
 pub(super) fn build_main_menu() -> Menu {
     Menu::new(i18n::t_str("cli.loop.menu_title"))
-        .add(MenuItem::auto(
-            i18n::t_str("cli.loop.menu_generate"),
-            MenuAction::Command(LoopCommand::GeneratePrompt),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.loop.menu_generate"),
+                MenuAction::Command(LoopCommand::GeneratePrompt),
+            )
+            .unique("main_menu_generate"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.loop.menu_paste"),
-            MenuAction::Command(LoopCommand::PasteAndSubmit),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.loop.menu_paste"),
+                MenuAction::Command(LoopCommand::PasteAndSubmit),
+            )
+            .unique("main_menu_paste"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.loop.menu_input"),
-            MenuAction::Command(LoopCommand::InputAndSubmit),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.loop.menu_input"),
+                MenuAction::Command(LoopCommand::InputAndSubmit),
+            )
+            .unique("main_menu_input"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.loop.menu_copy"),
-            MenuAction::Command(LoopCommand::CopyRoundResult),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.loop.menu_copy"),
+                MenuAction::Command(LoopCommand::CopyRoundResult),
+            )
+            .unique("main_menu_copy"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.loop.menu_config"),
-            MenuAction::Command(LoopCommand::ConfigMenu),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.loop.menu_config"),
+                MenuAction::Command(LoopCommand::ConfigMenu),
+            )
+            .unique("main_menu_config"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.loop.menu_summary"),
-            MenuAction::Command(LoopCommand::SessionSummary),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.loop.menu_summary"),
+                MenuAction::Command(LoopCommand::SessionSummary),
+            )
+            .unique("main_menu_summary"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.loop.menu_history"),
-            MenuAction::Command(LoopCommand::ToolHistory),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.loop.menu_history"),
+                MenuAction::Command(LoopCommand::ToolHistory),
+            )
+            .unique("main_menu_history"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.loop.menu_copy_prompt"),
-            MenuAction::Command(LoopCommand::CopyPromptMenu),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.loop.menu_copy_prompt"),
+                MenuAction::Command(LoopCommand::CopyPromptMenu),
+            )
+            .unique("main_menu_copy_prompt"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::keyed_alias(
-            "0",
-            &["q", "quit", "exit"],
-            i18n::t_str("cli.loop.menu_exit"),
-            MenuAction::Command(LoopCommand::Exit),
-        ))
+        .add(
+            MenuItem::keyed_alias(
+                "0",
+                &["q", "quit", "exit"],
+                i18n::t_str("cli.loop.menu_exit"),
+                MenuAction::Command(LoopCommand::Exit),
+            )
+            .unique("main_menu_quit"),
+        )
         .expect("unique menu key")
 }
 
@@ -445,5 +507,81 @@ mod tests {
         assert!(menu.resolve("bogus_input").is_none());
         assert!(menu.resolve("").is_none());
         assert!(menu.resolve("999").is_none());
+    }
+
+    #[test]
+    fn unique_key_resolves_to_its_action() {
+        let menu = Menu::new("m")
+            .add(
+                MenuItem::auto("first".to_string(), MenuAction::Command(command_marker()))
+                    .unique("main_menu_quit"),
+            )
+            .unwrap();
+        assert_eq!(
+            menu.resolve("main_menu_quit"),
+            Some(&MenuAction::Command(command_marker()))
+        );
+        // The auto numeric key still resolves alongside the slug.
+        // 自动数字键与 slug 同时可解析。
+        assert_eq!(
+            menu.resolve("1"),
+            Some(&MenuAction::Command(command_marker()))
+        );
+    }
+
+    #[test]
+    fn duplicate_unique_key_is_rejected() {
+        let result = Menu::new("m")
+            .add(
+                MenuItem::auto("one".to_string(), MenuAction::Command(LoopCommand::Back))
+                    .unique("shared_slug"),
+            )
+            .unwrap()
+            .add(
+                MenuItem::auto(
+                    "two".to_string(),
+                    MenuAction::Command(LoopCommand::SessionSummary),
+                )
+                .unique("shared_slug"),
+            );
+        assert_eq!(
+            result,
+            Err(MenuError::DuplicateKey("shared_slug".to_string()))
+        );
+    }
+
+    #[test]
+    fn unique_key_colliding_with_an_alias_is_rejected() {
+        let result = Menu::new("m")
+            .add(
+                MenuItem::keyed_alias(
+                    "0",
+                    &["q", "quit", "exit"],
+                    "back".to_string(),
+                    MenuAction::Command(LoopCommand::Back),
+                )
+                .unique("menu_back"),
+            )
+            .unwrap()
+            .add(
+                MenuItem::auto(
+                    "after".to_string(),
+                    MenuAction::Command(LoopCommand::SessionSummary),
+                )
+                .unique("exit"),
+            );
+        assert_eq!(result, Err(MenuError::DuplicateKey("exit".to_string())));
+    }
+
+    #[test]
+    fn main_menu_items_all_carry_unique_resolvable_keys() {
+        let menu = build_main_menu();
+        let mut seen = std::collections::HashSet::new();
+        for item in menu.items() {
+            let slug = item.unique_key().expect("every item has a unique key");
+            assert!(!slug.is_empty());
+            assert!(seen.insert(slug), "duplicate slug `{slug}`");
+            assert!(menu.resolve(slug).is_some(), "slug `{slug}` must resolve");
+        }
     }
 }

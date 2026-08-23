@@ -5,8 +5,6 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
 
-use manualaid_core::user_dir;
-
 mod common;
 
 fn run(args: &[&str]) -> Output {
@@ -34,10 +32,6 @@ fn stderr(output: &Output) -> String {
     String::from_utf8(output.stderr.clone()).expect("utf8 stderr")
 }
 
-fn home_dir_resolvable() -> bool {
-    user_dir::home_dir().is_ok()
-}
-
 #[test]
 fn no_args_prints_running_message_in_english() {
     let tmp = common::TempDir::new("no-args-en");
@@ -62,11 +56,12 @@ fn no_args_prints_running_message_in_chinese() {
 
 #[test]
 fn mask_prints_masked_text_and_snapshot_json() {
-    if !home_dir_resolvable() {
-        eprintln!("skipping: home directory cannot be resolved in this environment");
-        return;
-    }
-    let output = run(&["debug", "mask", "mail me at bob@example.com"]);
+    let tmp = common::TempDir::new("mask-bin");
+    let output = run_in(
+        tmp.path(),
+        tmp.path(),
+        &["debug", "mask", "mail me at bob@example.com"],
+    );
     assert!(output.status.success());
     let text = stdout(&output);
     assert!(text.contains("[PRV_EMAIL_"));
@@ -78,12 +73,12 @@ fn mask_prints_masked_text_and_snapshot_json() {
 
 #[test]
 fn mask_directory_input_fails_with_localized_error() {
-    if !home_dir_resolvable() {
-        eprintln!("skipping: home directory cannot be resolved in this environment");
-        return;
-    }
-    let tmp = common::TempDir::new("mask-dir");
-    let output = run(&["debug", "mask", tmp.path().to_str().unwrap()]);
+    let tmp = common::TempDir::new("mask-dir-bin");
+    let output = run_in(
+        tmp.path(),
+        tmp.path(),
+        &["debug", "mask", tmp.path().to_str().unwrap()],
+    );
     assert!(!output.status.success());
     assert!(stderr(&output).contains("Masking failed"));
 }
@@ -137,54 +132,78 @@ fn restore_invalid_snapshot_fails_localized() {
     assert!(stderr(&output).contains("快照解析失败"));
 }
 
-#[test]
-fn skill_flags_filter_global_and_project_scopes() {
-    if !home_dir_resolvable() {
-        eprintln!("skipping: home directory cannot be resolved in this environment");
-        return;
-    }
-    let tmp = common::TempDir::new("skill-bin");
-    let project = tmp.path().join("project");
-    let home = tmp.path().join("home");
-    fs::create_dir_all(&project).unwrap();
+fn write_skill_fixtures(project: &Path, home: &Path) {
+    fs::create_dir_all(project).unwrap();
     common::write_skill(
-        &project,
+        project,
         ".claude",
         "projskill",
         Some("projskill"),
         "project description",
     );
     common::write_skill(
-        &home,
+        home,
         ".codex",
         "globskill",
         Some("globskill"),
         "global description",
     );
+}
 
-    let both = run_in(&project, &home, &["debug", "skill"]);
-    assert!(both.status.success());
-    assert!(stdout(&both).contains("projskill"));
-    assert!(stdout(&both).contains("globskill"));
+#[test]
+fn skill_flags_default_shows_both_scopes() {
+    let tmp = common::TempDir::new("skill-both-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    write_skill_fixtures(&project, &home);
 
-    let global_only = run_in(&project, &home, &["debug", "skill", "--global"]);
-    assert!(global_only.status.success());
-    assert!(stdout(&global_only).contains("globskill"));
-    assert!(!stdout(&global_only).contains("projskill"));
+    let output = run_in(&project, &home, &["debug", "skill"]);
+    assert!(output.status.success());
+    assert!(stdout(&output).contains("projskill"));
+    assert!(stdout(&output).contains("globskill"));
+}
 
-    let project_only = run_in(&project, &home, &["debug", "skill", "--project"]);
-    assert!(project_only.status.success());
-    assert!(stdout(&project_only).contains("projskill"));
-    assert!(!stdout(&project_only).contains("globskill"));
+#[test]
+fn skill_flags_global_scope_filters_project_out() {
+    let tmp = common::TempDir::new("skill-global-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    write_skill_fixtures(&project, &home);
 
-    let both_flags = run_in(
+    let output = run_in(&project, &home, &["debug", "skill", "--global"]);
+    assert!(output.status.success());
+    assert!(stdout(&output).contains("globskill"));
+    assert!(!stdout(&output).contains("projskill"));
+}
+
+#[test]
+fn skill_flags_project_scope_filters_global_out() {
+    let tmp = common::TempDir::new("skill-project-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    write_skill_fixtures(&project, &home);
+
+    let output = run_in(&project, &home, &["debug", "skill", "--project"]);
+    assert!(output.status.success());
+    assert!(stdout(&output).contains("projskill"));
+    assert!(!stdout(&output).contains("globskill"));
+}
+
+#[test]
+fn skill_flags_both_scopes_shows_everything() {
+    let tmp = common::TempDir::new("skill-both-flags-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    write_skill_fixtures(&project, &home);
+
+    let output = run_in(
         &project,
         &home,
         &["debug", "skill", "--global", "--project"],
     );
-    assert!(both_flags.status.success());
-    assert!(stdout(&both_flags).contains("projskill"));
-    assert!(stdout(&both_flags).contains("globskill"));
+    assert!(output.status.success());
+    assert!(stdout(&output).contains("projskill"));
+    assert!(stdout(&output).contains("globskill"));
 }
 
 #[test]
@@ -223,18 +242,22 @@ fn init_output_includes_localized_timings() {
     assert!(text.contains("初始化："));
 }
 
-#[test]
-fn dir_view_shows_tree_and_honors_limit_and_depth() {
-    let tmp = common::TempDir::new("view-bin");
-    let project = tmp.path().join("project");
-    let home = tmp.path().join("home");
-    fs::create_dir_all(&project).unwrap();
+fn write_view_fixture(project: &Path) {
     fs::create_dir_all(project.join(".ManualAid")).unwrap();
     fs::write(project.join(".ManualAid").join("config.toml"), "[skill]\n").unwrap();
     fs::write(project.join(".ManualAid").join(".gitignore"), "*\n").unwrap();
     for i in 0..10 {
         fs::write(project.join(".ManualAid").join(format!("f{i}.txt")), "x").unwrap();
     }
+}
+
+#[test]
+fn dir_view_shows_tree_with_default_limit_and_depth() {
+    let tmp = common::TempDir::new("view-default-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&project).unwrap();
+    write_view_fixture(&project);
 
     let output = run_in(&project, &home, &["dir", "--view", "--project"]);
     assert!(output.status.success());
@@ -243,6 +266,15 @@ fn dir_view_shows_tree_and_honors_limit_and_depth() {
     assert!(text.contains("config.toml"));
     assert!(text.contains(".gitignore"));
     assert!(text.contains("… 5 more files"));
+}
+
+#[test]
+fn dir_view_limit_zero_shows_all_files() {
+    let tmp = common::TempDir::new("view-limit-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&project).unwrap();
+    write_view_fixture(&project);
 
     let output = run_in(
         &project,
@@ -253,6 +285,15 @@ fn dir_view_shows_tree_and_honors_limit_and_depth() {
     let text = stdout(&output);
     assert!(text.contains("f9.txt"));
     assert!(!text.contains("more files"));
+}
+
+#[test]
+fn dir_view_depth_zero_shows_only_root() {
+    let tmp = common::TempDir::new("view-depth-bin");
+    let project = tmp.path().join("project");
+    let home = tmp.path().join("home");
+    fs::create_dir_all(&project).unwrap();
+    write_view_fixture(&project);
 
     let output = run_in(
         &project,
@@ -314,11 +355,12 @@ fn dir_clean_without_yes_is_rejected_when_non_terminal() {
 
 #[test]
 fn mask_output_includes_timings_with_char_count() {
-    if !home_dir_resolvable() {
-        eprintln!("skipping: home directory cannot be resolved in this environment");
-        return;
-    }
-    let output = run(&["debug", "mask", "mail me at bob@example.com"]);
+    let tmp = common::TempDir::new("mask-timing-bin");
+    let output = run_in(
+        tmp.path(),
+        tmp.path(),
+        &["debug", "mask", "mail me at bob@example.com"],
+    );
     assert!(output.status.success());
     let text = stdout(&output);
     assert!(text.contains("Timings"));
@@ -327,11 +369,8 @@ fn mask_output_includes_timings_with_char_count() {
 
 #[test]
 fn skill_output_includes_timings() {
-    if !home_dir_resolvable() {
-        eprintln!("skipping: home directory cannot be resolved in this environment");
-        return;
-    }
-    let output = run(&["debug", "skill"]);
+    let tmp = common::TempDir::new("skill-timing-bin");
+    let output = run_in(tmp.path(), tmp.path(), &["debug", "skill"]);
     assert!(output.status.success());
     let text = stdout(&output);
     assert!(text.contains("Timings"));

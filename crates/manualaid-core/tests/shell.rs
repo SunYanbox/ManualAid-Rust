@@ -3,6 +3,7 @@
 // 测试用 std Mutex 跨 await 串行化互斥；守卫不会被重入，此 lint 不适用。
 #![allow(clippy::await_holding_lock)]
 
+use std::ffi::OsString;
 #[cfg(windows)]
 use std::path::Path;
 use std::path::PathBuf;
@@ -13,6 +14,15 @@ use manualaid_core::error::CoreError;
 use manualaid_core::shell::{
     CommandResult, reset_shell_path, run_program, run_shell, set_shell_path, shell_path,
 };
+
+/// Timeout used by shell tests that must kill a long-running command.
+/// 用于必须中止长时运行命令的 Shell 测试超时。
+const TIMEOUT: Duration = Duration::from_millis(500);
+
+/// Upper bound for timeout and bounded-drain tests to return. Must stay well
+/// below the command's remaining sleep so the timeout path is deterministic.
+/// 超时与有界排空测试返回的上界，需远小于命令剩余睡眠时间以保证确定性。
+const MAX_RETURN_LATENCY: Duration = Duration::from_secs(2);
 
 /// Serializes tests that touch the shared shell path static, because
 /// `#[tokio::test]` bodies run concurrently.
@@ -37,6 +47,40 @@ impl Drop for ShellRestore {
                 let _ = set_shell_path(path);
             }
             None => reset_shell_path(),
+        }
+    }
+}
+
+/// Restores one environment variable to its original value on drop, or
+/// removes it again when it was originally unset.
+/// 析构时将单个环境变量恢复为原值；原本不存在则再次移除。
+struct EnvRestore {
+    key: &'static str,
+    original: Option<OsString>,
+}
+
+impl EnvRestore {
+    fn remove(key: &'static str) -> Self {
+        let original = std::env::var_os(key);
+        // SAFETY: the shell lock serializes this test against every other
+        // test reading this variable, and none of them observe the unset
+        // state while the guard is alive.
+        unsafe { std::env::remove_var(key) };
+        Self { key, original }
+    }
+}
+
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        match &self.original {
+            Some(value) => {
+                // SAFETY: same reasoning as in remove().
+                unsafe { std::env::set_var(self.key, value) };
+            }
+            None => {
+                // SAFETY: same reasoning as in remove().
+                unsafe { std::env::remove_var(self.key) };
+            }
         }
     }
 }
@@ -140,12 +184,12 @@ async fn run_shell_timeout_kills_and_preserves_output() {
     #[cfg(not(windows))]
     let command = "echo started; sleep 5";
     let start = Instant::now();
-    let result = run_shell(command, Some(Duration::from_millis(500)))
+    let result = run_shell(command, Some(TIMEOUT))
         .await
         .expect("timeout is not an error");
     assert!(result.timed_out);
     assert!(
-        start.elapsed() < Duration::from_secs(2),
+        start.elapsed() < MAX_RETURN_LATENCY,
         "timeout should return quickly, took {:?}",
         start.elapsed()
     );
@@ -168,7 +212,7 @@ async fn drain_is_bounded_when_grandchildren_hold_pipes() {
         .expect("command should return");
     assert!(!result.timed_out);
     assert!(
-        start.elapsed() < Duration::from_secs(2),
+        start.elapsed() < MAX_RETURN_LATENCY,
         "drain should be bounded, took {:?}",
         start.elapsed()
     );
@@ -205,16 +249,11 @@ async fn run_program_timeout_kills_and_preserves_output() {
     let result = run_program(
         "cmd.exe",
         &["/C", "echo started & ping -n 6 127.0.0.1"],
-        Some(Duration::from_millis(500)),
+        Some(TIMEOUT),
     )
     .await;
     #[cfg(not(windows))]
-    let result = run_program(
-        "/bin/sh",
-        &["-c", "echo started; sleep 5"],
-        Some(Duration::from_millis(500)),
-    )
-    .await;
+    let result = run_program("/bin/sh", &["-c", "echo started; sleep 5"], Some(TIMEOUT)).await;
     let result = result.expect("timeout is not an error");
     assert!(result.timed_out);
     assert!(result.stdout.contains("started"));
@@ -291,69 +330,49 @@ async fn shell_path_getter_reflects_configuration() {
     assert_eq!(shell_path(), None);
 }
 
-/// With no shell configured, the default falls back to `cmd` when `%COMSPEC%`
-/// is unset (and to `sh` when `$SHELL` is unset).
-/// 未配置 Shell 且 `%COMSPEC%`（Unix 为 `$SHELL`）缺失时，默认回退到
-/// `cmd`（Unix 为 `sh`）。
+/// With no shell configured and `%COMSPEC%` unset, the default falls back to
+/// `cmd`. The environment variable is restored by `EnvRestore` on drop.
+/// 未配置 Shell 且 `%COMSPEC%` 缺失时，默认回退到 `cmd`；环境变量由
+/// `EnvRestore` 在析构时恢复。
+#[cfg(windows)]
 #[tokio::test]
-async fn default_shell_falls_back_without_env() {
+async fn default_shell_falls_back_without_env_windows() {
     let _guard = lock_shell();
     let _restore = ShellRestore { old: shell_path() };
     reset_shell_path();
-    #[cfg(windows)]
-    {
-        let original = std::env::var_os("COMSPEC");
-        // SAFETY: the shell lock serializes this test against every other
-        // test touching the shell path, and none of them read COMSPEC while
-        // it is unset. The value is restored right after the run.
-        unsafe { std::env::remove_var("COMSPEC") };
-        let result = run_shell("echo fallback", None)
-            .await
-            .expect("cmd fallback should work");
-        if let Some(value) = original {
-            // SAFETY: same reasoning as the removal above.
-            unsafe { std::env::set_var("COMSPEC", value) };
-        }
-        assert_eq!(result.exit_code, Some(0));
-        assert_eq!(result.stdout.trim(), "fallback");
-    }
-    #[cfg(not(windows))]
-    {
-        let original = std::env::var_os("SHELL");
-        // SAFETY: same reasoning as the Windows branch above.
-        unsafe { std::env::remove_var("SHELL") };
-        let result = run_shell("echo fallback", None)
-            .await
-            .expect("sh fallback should work");
-        if let Some(value) = original {
-            // SAFETY: same reasoning as the removal above.
-            unsafe { std::env::set_var("SHELL", value) };
-        }
-        assert_eq!(result.exit_code, Some(0));
-        assert_eq!(result.stdout.trim(), "fallback");
-    }
+    let _comspec = EnvRestore::remove("COMSPEC");
+    let result = run_shell("echo fallback", None)
+        .await
+        .expect("cmd fallback should work");
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout.trim(), "fallback");
+}
+
+/// With no shell configured and `$SHELL` unset, the default falls back to
+/// `sh`. The environment variable is restored by `EnvRestore` on drop.
+/// 未配置 Shell 且 `$SHELL` 缺失时，默认回退到 `sh`；环境变量由
+/// `EnvRestore` 在析构时恢复。
+#[cfg(not(windows))]
+#[tokio::test]
+async fn default_shell_falls_back_without_env_unix() {
+    let _guard = lock_shell();
+    let _restore = ShellRestore { old: shell_path() };
+    reset_shell_path();
+    let _shell = EnvRestore::remove("SHELL");
+    let result = run_shell("echo fallback", None)
+        .await
+        .expect("sh fallback should work");
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout.trim(), "fallback");
 }
 
 /// On GBK systems (ANSI codepage 936), cmd output decodes to UTF-8.
 /// 在 GBK 系统（ANSI 代码页 936）上，cmd 输出可正确解码为 UTF-8。
 #[cfg(windows)]
 #[tokio::test]
+#[ignore = "requires ANSI codepage 936 (GBK)"]
 async fn run_shell_decodes_gbk_output() {
     let _guard = lock_shell();
-    let probe = run_program(
-        "powershell.exe",
-        &[
-            "-NoProfile",
-            "-Command",
-            "[System.Text.Encoding]::Default.CodePage",
-        ],
-        None,
-    )
-    .await
-    .expect("codepage probe should run");
-    if !probe.stdout.contains("936") {
-        return;
-    }
     let result = run_shell("echo 中文测试", None)
         .await
         .expect("echo should run");
@@ -375,6 +394,7 @@ async fn run_shell_passes_quoted_paths_verbatim_to_git() {
         .await
         .expect("git probe should run");
     if probe.exit_code != Some(0) {
+        eprintln!("skipping: git is not installed");
         return;
     }
     let result = run_shell("git add \"definitely-not-a-file-中文-路径.txt\"", None)
@@ -405,6 +425,7 @@ async fn run_shell_passes_flag_with_quoted_value_to_git() {
         .await
         .expect("git probe should run");
     if probe.exit_code != Some(0) {
+        eprintln!("skipping: git is not installed");
         return;
     }
     let result = run_shell("git log --format=\"%h\" -1", None)
@@ -460,6 +481,7 @@ async fn run_shell_preserves_ampersand_chain_with_quoted_messages() {
 async fn run_shell_quoted_executable_first_token() {
     let _guard = lock_shell();
     if !Path::new(r"C:\Windows\System32\where.exe").exists() {
+        eprintln!("skipping: where.exe is not present");
         return;
     }
     let result = run_shell("\"C:\\Windows\\System32\\where.exe\" where.exe", None)

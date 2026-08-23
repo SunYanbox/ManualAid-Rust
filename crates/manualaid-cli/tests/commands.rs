@@ -10,7 +10,7 @@ use manualaid_cli::cli::Cli;
 use manualaid_cli::commands::{run, run_dir_clean_with_stdin, run_main};
 
 mod common;
-#[path = "commands/handlers.rs"]
+#[path = "commands/handlers/mod.rs"]
 mod handlers;
 #[path = "commands/loop.rs"]
 mod r#loop;

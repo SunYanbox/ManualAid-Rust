@@ -77,18 +77,18 @@ fn loop_binary_drives_menu_inline_commands_and_typed_round() {
         &[
             "/tools",
             "/format 4",
-            "4",
-            "5",
-            "9",
-            "11",
-            "0",
-            "3",
+            "main_menu_copy",
+            "main_menu_config",
+            "99",
+            "bogus",
+            "setting_menu_back",
+            "main_menu_input",
             &read_call,
             "/end",
             "n",
-            "6",
+            "main_menu_summary",
             "x",
-            "0",
+            "main_menu_quit",
         ],
     );
     assert!(output.status.success());
@@ -107,19 +107,27 @@ fn loop_binary_input_menu_submits_text() {
     let home = common::TempDir::new("loop-flow-input-home");
     let target = dir.path().join("target.txt");
     std::fs::write(&target, "hello").unwrap();
-    // Use the "input tool call text" menu option (3) instead of the paste
-    // option (2): the paste path needs a real system clipboard write before
-    // the child starts, while the input path uses stdin only and is stable
-    // across headless CI and Windows. The clipboard-backed paste behavior is
-    // already covered with MockClipboard by the in-process handler tests.
-    // 使用“输入工具调用文本”菜单项（3）而非粘贴项（2）：粘贴路径需要子进程
-    // 启动前写真实系统剪贴板，而输入路径仅依赖 stdin，在无头 CI 与 Windows
-    // 上都稳定。粘贴的剪贴板行为已由进程内 handler 测试用 MockClipboard 覆盖。
+    // Use the "input tool call text" menu option (main_menu_input) instead of
+    // the paste option (main_menu_paste): the paste path needs a real system
+    // clipboard write before the child starts, while the input path uses
+    // stdin only and is stable across headless CI and Windows. The
+    // clipboard-backed paste behavior is already covered with MockClipboard
+    // by the in-process handler tests.
+    // 使用“输入工具调用文本”菜单项（main_menu_input）而非粘贴项
+    // （main_menu_paste）：粘贴路径需要子进程启动前写真实系统剪贴板，输入
+    // 路径仅依赖 stdin，在无头 CI 与 Windows 上都稳定。粘贴的剪贴板行为已
+    // 由进程内 handler 测试用 MockClipboard 覆盖。
     let output = common::run_binary_scripted(
         dir.path(),
         Some(home.path()),
         &[],
-        &["3", &read_call(&target), "/end", "n", "0"],
+        &[
+            "main_menu_input",
+            &read_call(&target),
+            "/end",
+            "n",
+            "main_menu_quit",
+        ],
     );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -140,22 +148,32 @@ fn loop_binary_accept_edit_auto_approves_workspace_write() {
         dir.path(),
         Some(home.path()),
         &["--mode", "accept-edit"],
-        &["5", "8", "0", "3", &write_call, "/end", "n", "0"],
+        &[
+            "main_menu_config",
+            "setting_menu_context_auto_load",
+            "setting_menu_back",
+            "main_menu_input",
+            &write_call,
+            "/end",
+            "n",
+            "main_menu_quit",
+        ],
     );
     assert!(output.status.success());
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "ok");
 }
 
 #[test]
-fn loop_binary_exits_on_zero_with_explicit_and_real_home() {
+fn loop_binary_exits_on_quit_with_explicit_and_real_home() {
     let dir = common::TempDir::new("loop-flow-home");
     let home = common::TempDir::new("loop-flow-home-temp");
-    let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["0"]);
+    let output =
+        common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["main_menu_quit"]);
     assert!(output.status.success());
     assert!(config_path(dir.path()).is_file());
     // Without a home override the loop falls back to the real user home and
     // still exits cleanly; it only reads the home directory.
-    let output = common::run_binary_scripted(dir.path(), None, &[], &["0"]);
+    let output = common::run_binary_scripted(dir.path(), None, &[], &["main_menu_quit"]);
     assert!(output.status.success());
 }
 
@@ -165,7 +183,8 @@ fn loop_binary_reports_invalid_config() {
     let home = common::TempDir::new("loop-flow-bad-config-home");
     std::fs::create_dir_all(dir.path().join(".ManualAid")).unwrap();
     std::fs::write(config_path(dir.path()), "not [valid toml").unwrap();
-    let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["0"]);
+    let output =
+        common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["main_menu_quit"]);
     assert!(!output.status.success());
     assert!(!output.stderr.is_empty());
 }
@@ -182,7 +201,12 @@ fn loop_binary_copies_single_context_file_to_clipboard() {
     // 通过复制成功后的确认输出断言，而非轮询系统剪贴板：子进程阻塞等待
     // stdin 时剪贴板所有者可能无法响应，导致无头 CI 与 Windows 上轮询
     // 剪贴板不稳定。
-    let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["1", "0"]);
+    let output = common::run_binary_scripted(
+        dir.path(),
+        Some(home.path()),
+        &[],
+        &["main_menu_generate", "main_menu_quit"],
+    );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains(&i18n::t_str("cli.message.prompt_copied")));
@@ -199,12 +223,23 @@ fn loop_binary_copies_intent_rule_to_clipboard() {
     // 通过复制成功后的确认输出断言，而非轮询系统剪贴板：子进程阻塞等待
     // stdin 时剪贴板所有者可能无法响应，导致无头 CI 与 Windows 上轮询
     // 剪贴板不稳定。
-    // Script: enter the copy-prompt submenu (8), copy the intent rule (1),
-    // leave the submenu (0), and exit the main loop (0).
-    // 脚本：进入复制提示词二级菜单（8），复制意图规则（1），退出二级菜单
-    // （0），再退出主循环（0）。
-    let output =
-        common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["8", "1", "0", "0"]);
+    // Script: enter the copy-prompt submenu (main_menu_copy_prompt), copy the
+    // intent rule (copy_prompt_menu_intent_rule), leave the submenu
+    // (copy_prompt_menu_back), and exit the main loop (main_menu_quit).
+    // 脚本：进入复制提示词二级菜单（main_menu_copy_prompt），复制意图规则
+    // （copy_prompt_menu_intent_rule），退出二级菜单（copy_prompt_menu_back），
+    // 再退出主循环（main_menu_quit）。
+    let output = common::run_binary_scripted(
+        dir.path(),
+        Some(home.path()),
+        &[],
+        &[
+            "main_menu_copy_prompt",
+            "copy_prompt_menu_intent_rule",
+            "copy_prompt_menu_back",
+            "main_menu_quit",
+        ],
+    );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains(&i18n::t_str("cli.message.intent_rule_copied")));
@@ -219,7 +254,16 @@ fn loop_binary_copy_prompt_menu_returns_to_main_menu() {
     // clipboard, which may not answer while the child waits on stdin.
     // 进入复制提示词二级菜单后直接返回；通过 stdout 断言二级菜单标题，
     // 而非轮询系统剪贴板（子进程等待 stdin 时剪贴板可能无法响应）。
-    let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["8", "0", "0"]);
+    let output = common::run_binary_scripted(
+        dir.path(),
+        Some(home.path()),
+        &[],
+        &[
+            "main_menu_copy_prompt",
+            "copy_prompt_menu_back",
+            "main_menu_quit",
+        ],
+    );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains(&i18n::t_str("cli.copy_prompt.title")));
@@ -238,7 +282,17 @@ fn loop_binary_asks_selection_when_multiple_context_files_exist() {
     // 通过 stdout 驱动选择，而非轮询系统剪贴板：子进程阻塞等待 stdin 时
     // 剪贴板所有者可能无法响应，导致无头 CI 与 Windows 上轮询剪贴板
     // 不稳定。
-    let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["1", "1", "0"]);
+    // The second "1" selects the first numbered context-file entry; the
+    // context chooser is a numbered prompt, not a Menu, so it keeps its
+    // numeric input (documented stable discovery order).
+    // 第二个 “1” 选择第一个编号上下文文件条目；上下文选择器是编号提示而
+    // 非 Menu，因此保留数字输入（规范发现的稳定顺序）。
+    let output = common::run_binary_scripted(
+        dir.path(),
+        Some(home.path()),
+        &[],
+        &["main_menu_generate", "1", "main_menu_quit"],
+    );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Context files loaded: AGENTS.md"));
@@ -264,7 +318,12 @@ fn loop_binary_skips_context_selection_when_auto_load_is_disabled() {
     // side channel here.
     // 断言复制成功确认且未出现选择菜单，而非轮询系统剪贴板。子进程等待
     // stdin 时剪贴板可能无法响应，因此 stdout 是这里的稳定验证渠道。
-    let output = common::run_binary_scripted(dir.path(), Some(home.path()), &[], &["1", "0"]);
+    let output = common::run_binary_scripted(
+        dir.path(),
+        Some(home.path()),
+        &[],
+        &["main_menu_generate", "main_menu_quit"],
+    );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains(&i18n::t_str("cli.message.prompt_copied")));

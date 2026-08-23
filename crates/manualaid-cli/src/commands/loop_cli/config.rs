@@ -73,47 +73,71 @@ pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
 /// 构建自动编号的复制提示词二级菜单。
 fn build_copy_prompt_menu() -> Menu {
     Menu::new(i18n::t_str("cli.copy_prompt.title"))
-        .add(MenuItem::auto(
-            i18n::t_str("cli.copy_prompt.intent_rule"),
-            MenuAction::Command(LoopCommand::CopyIntentRule),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.intent_rule"),
+                MenuAction::Command(LoopCommand::CopyIntentRule),
+            )
+            .unique("copy_prompt_menu_intent_rule"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.copy_prompt.tool_format"),
-            MenuAction::Command(LoopCommand::CopyToolFormat),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.tool_format"),
+                MenuAction::Command(LoopCommand::CopyToolFormat),
+            )
+            .unique("copy_prompt_menu_tool_format"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.copy_prompt.enabled_tools"),
-            MenuAction::Command(LoopCommand::CopyEnabledTools),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.enabled_tools"),
+                MenuAction::Command(LoopCommand::CopyEnabledTools),
+            )
+            .unique("copy_prompt_menu_enabled_tools"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.copy_prompt.line_ending"),
-            MenuAction::Command(LoopCommand::CopyLineEndingRule),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.line_ending"),
+                MenuAction::Command(LoopCommand::CopyLineEndingRule),
+            )
+            .unique("copy_prompt_menu_line_ending"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.copy_prompt.plan_mode"),
-            MenuAction::Command(LoopCommand::CopyPlanModeRule),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.plan_mode"),
+                MenuAction::Command(LoopCommand::CopyPlanModeRule),
+            )
+            .unique("copy_prompt_menu_plan_mode"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.copy_prompt.switch_mode"),
-            MenuAction::Command(LoopCommand::CopySwitchModeRule),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.switch_mode"),
+                MenuAction::Command(LoopCommand::CopySwitchModeRule),
+            )
+            .unique("copy_prompt_menu_switch_mode"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.copy_prompt.task_planning"),
-            MenuAction::Command(LoopCommand::CopyTaskPlanningRule),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.task_planning"),
+                MenuAction::Command(LoopCommand::CopyTaskPlanningRule),
+            )
+            .unique("copy_prompt_menu_task_planning"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::keyed_alias(
-            "0",
-            &["q", "quit", "exit"],
-            i18n::t_str("cli.config.back"),
-            MenuAction::Command(LoopCommand::Back),
-        ))
+        .add(
+            MenuItem::keyed_alias(
+                "0",
+                &["q", "quit", "exit"],
+                i18n::t_str("cli.config.back"),
+                MenuAction::Command(LoopCommand::Back),
+            )
+            .unique("copy_prompt_menu_back"),
+        )
         .expect("unique menu key")
 }
 
@@ -190,66 +214,96 @@ fn build_config_menu(config: &Config, options: &LoopOptions) -> Menu {
         }
     };
     Menu::new(i18n::t_str("cli.config.title"))
-        .add(MenuItem::auto(
-            t_fmt("cli.config.lang", &[("lang", lang_name)]),
-            MenuAction::Command(LoopCommand::SwitchLang(None)),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt("cli.config.lang", &[("lang", lang_name)]),
+                MenuAction::Command(LoopCommand::SwitchLang(None)),
+            )
+            .unique("setting_menu_lang"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.format", &[("format", &config.tool_call_format)]),
-            MenuAction::Command(LoopCommand::SwitchFormat(None)),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt("cli.config.format", &[("format", &config.tool_call_format)]),
+                MenuAction::Command(LoopCommand::SwitchFormat(None)),
+            )
+            .unique("setting_menu_format"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.config.tools_list"),
-            MenuAction::Command(LoopCommand::ToolMenu),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.config.tools_list"),
+                MenuAction::Command(LoopCommand::ToolMenu),
+            )
+            .unique("setting_menu_tools"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt(
-                "cli.config.auto_copy",
-                &[("state", &state(options.auto_copy))],
-            ),
-            MenuAction::Command(LoopCommand::ToggleAutoCopy),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt(
+                    "cli.config.auto_copy",
+                    &[("state", &state(options.auto_copy))],
+                ),
+                MenuAction::Command(LoopCommand::ToggleAutoCopy),
+            )
+            .unique("setting_menu_auto_copy"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt(
-                "cli.config.clear_screen",
-                &[("state", &state(options.clear_screen))],
-            ),
-            MenuAction::Command(LoopCommand::ToggleClearScreen),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt(
+                    "cli.config.clear_screen",
+                    &[("state", &state(options.clear_screen))],
+                ),
+                MenuAction::Command(LoopCommand::ToggleClearScreen),
+            )
+            .unique("setting_menu_clear_screen"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.config.skill_list"),
-            MenuAction::Command(LoopCommand::SkillMenu),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.config.skill_list"),
+                MenuAction::Command(LoopCommand::SkillMenu),
+            )
+            .unique("setting_menu_skill"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.mode", &[("mode", &mode_label(options.mode))]),
-            MenuAction::Command(LoopCommand::ToggleMode),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt("cli.config.mode", &[("mode", &mode_label(options.mode))]),
+                MenuAction::Command(LoopCommand::ToggleMode),
+            )
+            .unique("setting_menu_mode"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt(
-                "cli.config.context_auto_load",
-                &[("state", &state(config.context_auto_load))],
-            ),
-            MenuAction::Command(LoopCommand::ToggleContextAutoLoad),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt(
+                    "cli.config.context_auto_load",
+                    &[("state", &state(config.context_auto_load))],
+                ),
+                MenuAction::Command(LoopCommand::ToggleContextAutoLoad),
+            )
+            .unique("setting_menu_context_auto_load"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            i18n::t_str("cli.config.memory"),
-            MenuAction::Command(LoopCommand::ShowMemoryUsage),
-        ))
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.config.memory"),
+                MenuAction::Command(LoopCommand::ShowMemoryUsage),
+            )
+            .unique("setting_menu_memory"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::keyed_alias(
-            "0",
-            &["q", "quit", "exit"],
-            i18n::t_str("cli.config.back"),
-            MenuAction::Command(LoopCommand::Back),
-        ))
+        .add(
+            MenuItem::keyed_alias(
+                "0",
+                &["q", "quit", "exit"],
+                i18n::t_str("cli.config.back"),
+                MenuAction::Command(LoopCommand::Back),
+            )
+            .unique("setting_menu_back"),
+        )
         .expect("unique menu key")
 }
 
@@ -315,37 +369,55 @@ fn build_tool_menu(config: &Config) -> Menu {
         }
     };
     Menu::new(i18n::t_str("cli.tool_config.title"))
-        .add(MenuItem::auto(
-            t_fmt("cli.config.shell", &[("state", &state(config.shell))]),
-            MenuAction::Command(LoopCommand::ToggleShell),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt("cli.config.shell", &[("state", &state(config.shell))]),
+                MenuAction::Command(LoopCommand::ToggleShell),
+            )
+            .unique("tool_menu_shell"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.read", &[("state", &state(config.read))]),
-            MenuAction::Command(LoopCommand::ToggleRead),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt("cli.config.read", &[("state", &state(config.read))]),
+                MenuAction::Command(LoopCommand::ToggleRead),
+            )
+            .unique("tool_menu_read"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.write", &[("state", &state(config.write))]),
-            MenuAction::Command(LoopCommand::ToggleWrite),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt("cli.config.write", &[("state", &state(config.write))]),
+                MenuAction::Command(LoopCommand::ToggleWrite),
+            )
+            .unique("tool_menu_write"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.edit", &[("state", &state(config.edit))]),
-            MenuAction::Command(LoopCommand::ToggleEdit),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt("cli.config.edit", &[("state", &state(config.edit))]),
+                MenuAction::Command(LoopCommand::ToggleEdit),
+            )
+            .unique("tool_menu_edit"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::auto(
-            t_fmt("cli.config.skill", &[("state", &state(config.skill))]),
-            MenuAction::Command(LoopCommand::ToggleSkill),
-        ))
+        .add(
+            MenuItem::auto(
+                t_fmt("cli.config.skill", &[("state", &state(config.skill))]),
+                MenuAction::Command(LoopCommand::ToggleSkill),
+            )
+            .unique("tool_menu_skill"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::keyed_alias(
-            "0",
-            &["q", "quit", "exit"],
-            i18n::t_str("cli.config.back"),
-            MenuAction::Command(LoopCommand::Back),
-        ))
+        .add(
+            MenuItem::keyed_alias(
+                "0",
+                &["q", "quit", "exit"],
+                i18n::t_str("cli.config.back"),
+                MenuAction::Command(LoopCommand::Back),
+            )
+            .unique("tool_menu_back"),
+        )
         .expect("unique menu key")
 }
 
@@ -412,40 +484,52 @@ fn build_skill_menu() -> Menu {
             crate::style::muted(&i18n::t_str("cli.config.disabled"))
         };
         menu = menu
-            .add(MenuItem::auto(
-                t_fmt(
-                    "cli.skill_config.item",
-                    &[
-                        ("state", &state),
-                        ("name", &skill.name),
-                        ("unique_name", &skill.unique_name),
-                    ],
-                ),
-                MenuAction::Command(LoopCommand::ToggleSkillAt(skill.path)),
-            ))
+            .add(
+                MenuItem::auto(
+                    t_fmt(
+                        "cli.skill_config.item",
+                        &[
+                            ("state", &state),
+                            ("name", &skill.name),
+                            ("unique_name", &skill.unique_name),
+                        ],
+                    ),
+                    MenuAction::Command(LoopCommand::ToggleSkillAt(skill.path)),
+                )
+                .unique(&format!("skill_menu_{}", skill.unique_name)),
+            )
             .expect("unique menu key");
     }
     menu = menu
-        .add(MenuItem::keyed_alias(
-            "a",
-            &["all"],
-            i18n::t_str("cli.skill_config.all_on"),
-            MenuAction::Command(LoopCommand::EnableAllSkills),
-        ))
+        .add(
+            MenuItem::keyed_alias(
+                "a",
+                &["all"],
+                i18n::t_str("cli.skill_config.all_on"),
+                MenuAction::Command(LoopCommand::EnableAllSkills),
+            )
+            .unique("skill_menu_enable_all"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::keyed_alias(
-            "n",
-            &["none"],
-            i18n::t_str("cli.skill_config.all_off"),
-            MenuAction::Command(LoopCommand::DisableAllSkills),
-        ))
+        .add(
+            MenuItem::keyed_alias(
+                "n",
+                &["none"],
+                i18n::t_str("cli.skill_config.all_off"),
+                MenuAction::Command(LoopCommand::DisableAllSkills),
+            )
+            .unique("skill_menu_disable_all"),
+        )
         .expect("unique menu key")
-        .add(MenuItem::keyed_alias(
-            "0",
-            &["q", "quit", "exit"],
-            i18n::t_str("cli.config.back"),
-            MenuAction::Command(LoopCommand::Back),
-        ))
+        .add(
+            MenuItem::keyed_alias(
+                "0",
+                &["q", "quit", "exit"],
+                i18n::t_str("cli.config.back"),
+                MenuAction::Command(LoopCommand::Back),
+            )
+            .unique("skill_menu_back"),
+        )
         .expect("unique menu key");
     menu
 }
@@ -477,6 +561,25 @@ mod tests {
             format!("---\nname: {name}\ndescription: test skill\n---\n# {name}\n"),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn every_menu_item_carries_a_unique_resolvable_key() {
+        let menus = [
+            build_copy_prompt_menu(),
+            build_config_menu(&Config::default(), &LoopOptions::default()),
+            build_tool_menu(&Config::default()),
+            build_skill_menu(),
+        ];
+        for menu in menus {
+            let mut seen = std::collections::HashSet::new();
+            for item in menu.items() {
+                let slug = item.unique_key().expect("every item has a unique key");
+                assert!(!slug.is_empty(), "unique key must not be empty");
+                assert!(seen.insert(slug), "duplicate slug `{slug}`");
+                assert!(menu.resolve(slug).is_some(), "slug `{slug}` must resolve");
+            }
+        }
     }
 
     #[test]
