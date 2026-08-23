@@ -5,7 +5,7 @@
 
 # ManualAid文件夹
 
-ManualAid文件夹指`.ManualAid`，用于储存配置文件、记忆文件、数据库以及日志等数据。其中分为：
+ManualAid文件夹指`.ManualAid`，用于储存配置文件、技能启用状态以及（规划中的）记忆文件等数据。当前版本尚未使用数据库或日志文件。其中分为：
 
 全局ManualAid文件夹：`~/.ManualAid/`
 项目ManualAid文件夹：`{项目绝对路径}/.ManualAid/`
