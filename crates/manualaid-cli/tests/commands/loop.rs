@@ -260,6 +260,8 @@ async fn manual_mode_asks_before_workspace_write() {
 
 #[test]
 fn menu_contains_all_options() {
+    let _lock = super::LOCALE_LOCK.lock().unwrap();
+    i18n::set_locale("en");
     let menu = render_menu();
     for label in [
         "cli.loop.menu_title",
@@ -275,6 +277,8 @@ fn menu_contains_all_options() {
 
 #[test]
 fn config_menu_shows_current_states() {
+    let _lock = super::LOCALE_LOCK.lock().unwrap();
+    i18n::set_locale("en");
     let config = Config {
         shell: false,
         ..Config::default()
@@ -286,6 +290,8 @@ fn config_menu_shows_current_states() {
 
 #[test]
 fn tool_menu_shows_shell_disabled_state() {
+    let _lock = super::LOCALE_LOCK.lock().unwrap();
+    i18n::set_locale("en");
     let config = Config {
         shell: false,
         ..Config::default()
