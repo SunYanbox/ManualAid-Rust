@@ -13,7 +13,6 @@ use manualaid_core::skill::{
     all_skills, enabled_skills, get_skill, reload_skills, reload_skills_with_home, reset_skills,
     set_enabled,
 };
-use manualaid_core::user_dir;
 
 mod common;
 use common::{TempDir, write_skill};
@@ -450,11 +449,8 @@ fn reload_skills_invalid_config_is_config_error() {
 /// 公开的 `reload_skills` 针对真实用户主目录可用；无论真实主目录中有哪些
 /// 技能，项目技能都会被加载。
 #[test]
+#[ignore = "requires a resolvable real user home; deterministic coverage is reload_skills_with_home"]
 fn reload_skills_uses_real_home() {
-    if user_dir::home_dir().is_err() {
-        eprintln!("skipping: home directory cannot be resolved in this environment");
-        return;
-    }
     let _restore = lock_skills();
     let root = TempDir::new("real-home-skills");
     write_skill(
