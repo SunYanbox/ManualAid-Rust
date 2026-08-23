@@ -7,7 +7,7 @@ use manualaid_core::tools::ToolResult;
 use manualaid_ws::config::Config;
 use manualaid_ws::prompt::{build_system_prompt, format_results, render_tools_list};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 /// `rust_i18n` keeps one process-wide locale, so every test that asserts
 /// localized text must run under this lock to avoid races.
@@ -17,17 +17,30 @@ static LANG_LOCK: Mutex<()> = Mutex::new(());
 
 const MAX: usize = 50_000;
 
+/// Restores the process-wide locale to `en` on drop.
+/// 在 drop 时将进程级 locale 恢复为 `en`。
+struct LocaleRestore {
+    _guard: MutexGuard<'static, ()>,
+}
+
+impl Drop for LocaleRestore {
+    fn drop(&mut self) {
+        i18n::set_locale("en");
+    }
+}
+
 /// Run `f` with `lang` active, then restore English for other tests.
 /// A poisoned lock is recovered so one failing test does not cascade.
 /// 在 `lang` 语言下执行 `f`，结束后恢复英文供其他测试使用。
 /// 锁被污染时直接接管，避免单个测试失败引发级联失败。
 fn with_locale(lang: &str, f: impl FnOnce()) {
-    let _guard = LANG_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _restore = LocaleRestore {
+        _guard: LANG_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    };
     i18n::set_locale(lang);
     f();
-    i18n::set_locale("en");
 }
 
 #[test]
