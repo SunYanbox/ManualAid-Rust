@@ -44,7 +44,6 @@ fn format_default_output_plain_and_styled() {
         format_default_output("ManualAid running..."),
         "\n\x1b[32mManualAid running...\x1b[0m\n"
     );
-    style::set_enabled(false);
 }
 
 #[test]
@@ -60,7 +59,6 @@ fn format_mask_output_has_two_headed_sections() {
     let out = format_mask_output("m", "{}");
     assert!(out.contains("\x1b[1;36mMasked text\x1b[0m\nm"));
     assert!(out.contains("\x1b[1;36mSnapshot JSON\x1b[0m\n{}"));
-    style::set_enabled(false);
 }
 
 #[test]
@@ -77,7 +75,6 @@ fn format_restore_output_plain_and_styled() {
         "\n\x1b[1;36mRestored text\x1b[0m\n\x1b[32mhello\x1b[0m\n"
     );
     assert_eq!(format_restore_output(""), "");
-    style::set_enabled(false);
 }
 
 #[test]
@@ -95,7 +92,6 @@ fn format_error_output_plain_and_styled() {
         format_error_output("Masking failed: x"),
         "\x1b[1;31mError: Masking failed: x\x1b[0m\n"
     );
-    style::set_enabled(false);
 }
 
 #[test]

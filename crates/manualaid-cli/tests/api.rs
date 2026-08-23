@@ -14,6 +14,8 @@ mod skill;
 
 use std::sync::{Mutex, MutexGuard};
 
+use manualaid_cli::style;
+
 /// Serializes tests that depend on the process-wide i18n locale.
 /// 串行化依赖进程级 i18n locale 的测试。
 static LOCALE_LOCK: Mutex<()> = Mutex::new(());
@@ -22,14 +24,45 @@ static LOCALE_LOCK: Mutex<()> = Mutex::new(());
 /// 串行化依赖进程级样式开关的测试。
 static STYLE_LOCK: Mutex<()> = Mutex::new(());
 
-fn locale_guard() -> MutexGuard<'static, ()> {
-    LOCALE_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+/// Restores the process-wide locale to `en` on drop.
+/// 在 drop 时将进程级 locale 恢复为 `en`。
+struct LocaleGuard {
+    _lock: MutexGuard<'static, ()>,
 }
 
-fn style_guard() -> MutexGuard<'static, ()> {
-    STYLE_LOCK
+fn locale_guard() -> LocaleGuard {
+    LocaleGuard {
+        _lock: LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    }
+}
+
+impl Drop for LocaleGuard {
+    fn drop(&mut self) {
+        i18n::set_locale("en");
+    }
+}
+
+/// Restores the process-wide styling switch to its previous value on drop.
+/// 在 drop 时将进程级样式开关恢复为进入前的值。
+struct StyleGuard {
+    _lock: MutexGuard<'static, ()>,
+    original: bool,
+}
+
+fn style_guard() -> StyleGuard {
+    let _lock = STYLE_LOCK
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    StyleGuard {
+        _lock,
+        original: style::is_enabled(),
+    }
+}
+
+impl Drop for StyleGuard {
+    fn drop(&mut self) {
+        style::set_enabled(self.original);
+    }
 }

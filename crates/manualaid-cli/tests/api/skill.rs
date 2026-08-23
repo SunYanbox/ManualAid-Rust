@@ -67,7 +67,6 @@ fn format_skill_applies_styles_when_enabled() {
     assert!(block.contains("\x1b[1m  - Unique name: uniq\x1b[0m"));
     assert!(block.contains("    - Name: uniq"));
     assert!(block.contains("\x1b[90m    - Total chars: 4\x1b[0m"));
-    style::set_enabled(false);
 }
 
 #[test]
@@ -206,5 +205,4 @@ fn format_skill_output_plain_and_styled() {
     let out = format_skill_output(&[a]);
     assert!(out.starts_with("\n\x1b[1;36mSkills (1)\x1b[0m\n\n"));
     assert!(out.contains("\x1b[1m  - Unique name: a\x1b[0m"));
-    style::set_enabled(false);
 }
