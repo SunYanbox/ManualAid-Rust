@@ -4,6 +4,37 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，并遵循语义化版本。
 
+## [0.5.0] - 2026-08-18
+
+### 新增
+
+- 新增 `debug whitelist` 命令，分层查看审计命令白名单的默认值、项目/全局配置、合并生效列表与黑名单冲突
+- 新增 inline 快捷命令：`/help`、`/history`、`/summary`、`/clear`、`/mode`，并支持 `/h`、`/H`、`/s`、`/cls`、`/m` 等别名
+- 主循环首次渲染菜单后显示帮助提示，并在提示符前显示当前审批模式
+- 启动消息包含版本号
+- JSON 解析器接受系统提示词使用的 `func_calls` 围栏
+
+### 变更
+
+- 大幅扩充内置默认 Shell 白名单，新增 ls、cat、grep、git 系列、gh 系列、cargo 系列以及平台命令
+- 对齐 Agent 提示词与工具描述，更新中英文 locale 文案
+- 主循环新增 `/mode`、`/m` 快捷切换审批模式
+- 配置菜单审批模式标签逻辑移动到 utils
+
+## [0.4.1] - 2026-08-16
+
+### 新增
+
+- Read 工具新增 `show_line_numbers` 和 `show_line_endings` 诊断参数
+- 新增 `AGENTS.md` 开发指南
+- 新增 `doc/comment-style.md`、`doc/commit-conventions.md`、`doc/issue-pr-guide.md` 文档
+- 新增 `scripts/ci.cmd`、`scripts/ci.ps1`、`scripts/ci.sh` CI 检查脚本
+
+### 变更
+
+- Edit `old_string` 未找到时，附加换行符差异提示或相似度不低于 90% 的候选字符串
+- 更新 Read/Edit 工具的中英文描述，移除默认 2000 行说明并补充诊断参数说明
+
 ## [0.4.0] - 2026-08-15
 
 ### 新增
