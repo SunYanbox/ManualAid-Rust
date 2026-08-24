@@ -25,18 +25,24 @@ impl Drop for LocaleGuard {
 }
 
 #[test]
-fn empty_changelog_has_no_versions() {
+fn changelog_has_unreleased_and_version_entries() {
     let _guard = locale_guard();
     set_locale("zh-CN");
-    assert!(changelog_versions().is_empty());
+    let versions = changelog_versions();
+    assert!(!versions.is_empty());
+    assert!(versions.iter().any(|entry| entry.version == "Unreleased"));
+    assert!(versions.iter().any(|entry| entry.version == "0.7.0"));
 }
 
 #[test]
-fn empty_changelog_returns_empty_text_and_no_version_body() {
+fn changelog_all_contains_version_headings() {
     let _guard = locale_guard();
     set_locale("zh-CN");
-    assert_eq!(changelog_all(), "");
-    assert_eq!(changelog_version("0.7.0"), None);
+    let text = changelog_all();
+    assert!(text.contains("## [Unreleased]"));
+    assert!(text.contains("## [0.7.0]"));
+    assert!(changelog_version("0.7.0").is_some());
+    assert!(changelog_version("bogus").is_none());
 }
 
 #[test]
