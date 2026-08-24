@@ -415,8 +415,9 @@ mod tests {
         set_enabled(false);
         assert!(print_paged("a\nb\nc\n").is_ok());
         assert!(print_paged_three_lines("a\nb\nc\nd\n").is_ok());
+        assert!(print_paged_diff("x\ny\nz\n").is_ok());
         set_enabled(!cfg!(test));
-        assert_eq!(capture.text(), "a\nb\nc\na\nb\nc\nd\n");
+        assert_eq!(capture.text(), "a\nb\nc\na\nb\nc\nd\nx\ny\nz\n");
     }
 
     #[test]
@@ -426,8 +427,9 @@ mod tests {
         set_enabled(true);
         assert!(print_paged("a\nb\n").is_ok());
         assert!(print_paged_three_lines("a\nb\nc\n").is_ok());
+        assert!(print_paged_diff("x\ny\n").is_ok());
         set_enabled(!cfg!(test));
-        assert_eq!(capture.text(), "a\nb\na\nb\nc\n");
+        assert_eq!(capture.text(), "a\nb\na\nb\nc\nx\ny\n");
     }
 
     #[test]

@@ -826,6 +826,19 @@ mod tests {
         assert!(output.contains(&i18n::t_str("cli.config.back")));
     }
 
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn changelog_menu_shows_version_body_for_existing_version() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("zh-CN");
+        // Menu order: 1 view all, then each parsed version starting at 2.
+        push_test_input(&["3", "0"]);
+        changelog_menu().await;
+        let output = _capture.text();
+        assert!(output.contains("0.7.0"));
+    }
+
     #[test]
     fn render_config_menu_shows_chinese_lang_and_toggled_options() {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
