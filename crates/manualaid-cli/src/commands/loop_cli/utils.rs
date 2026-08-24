@@ -413,6 +413,29 @@ pub fn format_round_detail(record: &BatchRecord) -> String {
     lines.join("\n")
 }
 
+/// Style a raw ChangeLog markdown text for display: version headings are
+/// emphasized, section headings are accented, and every line is indented so
+/// the changelog clearly stands apart from the surrounding menu and prompt.
+/// 为原始 ChangeLog Markdown 文本添加显示样式：版本标题强调显示、小节标题
+/// 高亮，并且每行缩进，使更新日志与周围的菜单和输入提示区分开。
+pub(super) fn format_changelog_text(text: &str) -> String {
+    let mut output = String::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let styled = if trimmed.starts_with("## [") {
+            crate::style::header(trimmed)
+        } else if trimmed.starts_with("### ") {
+            crate::style::accent(trimmed)
+        } else {
+            crate::style::gray(trimmed)
+        };
+        output.push_str("  ");
+        output.push_str(&styled);
+        output.push('\n');
+    }
+    output
+}
+
 pub(super) fn print_muted_block(lines: &[String]) {
     crate::console::out_println!();
     for line in lines {

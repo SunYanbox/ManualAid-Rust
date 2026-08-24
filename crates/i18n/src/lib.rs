@@ -71,7 +71,7 @@ pub fn t_str(key: &str) -> String {
 /// Embedded Chinese ChangeLog. Other locales fall back to this text until
 /// a matching file is added.
 /// 嵌入的中文 ChangeLog。在新增对应语言文件前，其他 locale 回退到该文本。
-const CHANGELOG_ZH_CN: &str = include_str!("../../../docs/changelog/zh-CN.md");
+const CHANGELOG_ZH_CN: &str = include_str!("../../../docs/changelog/CHANGELOG_ZH_CN.md");
 
 /// One parsed ChangeLog version block.
 /// 一个解析出的 ChangeLog 版本块。

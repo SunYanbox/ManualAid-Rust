@@ -11,7 +11,7 @@ use manualaid_ws::session::SessionLog;
 use super::LoopOptions;
 use super::command::LoopCommand;
 use super::menu::{Menu, MenuAction, MenuItem};
-use super::utils::{mode_label, t_fmt};
+use super::utils::{format_changelog_text, mode_label, t_fmt};
 
 /// The copy-prompt submenu: copy reusable prompt snippets to the clipboard.
 /// 复制提示词二级菜单：将可复用的提示词片段复制到剪贴板。
@@ -234,13 +234,15 @@ async fn changelog_menu() {
                         crate::style::muted(&i18n::t_str("cli.changelog.empty"))
                     );
                 } else {
-                    let _ = crate::pager::print_paged(text);
+                    let styled = format_changelog_text(text);
+                    let _ = crate::pager::print_paged(&styled);
                 }
             }
             super::command::LoopCommand::ChangelogVersionAt(version) => {
                 match i18n::changelog_version(version.as_str()) {
                     Some(text) => {
-                        let _ = crate::pager::print_paged(&text);
+                        let styled = format_changelog_text(&text);
+                        let _ = crate::pager::print_paged(&styled);
                     }
                     None => {
                         crate::console::out_println!(

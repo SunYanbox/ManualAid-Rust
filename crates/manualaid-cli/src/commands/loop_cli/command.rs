@@ -22,7 +22,8 @@ use super::handlers::{
     print_session_summary, show_tool_history,
 };
 use super::utils::{
-    apply_format_mode, cycle_format, cycle_lang, mode_label, print_muted_block, t_fmt,
+    apply_format_mode, cycle_format, cycle_lang, format_changelog_text, mode_label,
+    print_muted_block, t_fmt,
 };
 
 /// The result of running a command.
@@ -308,14 +309,16 @@ pub(super) async fn run_command<P: ClipboardProvider>(
                     crate::style::muted(&i18n::t_str("cli.changelog.empty"))
                 );
             } else {
-                let _ = crate::pager::print_paged(text);
+                let styled = format_changelog_text(text);
+                let _ = crate::pager::print_paged(&styled);
             }
             CommandOutcome::Continue
         }
         LoopCommand::ChangelogVersionAt(version) => {
             match i18n::changelog_version(version.as_str()) {
                 Some(text) => {
-                    let _ = crate::pager::print_paged(&text);
+                    let styled = format_changelog_text(&text);
+                    let _ = crate::pager::print_paged(&styled);
                 }
                 None => {
                     crate::console::out_println!(
