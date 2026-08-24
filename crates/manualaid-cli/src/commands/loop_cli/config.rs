@@ -1358,4 +1358,41 @@ mod tests {
         // 因为 skill_menu 中的命令都是 Continue 或 Back
         // 跳过
     }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn changelog_menu_invalid_input_continues_then_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("zh-CN");
+        push_test_input(&["invalid", "0"]);
+        changelog_menu().await;
+        let output = _capture.text();
+        assert!(output.contains(&i18n::t_str("cli.loop.menu_invalid")));
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn config_menu_enters_changelog_submenu_and_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("zh-CN");
+        let root = crate::test_support::temp_dir("config-changelog");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        let mut session = SessionLog::new();
+        push_test_input(&["10", "0", "0"]);
+        config_menu(
+            &manualaid_core::clipboard::MockClipboard::new(),
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &mut session,
+        )
+        .await;
+        let output = _capture.text();
+        assert!(output.contains(&i18n::t_str("cli.changelog.title")));
+    }
 }

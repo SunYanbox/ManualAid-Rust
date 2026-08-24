@@ -663,4 +663,12 @@ mod tests {
             drop(guard);
         }
     }
+
+    #[test]
+    fn write_pages_with_writes_and_flushes() {
+        let mut out = Vec::new();
+        write_pages_with(&mut out, &["a", "b", "c", "d"], 3, 4, || Ok(true)).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("a\r\nb\r\nc\r\n"));
+    }
 }

@@ -701,6 +701,9 @@ mod tests {
             root: &root,
             session: &mut session,
         };
-        assert_eq!(run_command(&LoopCommand::Exit, &mut ctx).await, CommandOutcome::ExitLoop);
+        assert_eq!(
+            run_command(&LoopCommand::Exit, &mut ctx).await,
+            CommandOutcome::ExitLoop
+        );
     }
 }
