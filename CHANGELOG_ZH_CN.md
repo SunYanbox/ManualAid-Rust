@@ -10,6 +10,7 @@
 
 - 主菜单输入框支持 `!` 前缀直接运行 Shell 命令，复用轮次结果显示与历史记录
 - 设置菜单新增内置更新日志查看器，支持按版本和一次查看全部
+- `i18n` 新增 `changelog_all`、`changelog_versions`、`changelog_version` 公开接口，并封装 `set_locale`
 - 菜单项新增稳定唯一键（slug），供调用方与测试选择菜单项
 
 ### 变更
