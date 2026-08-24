@@ -52,11 +52,10 @@ pub fn print_paged(output: &str) -> io::Result<()> {
 /// 折叠分页首页固定显示的行数。
 const COLLAPSED_FIRST_PAGE_LINES: usize = 3;
 
-/// Print `output`, starting with a three-line preview and then showing one
-/// full screen per key press when it is longer; `q`/Ctrl+C quits early.
-/// 输出 `output`：超过 3 行时先显示固定预览，之后每按一次键显示一整屏，
-/// `q`/Ctrl+C 可提前退出。
-pub fn print_paged_collapsed(output: &str) -> io::Result<()> {
+/// Print `output`, showing three lines per key press for every page;
+/// `q`/Ctrl+C quits early.
+/// 输出 `output`：每一页都只显示三行，`q`/Ctrl+C 可提前退出。
+pub fn print_paged_three_lines(output: &str) -> io::Result<()> {
     if crate::console::is_capturing() {
         return print_all_to(output, &mut crate::console::ConsoleWriter);
     }
@@ -69,8 +68,14 @@ pub fn print_paged_collapsed(output: &str) -> io::Result<()> {
         io::stdout().is_terminal(),
         io::stdin().is_terminal(),
         terminal_height(),
-        |lines, first_page_size, page_size| {
-            interactive_paged(io::stdout(), lines, first_page_size, page_size, read_key)
+        |lines, first_page_size, _page_size| {
+            interactive_paged(
+                io::stdout(),
+                lines,
+                first_page_size,
+                COLLAPSED_FIRST_PAGE_LINES,
+                read_key,
+            )
         },
     )
 }
@@ -372,7 +377,7 @@ mod tests {
         let capture = crate::console::capture();
         set_enabled(false);
         assert!(print_paged("a\nb\nc\n").is_ok());
-        assert!(print_paged_collapsed("a\nb\nc\nd\n").is_ok());
+        assert!(print_paged_three_lines("a\nb\nc\nd\n").is_ok());
         set_enabled(!cfg!(test));
         assert_eq!(capture.text(), "a\nb\nc\na\nb\nc\nd\n");
     }
@@ -383,7 +388,7 @@ mod tests {
         let capture = crate::console::capture();
         set_enabled(true);
         assert!(print_paged("a\nb\n").is_ok());
-        assert!(print_paged_collapsed("a\nb\nc\n").is_ok());
+        assert!(print_paged_three_lines("a\nb\nc\n").is_ok());
         set_enabled(!cfg!(test));
         assert_eq!(capture.text(), "a\nb\na\nb\nc\n");
     }

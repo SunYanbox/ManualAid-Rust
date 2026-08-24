@@ -310,7 +310,7 @@ pub(super) async fn run_command<P: ClipboardProvider>(
                 );
             } else {
                 let styled = format_changelog_text(text);
-                let _ = crate::pager::print_paged(&styled);
+                let _ = crate::pager::print_paged_three_lines(&styled);
             }
             CommandOutcome::Continue
         }
@@ -318,7 +318,7 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             match i18n::changelog_version(version.as_str()) {
                 Some(text) => {
                     let styled = format_changelog_text(&text);
-                    let _ = crate::pager::print_paged(&styled);
+                    let _ = crate::pager::print_paged_three_lines(&styled);
                 }
                 None => {
                     crate::console::out_println!(

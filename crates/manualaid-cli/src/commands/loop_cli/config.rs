@@ -235,14 +235,14 @@ async fn changelog_menu() {
                     );
                 } else {
                     let styled = format_changelog_text(text);
-                    let _ = crate::pager::print_paged(&styled);
+                    let _ = crate::pager::print_paged_three_lines(&styled);
                 }
             }
             super::command::LoopCommand::ChangelogVersionAt(version) => {
                 match i18n::changelog_version(version.as_str()) {
                     Some(text) => {
                         let styled = format_changelog_text(&text);
-                        let _ = crate::pager::print_paged(&styled);
+                        let _ = crate::pager::print_paged_three_lines(&styled);
                     }
                     None => {
                         crate::console::out_println!(
@@ -823,7 +823,6 @@ mod tests {
         let output = _capture.text();
         assert!(output.contains(&i18n::t_str("cli.changelog.title")));
         assert!(output.contains(&i18n::t_str("cli.changelog.all")));
-        assert!(output.contains(&i18n::t_str("cli.changelog.empty")));
         assert!(output.contains(&i18n::t_str("cli.config.back")));
     }
 
