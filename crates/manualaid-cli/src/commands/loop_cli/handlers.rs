@@ -17,6 +17,9 @@ use super::utils::{
     parse_round_index, print_muted_block, read_line, t_fmt,
 };
 use manualaid_core::clipboard::{ClipboardProvider, RealClipboard};
+use manualaid_core::parser::ParsedToolCall;
+use manualaid_core::tools::ToolResult;
+use manualaid_ws::session::RoundStats;
 use tokenx_rs;
 
 /// Generate the system prompt with the selected context files and copy it
@@ -235,41 +238,72 @@ pub async fn submit_text_with_provider<P: ClipboardProvider>(
     let round_start = std::time::Instant::now();
     match execute_round_with_approval(executor, registry, text, ask_approval).await {
         Ok((calls, results, stats)) => {
-            let _ = crate::pager::print_paged_collapsed(&format_round_summary(&results));
-            let round_tokens = stats.total_tokens;
-            session.push(calls, results.clone(), stats);
-            let round_index = session.len();
-            let copy = options.auto_copy || ask_copy();
-            let mut block = vec![
-                t_fmt(
-                    "cli.loop.timing_round",
-                    &[("elapsed", &crate::format_duration(round_start.elapsed()))],
-                ),
-                t_fmt(
-                    "cli.loop.token_estimate_round",
-                    &[("tokens", &round_tokens.to_string())],
-                ),
-            ];
-            if copy
-                && let Err(e) = provider.write(&manualaid_ws::prompt::format_results(
-                    &results,
-                    max_result_chars,
-                ))
-            {
-                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
-            } else if copy {
-                block.insert(
-                    0,
-                    t_fmt(
-                        "cli.message.result_copied",
-                        &[("index", &round_index.to_string())],
-                    ),
-                );
-            }
-            print_muted_block(&block);
+            finish_round_with_provider(
+                provider,
+                session,
+                options,
+                max_result_chars,
+                round_start,
+                calls,
+                results,
+                stats,
+            )
+            .await;
         }
         Err(e) => eprintln!("{e}"),
     }
+}
+
+/// Finish an executed round: show the summary, record the round in the
+/// session log and copy the results when auto-copy is on or the user
+/// confirms. Shared by regular submissions and `!` shell commands so both
+/// behave exactly the same.
+/// 完成一轮已执行的调用：显示摘要、把该轮写入会话历史，并在自动复制开启
+/// 或用户确认时复制结果。普通提交与 `!` shell 命令共享该逻辑，使两者的
+/// 行为完全一致。
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn finish_round_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    session: &mut SessionLog,
+    options: &mut LoopOptions,
+    max_result_chars: usize,
+    round_start: std::time::Instant,
+    calls: Vec<ParsedToolCall>,
+    results: Vec<ToolResult>,
+    stats: RoundStats,
+) {
+    let _ = crate::pager::print_paged_collapsed(&format_round_summary(&results));
+    let round_tokens = stats.total_tokens;
+    session.push(calls, results.clone(), stats);
+    let round_index = session.len();
+    let copy = options.auto_copy || ask_copy();
+    let mut block = vec![
+        t_fmt(
+            "cli.loop.timing_round",
+            &[("elapsed", &crate::format_duration(round_start.elapsed()))],
+        ),
+        t_fmt(
+            "cli.loop.token_estimate_round",
+            &[("tokens", &round_tokens.to_string())],
+        ),
+    ];
+    if copy
+        && let Err(e) = provider.write(&manualaid_ws::prompt::format_results(
+            &results,
+            max_result_chars,
+        ))
+    {
+        eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+    } else if copy {
+        block.insert(
+            0,
+            t_fmt(
+                "cli.message.result_copied",
+                &[("index", &round_index.to_string())],
+            ),
+        );
+    }
+    print_muted_block(&block);
 }
 
 /// Ask whether to copy the round results to the clipboard.

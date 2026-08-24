@@ -129,6 +129,9 @@ title = "Tool history (newest first)"
 totals = "| ~%{tokens} tokens, %{duration}"
 tool_line = "  [%{tool}] %{status}  exec %{duration}  ~%{tokens} tokens"
 
+[cli.bang]
+empty = "Command must not be empty"
+
 [cli.loop]
 copied = "Copied to clipboard"
 header = "Workspace: %{path} | Time: %{time} | Shell: %{shell}"
@@ -144,7 +147,10 @@ menu_paste = "Paste and submit tool call text"
 menu_prompt = "Choose: "
 menu_summary = "Generate session summary"
 menu_title = "ManualAid CLI Agent Copy-Paste Loop"
-help_hint = "Tip: type /help for shortcuts"
+help_hint = """
+Tip: type /help for shortcuts
+Tip: type a command starting with `!` to run it directly in the shell
+"""
 timing_prompt = "System prompt generation: %{elapsed}"
 timing_round = "Round execution: %{elapsed}"
 token_estimate_prompt = "Estimated token consumption: %{tokens}"
@@ -209,4 +215,5 @@ Available inline commands:
   /tools           - List available tools
   /c [index]      - Copy round result
   /c t <tool>     - Copy tool template
+  !<command>      - Run a terminal command directly
 """

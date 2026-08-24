@@ -301,6 +301,22 @@ fn loop_binary_asks_selection_when_multiple_context_files_exist() {
 }
 
 #[test]
+fn loop_binary_runs_bang_command_and_shows_it_in_history() {
+    let dir = common::TempDir::new("loop-flow-bang");
+    let home = common::TempDir::new("loop-flow-bang-home");
+    let output = common::run_binary_scripted(
+        dir.path(),
+        Some(home.path()),
+        &[],
+        &["!echo hello_bang", "/history", "main_menu_quit"],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("hello_bang"));
+    assert!(stdout.contains("[shell]"));
+}
+
+#[test]
 fn loop_binary_skips_context_selection_when_auto_load_is_disabled() {
     let dir = common::TempDir::new("loop-flow-ctx-off");
     let home = common::TempDir::new("loop-flow-ctx-off-home");

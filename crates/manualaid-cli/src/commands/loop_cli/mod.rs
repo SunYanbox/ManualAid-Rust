@@ -18,6 +18,7 @@ use manualaid_ws::config::Config;
 use manualaid_ws::session::SessionLog;
 
 mod approval;
+mod bang;
 mod command;
 mod config;
 mod context;
@@ -249,6 +250,23 @@ async fn loop_main_at(
                 &mut options,
                 trimmed,
             );
+            if options.mode != mode_before {
+                executor = build_executor(current_dir, &config, options.mode);
+            }
+            continue;
+        }
+
+        if trimmed.starts_with('!') {
+            let mode_before = options.mode;
+            bang::run_bang_command(
+                &manualaid_core::clipboard::RealClipboard,
+                &executor,
+                &mut config,
+                &mut session,
+                &mut options,
+                trimmed,
+            )
+            .await;
             if options.mode != mode_before {
                 executor = build_executor(current_dir, &config, options.mode);
             }
