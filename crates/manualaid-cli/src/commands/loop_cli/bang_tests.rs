@@ -91,13 +91,18 @@ async fn bang_nonzero_exit_records_failure() {
     let mut session = SessionLog::new();
     let mut options = LoopOptions::default();
 
+    #[cfg(windows)]
+    let command = "!cmd /c exit 7";
+    #[cfg(not(windows))]
+    let command = "!sh -c 'exit 7'";
+
     run_bang_command(
         &provider,
         &executor,
         &mut config,
         &mut session,
         &mut options,
-        "!cmd /c exit 7",
+        command,
     )
     .await;
 
@@ -128,7 +133,7 @@ async fn bang_blacklisted_command_is_denied_and_recorded() {
         &mut config,
         &mut session,
         &mut options,
-        "!> /dev/sda",
+        "!echo mkfs.",
     )
     .await;
 
