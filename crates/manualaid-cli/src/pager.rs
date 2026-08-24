@@ -52,11 +52,10 @@ pub fn print_paged(output: &str) -> io::Result<()> {
 /// 折叠分页首页固定显示的行数。
 const COLLAPSED_FIRST_PAGE_LINES: usize = 3;
 
-/// Print `output`, starting with a three-line preview and then showing one
-/// full screen per key press when it is longer; `q`/Ctrl+C quits early.
-/// 输出 `output`：超过 3 行时先显示固定预览，之后每按一次键显示一整屏，
-/// `q`/Ctrl+C 可提前退出。
-pub fn print_paged_collapsed(output: &str) -> io::Result<()> {
+/// Print `output`, showing three lines per key press for every page;
+/// `q`/Ctrl+C quits early.
+/// 输出 `output`：每一页都只显示三行，`q`/Ctrl+C 可提前退出。
+pub fn print_paged_three_lines(output: &str) -> io::Result<()> {
     if crate::console::is_capturing() {
         return print_all_to(output, &mut crate::console::ConsoleWriter);
     }
@@ -69,8 +68,51 @@ pub fn print_paged_collapsed(output: &str) -> io::Result<()> {
         io::stdout().is_terminal(),
         io::stdin().is_terminal(),
         terminal_height(),
-        |lines, first_page_size, page_size| {
-            interactive_paged(io::stdout(), lines, first_page_size, page_size, read_key)
+        |lines, first_page_size, _page_size| {
+            interactive_paged(
+                io::stdout(),
+                lines,
+                first_page_size,
+                COLLAPSED_FIRST_PAGE_LINES,
+                read_key,
+            )
+        },
+    )
+}
+
+/// Number of lines shown on the first page when paging diff output.
+/// 显示 diff 时第一页显示的行数。
+const DIFF_FIRST_PAGE_LINES: usize = 20;
+/// Number of lines shown per key press after the first page for diff output.
+/// 显示 diff 时第一页之后每次按键显示的行数。
+const DIFF_PAGE_LINES: usize = 10;
+
+/// Print `output` with a 20-line first page and 10-line pages afterwards.
+/// Used for diff output so enough context is visible without flooding the
+/// console with one full screen.
+/// 分页输出 `output`：第一页显示 20 行，之后每页显示 10 行。用于 diff
+/// 输出，在提供足够上下文的同时避免整屏刷屏。
+pub fn print_paged_diff(output: &str) -> io::Result<()> {
+    if crate::console::is_capturing() {
+        return print_all_to(output, &mut crate::console::ConsoleWriter);
+    }
+    if !INTERACTIVE_ENABLED.load(Ordering::Relaxed) {
+        return print_all(output);
+    }
+    print_paged_with(
+        output,
+        Some(DIFF_FIRST_PAGE_LINES),
+        io::stdout().is_terminal(),
+        io::stdin().is_terminal(),
+        terminal_height(),
+        |lines, first_page_size, _page_size| {
+            interactive_paged(
+                io::stdout(),
+                lines,
+                first_page_size,
+                DIFF_PAGE_LINES,
+                read_key,
+            )
         },
     )
 }
@@ -372,9 +414,10 @@ mod tests {
         let capture = crate::console::capture();
         set_enabled(false);
         assert!(print_paged("a\nb\nc\n").is_ok());
-        assert!(print_paged_collapsed("a\nb\nc\nd\n").is_ok());
+        assert!(print_paged_three_lines("a\nb\nc\nd\n").is_ok());
+        assert!(print_paged_diff("x\ny\nz\n").is_ok());
         set_enabled(!cfg!(test));
-        assert_eq!(capture.text(), "a\nb\nc\na\nb\nc\nd\n");
+        assert_eq!(capture.text(), "a\nb\nc\na\nb\nc\nd\nx\ny\nz\n");
     }
 
     #[test]
@@ -383,9 +426,10 @@ mod tests {
         let capture = crate::console::capture();
         set_enabled(true);
         assert!(print_paged("a\nb\n").is_ok());
-        assert!(print_paged_collapsed("a\nb\nc\n").is_ok());
+        assert!(print_paged_three_lines("a\nb\nc\n").is_ok());
+        assert!(print_paged_diff("x\ny\n").is_ok());
         set_enabled(!cfg!(test));
-        assert_eq!(capture.text(), "a\nb\na\nb\nc\n");
+        assert_eq!(capture.text(), "a\nb\na\nb\nc\nx\ny\n");
     }
 
     #[test]
@@ -618,5 +662,13 @@ mod tests {
         if let Ok(guard) = RawModeGuard::enable() {
             drop(guard);
         }
+    }
+
+    #[test]
+    fn write_pages_with_writes_and_flushes() {
+        let mut out = Vec::new();
+        write_pages_with(&mut out, &["a", "b", "c", "d"], 3, 4, || Ok(true)).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("a\r\nb\r\nc\r\n"));
     }
 }

@@ -22,7 +22,8 @@ use super::handlers::{
     print_session_summary, show_tool_history,
 };
 use super::utils::{
-    apply_format_mode, cycle_format, cycle_lang, mode_label, print_muted_block, t_fmt,
+    apply_format_mode, cycle_format, cycle_lang, format_changelog_text, mode_label,
+    print_muted_block, t_fmt,
 };
 
 /// The result of running a command.
@@ -85,6 +86,9 @@ pub(super) enum LoopCommand {
     ToolMenu,
     SkillMenu,
     ToggleContextAutoLoad,
+    ChangelogMenu,
+    ChangelogAll,
+    ChangelogVersionAt(String),
     ShowMemoryUsage,
     EnableAllSkills,
     DisableAllSkills,
@@ -288,6 +292,40 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             ];
             for line in lines {
                 crate::console::out_println!("{}", crate::style::accent(&line));
+            }
+            CommandOutcome::Continue
+        }
+        LoopCommand::ChangelogMenu => {
+            // Handled by the caller so entering this submenu from here
+            // would not create an async recursion cycle.
+            // 由调用方处理，避免在这里进入子菜单形成 async 递归环。
+            CommandOutcome::Continue
+        }
+        LoopCommand::ChangelogAll => {
+            let text = i18n::changelog_all();
+            if text.trim().is_empty() {
+                crate::console::out_println!(
+                    "{}",
+                    crate::style::muted(&i18n::t_str("cli.changelog.empty"))
+                );
+            } else {
+                let styled = format_changelog_text(text);
+                let _ = crate::pager::print_paged_three_lines(&styled);
+            }
+            CommandOutcome::Continue
+        }
+        LoopCommand::ChangelogVersionAt(version) => {
+            match i18n::changelog_version(version.as_str()) {
+                Some(text) => {
+                    let styled = format_changelog_text(&text);
+                    let _ = crate::pager::print_paged_three_lines(&styled);
+                }
+                None => {
+                    crate::console::out_println!(
+                        "{}",
+                        crate::style::muted(&i18n::t_str("cli.changelog.version_not_found"))
+                    );
+                }
             }
             CommandOutcome::Continue
         }
@@ -587,5 +625,85 @@ mod tests {
             let outcome = run_command(cmd, &mut ctx).await;
             assert_eq!(outcome, CommandOutcome::Continue);
         }
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn run_command_covers_remaining_menu_and_toggle_branches() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+
+        let mock = MockClipboard::new();
+        let registry = FormatRegistry::new();
+        let root = crate::test_support::temp_dir("run-remaining");
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        let mut config = Config::default();
+        let mut options = LoopOptions::default();
+        let mut session = SessionLog::new();
+        let executor = Executor::new(
+            Auditor::new(root.to_path_buf()).with_mode(SessionMode::AcceptEdit),
+            Arc::new(None),
+        );
+
+        // Provide scripted input for InputAndSubmit and PasteAndSubmit paths.
+        super::super::utils::push_test_input(&["/end"]);
+
+        let commands = [
+            LoopCommand::GeneratePrompt,
+            LoopCommand::ConfigMenu,
+            LoopCommand::SessionSummary,
+            LoopCommand::ToolHistory,
+            LoopCommand::CopyIntentRule,
+            LoopCommand::CopyRoundResult,
+            LoopCommand::PasteAndSubmit,
+            LoopCommand::InputAndSubmit,
+            LoopCommand::ToggleMode,
+            LoopCommand::SwitchLang(None),
+            LoopCommand::SwitchFormat(None),
+            LoopCommand::ToggleShell,
+            LoopCommand::ToggleRead,
+            LoopCommand::ToggleWrite,
+            LoopCommand::ToggleEdit,
+            LoopCommand::ToggleSkill,
+            LoopCommand::ToggleAutoCopy,
+            LoopCommand::ToggleClearScreen,
+            LoopCommand::ToolMenu,
+            LoopCommand::SkillMenu,
+            LoopCommand::ToggleContextAutoLoad,
+            LoopCommand::ShowMemoryUsage,
+            LoopCommand::ChangelogMenu,
+            LoopCommand::ChangelogAll,
+            LoopCommand::ChangelogVersionAt("0.7.0".to_string()),
+            LoopCommand::ChangelogVersionAt("bogus".to_string()),
+        ];
+        for cmd in &commands {
+            let mut ctx = CommandContext {
+                provider: &mock,
+                executor: &executor,
+                registry: &registry,
+                config: &mut config,
+                options: &mut options,
+                root: &root,
+                session: &mut session,
+            };
+            let outcome = run_command(cmd, &mut ctx).await;
+            assert_eq!(outcome, CommandOutcome::Continue);
+        }
+
+        // Exit command returns ExitLoop.
+        let mut ctx = CommandContext {
+            provider: &mock,
+            executor: &executor,
+            registry: &registry,
+            config: &mut config,
+            options: &mut options,
+            root: &root,
+            session: &mut session,
+        };
+        assert_eq!(
+            run_command(&LoopCommand::Exit, &mut ctx).await,
+            CommandOutcome::ExitLoop
+        );
     }
 }

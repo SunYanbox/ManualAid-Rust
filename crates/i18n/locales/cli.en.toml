@@ -129,6 +129,12 @@ title = "Tool history (newest first)"
 totals = "| ~%{tokens} tokens, %{duration}"
 tool_line = "  [%{tool}] %{status}  exec %{duration}  ~%{tokens} tokens"
 
+[cli.changelog]
+title = "Changelog"
+all = "View all"
+empty = "No changelog entries yet"
+version_not_found = "Changelog for version `%{version}` not found"
+
 [cli.bang]
 empty = "Command must not be empty"
 

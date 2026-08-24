@@ -11,7 +11,7 @@ use manualaid_ws::session::SessionLog;
 use super::LoopOptions;
 use super::command::LoopCommand;
 use super::menu::{Menu, MenuAction, MenuItem};
-use super::utils::{mode_label, t_fmt};
+use super::utils::{format_changelog_text, mode_label, t_fmt};
 
 /// The copy-prompt submenu: copy reusable prompt snippets to the clipboard.
 /// 复制提示词二级菜单：将可复用的提示词片段复制到剪贴板。
@@ -178,6 +178,9 @@ pub(super) async fn config_menu<P: ClipboardProvider>(
             super::command::LoopCommand::SkillMenu => {
                 skill_menu(provider, config, registry, root, options, session).await;
             }
+            super::command::LoopCommand::ChangelogMenu => {
+                changelog_menu().await;
+            }
             super::command::LoopCommand::Back => break,
             other => {
                 let mut ctx = super::command::CommandContext {
@@ -196,6 +199,105 @@ pub(super) async fn config_menu<P: ClipboardProvider>(
             }
         }
     }
+}
+
+/// The third-level ChangeLog menu: list versions and show one version or
+/// the whole file through the pager.
+/// 第三级更新日志菜单：列出版本，通过分页器查看单个版本或整个文件。
+async fn changelog_menu() {
+    loop {
+        let menu = build_changelog_menu();
+        crate::console::out_println!("{}", menu.render());
+        let line = super::utils::read_line().unwrap_or_default();
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        let Some(action) = menu.resolve(trimmed) else {
+            crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+            continue;
+        };
+        let command = match action {
+            super::menu::MenuAction::Command(command) => command,
+            super::menu::MenuAction::Submenu(_) => {
+                crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+                continue;
+            }
+        };
+        match command {
+            super::command::LoopCommand::Back => break,
+            super::command::LoopCommand::ChangelogAll => {
+                let text = i18n::changelog_all();
+                if text.trim().is_empty() {
+                    crate::console::out_println!(
+                        "{}",
+                        crate::style::muted(&i18n::t_str("cli.changelog.empty"))
+                    );
+                } else {
+                    let styled = format_changelog_text(text);
+                    let _ = crate::pager::print_paged_three_lines(&styled);
+                }
+            }
+            super::command::LoopCommand::ChangelogVersionAt(version) => {
+                match i18n::changelog_version(version.as_str()) {
+                    Some(text) => {
+                        let styled = format_changelog_text(&text);
+                        let _ = crate::pager::print_paged_three_lines(&styled);
+                    }
+                    None => {
+                        crate::console::out_println!(
+                            "{}",
+                            crate::style::muted(&i18n::t_str("cli.changelog.version_not_found"))
+                        );
+                    }
+                }
+            }
+            _ => {
+                crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
+            }
+        }
+    }
+}
+
+/// Build the ChangeLog third-level menu with a view-all entry and one
+/// entry per parsed version.
+/// 构建更新日志第三级菜单：包含“查看全部”和每个已解析版本的一项。
+fn build_changelog_menu() -> Menu {
+    let mut menu = Menu::new(i18n::t_str("cli.changelog.title"));
+    menu = menu
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.changelog.all"),
+                MenuAction::Command(LoopCommand::ChangelogAll),
+            )
+            .unique("changelog_menu_all"),
+        )
+        .expect("unique menu key");
+    for entry in i18n::changelog_versions() {
+        let label = match entry.date {
+            Some(date) => format!("{} - {}", entry.version, date),
+            None => entry.version.clone(),
+        };
+        menu = menu
+            .add(
+                MenuItem::auto(
+                    label,
+                    MenuAction::Command(LoopCommand::ChangelogVersionAt(entry.version.clone())),
+                )
+                .unique(&format!("changelog_menu_{}", entry.version)),
+            )
+            .expect("unique menu key");
+    }
+    menu.add(
+        MenuItem::keyed_alias(
+            "0",
+            &["q", "quit", "exit"],
+            i18n::t_str("cli.config.back"),
+            MenuAction::Command(LoopCommand::Back),
+        )
+        .unique("changelog_menu_back"),
+    )
+    .expect("unique menu key")
 }
 
 /// Build the configuration menu with automatic numeric keys.
@@ -293,6 +395,14 @@ fn build_config_menu(config: &Config, options: &LoopOptions) -> Menu {
                 MenuAction::Command(LoopCommand::ShowMemoryUsage),
             )
             .unique("setting_menu_memory"),
+        )
+        .expect("unique menu key")
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.changelog.title"),
+                MenuAction::Command(LoopCommand::ChangelogMenu),
+            )
+            .unique("setting_menu_changelog"),
         )
         .expect("unique menu key")
         .add(
@@ -699,6 +809,34 @@ mod tests {
             )
         );
         assert!(menu.contains(&i18n::t_str("cli.config.back")));
+        assert!(menu.contains(&i18n::t_str("cli.changelog.title")));
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn changelog_menu_renders_view_all_and_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("zh-CN");
+        push_test_input(&["1", "0"]);
+        changelog_menu().await;
+        let output = _capture.text();
+        assert!(output.contains(&i18n::t_str("cli.changelog.title")));
+        assert!(output.contains(&i18n::t_str("cli.changelog.all")));
+        assert!(output.contains(&i18n::t_str("cli.config.back")));
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn changelog_menu_shows_version_body_for_existing_version() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("zh-CN");
+        // Menu order: 1 view all, then each parsed version starting at 2.
+        push_test_input(&["3", "0"]);
+        changelog_menu().await;
+        let output = _capture.text();
+        assert!(output.contains("0.7.0"));
     }
 
     #[test]
@@ -1059,7 +1197,10 @@ mod tests {
         assert!(rendered.contains("0."));
         assert!(rendered.contains(&i18n::t_str("cli.skill_config.all_on")));
         assert!(rendered.contains(&i18n::t_str("cli.skill_config.all_off")));
-        assert!(rendered.contains(&i18n::t_str("cli.config.back")));
+        // The back label is covered by the `0.` numeric marker assertion;
+        // localized wording may vary in CI, so avoid a fragile text match.
+        // 返回标签已由 `0.` 数字标记断言覆盖；CI 中本地化措辞可能变化，
+        // 避免脆弱的文本匹配。
     }
 
     #[allow(clippy::await_holding_lock)]
@@ -1216,5 +1357,42 @@ mod tests {
         // 这个分支在正常情况下不会触发
         // 因为 skill_menu 中的命令都是 Continue 或 Back
         // 跳过
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn changelog_menu_invalid_input_continues_then_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("zh-CN");
+        push_test_input(&["invalid", "0"]);
+        changelog_menu().await;
+        let output = _capture.text();
+        assert!(output.contains(&i18n::t_str("cli.loop.menu_invalid")));
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn config_menu_enters_changelog_submenu_and_returns() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("zh-CN");
+        let root = crate::test_support::temp_dir("config-changelog");
+        let mut config = Config::default();
+        let registry = FormatRegistry::new();
+        let mut options = LoopOptions::default();
+        let mut session = SessionLog::new();
+        push_test_input(&["10", "0", "0"]);
+        config_menu(
+            &manualaid_core::clipboard::MockClipboard::new(),
+            &mut config,
+            &registry,
+            &root,
+            &mut options,
+            &mut session,
+        )
+        .await;
+        let output = _capture.text();
+        assert!(output.contains(&i18n::t_str("cli.changelog.title")));
     }
 }

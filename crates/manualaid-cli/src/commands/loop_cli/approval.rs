@@ -105,7 +105,7 @@ pub async fn execute_round_with_approval(
                     decision: decision.clone(),
                 };
                 let preview = approval_preview(&queue_item, &item.call.params);
-                let _ = crate::pager::print_paged_collapsed(&preview);
+                let _ = crate::pager::print_paged_diff(&preview);
                 tokio::time::sleep(APPROVAL_PAUSE).await;
                 match decide(&queue_item) {
                     Approval::Approve => {}
@@ -155,7 +155,7 @@ pub async fn execute_round_with_approval(
             && let Some(diff) = executed_diff
             && !diff.trim().is_empty()
         {
-            let _ = crate::pager::print_paged_collapsed(&diff);
+            let _ = crate::pager::print_paged_diff(&diff);
         }
         if !item.pending.is_empty() {
             // An approved call no longer needs the "approval needed"

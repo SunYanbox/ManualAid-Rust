@@ -272,7 +272,7 @@ pub(super) async fn finish_round_with_provider<P: ClipboardProvider>(
     results: Vec<ToolResult>,
     stats: RoundStats,
 ) {
-    let _ = crate::pager::print_paged_collapsed(&format_round_summary(&results));
+    let _ = crate::pager::print_paged_three_lines(&format_round_summary(&results));
     let round_tokens = stats.total_tokens;
     session.push(calls, results.clone(), stats);
     let round_index = session.len();
@@ -391,7 +391,7 @@ pub(super) fn copy_round_index_with_provider<P: ClipboardProvider>(
     // 内容预览仅用于展示：用浅灰样式，让详情信息突出、内容退居背景。
     let previewed = crate::style::gray(&truncate_preview_lines(&content, COPY_PREVIEW_MAX_LINES));
     let text = indent_each_line(&(preview.join("\n") + "\n" + &previewed));
-    let _ = crate::pager::print_paged_collapsed(&text);
+    let _ = crate::pager::print_paged_three_lines(&text);
     match provider.write(&content) {
         Ok(()) => print_muted_block(&[t_fmt(
             "cli.message.result_copied",

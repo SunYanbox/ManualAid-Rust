@@ -109,7 +109,7 @@ fn collapsed_pager_prints_all_when_not_terminal() {
         .map(|n| format!("line {n}"))
         .collect::<Vec<_>>()
         .join("\n");
-    pager::print_paged_collapsed(&long).expect("print should succeed");
+    pager::print_paged_three_lines(&long).expect("print should succeed");
 }
 
 #[test]
