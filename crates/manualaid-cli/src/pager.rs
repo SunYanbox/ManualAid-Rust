@@ -80,6 +80,43 @@ pub fn print_paged_three_lines(output: &str) -> io::Result<()> {
     )
 }
 
+/// Number of lines shown on the first page when paging diff output.
+/// 显示 diff 时第一页显示的行数。
+const DIFF_FIRST_PAGE_LINES: usize = 20;
+/// Number of lines shown per key press after the first page for diff output.
+/// 显示 diff 时第一页之后每次按键显示的行数。
+const DIFF_PAGE_LINES: usize = 10;
+
+/// Print `output` with a 20-line first page and 10-line pages afterwards.
+/// Used for diff output so enough context is visible without flooding the
+/// console with one full screen.
+/// 分页输出 `output`：第一页显示 20 行，之后每页显示 10 行。用于 diff
+/// 输出，在提供足够上下文的同时避免整屏刷屏。
+pub fn print_paged_diff(output: &str) -> io::Result<()> {
+    if crate::console::is_capturing() {
+        return print_all_to(output, &mut crate::console::ConsoleWriter);
+    }
+    if !INTERACTIVE_ENABLED.load(Ordering::Relaxed) {
+        return print_all(output);
+    }
+    print_paged_with(
+        output,
+        Some(DIFF_FIRST_PAGE_LINES),
+        io::stdout().is_terminal(),
+        io::stdin().is_terminal(),
+        terminal_height(),
+        |lines, first_page_size, _page_size| {
+            interactive_paged(
+                io::stdout(),
+                lines,
+                first_page_size,
+                DIFF_PAGE_LINES,
+                read_key,
+            )
+        },
+    )
+}
+
 /// Write `output` to `writer`, appending a newline when it does not already
 /// end with one so the next prompt or menu starts on a fresh line.
 /// 把 `output` 写入 `writer`；若输出未以换行结尾则补一个换行，避免后续
