@@ -129,6 +129,9 @@ title = "工具历史（最新的在前）"
 totals = "| 共约 %{tokens} tokens，总耗时 %{duration}"
 tool_line = "  [%{tool}] %{status}  执行 %{duration}  ~%{tokens} tokens"
 
+[cli.bang]
+empty = "命令不能为空"
+
 [cli.loop]
 copied = "已复制到剪贴板"
 header = "工作区：%{path} | 时间：%{time} | Shell：%{shell}"
@@ -144,7 +147,10 @@ menu_paste = "粘贴并提交工具调用文本"
 menu_prompt = "请选择："
 menu_summary = "生成会话摘要"
 menu_title = "ManualAid CLI Agent Copy-Paste Loop"
-help_hint = "提示：输入 /help 查看快捷命令"
+help_hint = """
+提示：输入 /help 查看快捷命令
+提示：输入 `!` 开头的 Shell 命令可以直接执行
+"""
 timing_prompt = "系统提示词生成：%{elapsed}"
 timing_round = "轮次执行：%{elapsed}"
 token_estimate_prompt = "预计 Token 消耗：%{tokens}"
@@ -209,4 +215,5 @@ text = """
   /tools           - 列出可用工具
   /c [index]      - 复制轮次结果
   /c t <tool>     - 复制工具模板
+  !<命令>      - 直接运行终端命令
 """
