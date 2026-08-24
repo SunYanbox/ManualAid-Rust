@@ -85,6 +85,9 @@ pub(super) enum LoopCommand {
     ToolMenu,
     SkillMenu,
     ToggleContextAutoLoad,
+    ChangelogMenu,
+    ChangelogAll,
+    ChangelogVersionAt(String),
     ShowMemoryUsage,
     EnableAllSkills,
     DisableAllSkills,
@@ -288,6 +291,38 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             ];
             for line in lines {
                 crate::console::out_println!("{}", crate::style::accent(&line));
+            }
+            CommandOutcome::Continue
+        }
+        LoopCommand::ChangelogMenu => {
+            // Handled by the caller so entering this submenu from here
+            // would not create an async recursion cycle.
+            // 由调用方处理，避免在这里进入子菜单形成 async 递归环。
+            CommandOutcome::Continue
+        }
+        LoopCommand::ChangelogAll => {
+            let text = i18n::changelog_all();
+            if text.trim().is_empty() {
+                crate::console::out_println!(
+                    "{}",
+                    crate::style::muted(&i18n::t_str("cli.changelog.empty"))
+                );
+            } else {
+                let _ = crate::pager::print_paged(text);
+            }
+            CommandOutcome::Continue
+        }
+        LoopCommand::ChangelogVersionAt(version) => {
+            match i18n::changelog_version(version.as_str()) {
+                Some(text) => {
+                    let _ = crate::pager::print_paged(&text);
+                }
+                None => {
+                    crate::console::out_println!(
+                        "{}",
+                        crate::style::muted(&i18n::t_str("cli.changelog.version_not_found"))
+                    );
+                }
             }
             CommandOutcome::Continue
         }

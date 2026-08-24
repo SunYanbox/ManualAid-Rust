@@ -129,6 +129,12 @@ title = "工具历史（最新的在前）"
 totals = "| 共约 %{tokens} tokens，总耗时 %{duration}"
 tool_line = "  [%{tool}] %{status}  执行 %{duration}  ~%{tokens} tokens"
 
+[cli.changelog]
+title = "更新日志"
+all = "查看全部"
+empty = "暂无更新日志"
+version_not_found = "未找到版本 %{version} 的更新日志"
+
 [cli.bang]
 empty = "命令不能为空"
 
