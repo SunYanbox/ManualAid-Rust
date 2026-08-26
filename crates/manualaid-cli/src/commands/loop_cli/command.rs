@@ -137,6 +137,7 @@ pub(super) async fn run_command<P: ClipboardProvider>(
                 provider,
                 executor,
                 registry,
+                root,
                 session,
                 options,
                 config.max_result_chars,
@@ -148,6 +149,7 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             input_and_submit(
                 executor,
                 registry,
+                root,
                 session,
                 options,
                 config.max_result_chars,
@@ -156,7 +158,7 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             CommandOutcome::Continue
         }
         LoopCommand::CopyRoundResult => {
-            copy_round_result_with_provider(provider, session, config.max_result_chars);
+            copy_round_result_with_provider(provider, root, session, config.max_result_chars);
             CommandOutcome::Continue
         }
         LoopCommand::ConfigMenu => {

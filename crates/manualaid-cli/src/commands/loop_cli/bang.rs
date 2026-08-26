@@ -3,6 +3,7 @@
 
 use indexmap::IndexMap;
 use serde_json::Value;
+use std::path::Path;
 
 use manualaid_core::clipboard::ClipboardProvider;
 use manualaid_core::executor::Executor;
@@ -32,6 +33,7 @@ const BANG_DESCRIPTION: &str = "[USER EXEC]";
 pub(super) async fn run_bang_command<P: ClipboardProvider>(
     provider: &P,
     executor: &Executor,
+    root: &Path,
     config: &mut Config,
     session: &mut SessionLog,
     options: &mut LoopOptions,
@@ -66,6 +68,7 @@ pub(super) async fn run_bang_command<P: ClipboardProvider>(
     let results = vec![result];
     finish_round_with_provider(
         provider,
+        root,
         session,
         options,
         max_result_chars,

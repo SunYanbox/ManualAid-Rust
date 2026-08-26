@@ -189,10 +189,15 @@ fn estimate_round_tokens(input: &str, results: &mut [ToolResult]) -> u64 {
     let num_calls = results.len().max(1);
     let mut total = input_tokens as u64;
     for result in results {
-        // usize::MAX never truncates and skips the i18n truncation branch.
-        // usize::MAX 永不截断，且不会进入 i18n 截断分支。
-        let wrapped =
-            manualaid_ws::prompt::format_results(std::slice::from_ref(result), usize::MAX);
+        // usize::MAX never truncates and skips the i18n truncation branch;
+        // the workspace root placeholder is never used.
+        // usize::MAX 永不截断，且不会进入 i18n 截断分支；工作区根路径
+        // 占位参数永不被使用。
+        let wrapped = manualaid_ws::prompt::format_results(
+            std::slice::from_ref(result),
+            usize::MAX,
+            std::path::Path::new(""),
+        );
         let output_tokens = tokenx_rs::estimate_token_count(&wrapped) as u64;
         result.estimated_tokens = input_tokens as u64 / num_calls as u64 + output_tokens;
         total += output_tokens;
@@ -358,6 +363,7 @@ mod tests {
                     tokenx_rs::estimate_token_count(&manualaid_ws::prompt::format_results(
                         std::slice::from_ref(r),
                         usize::MAX,
+                        std::path::Path::new(""),
                     )) as u64
                 })
                 .sum::<u64>();
@@ -370,6 +376,7 @@ mod tests {
             let own_output = tokenx_rs::estimate_token_count(&manualaid_ws::prompt::format_results(
                 std::slice::from_ref(result),
                 usize::MAX,
+                std::path::Path::new(""),
             )) as u64;
             assert_eq!(result.estimated_tokens, input_tokens / 2 + own_output);
         }

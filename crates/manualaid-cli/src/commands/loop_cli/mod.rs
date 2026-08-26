@@ -262,6 +262,7 @@ async fn loop_main_at(
             bang::run_bang_command(
                 &manualaid_core::clipboard::RealClipboard,
                 &executor,
+                current_dir,
                 &mut config,
                 &mut session,
                 &mut options,

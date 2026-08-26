@@ -71,7 +71,7 @@ async fn copy_preview_is_indented_and_collapsed() {
     manualaid_cli::style::set_enabled(false);
     i18n::set_locale("en");
     push_test_input(&[super::LATEST_ROUND_INDEX]);
-    copy_round_result_with_provider(&mock, &session, 100);
+    copy_round_result_with_provider(&mock, root.path(), &session, 100);
     let output = _capture.text();
     // Every preview line is indented by two spaces (the tool line
     // template already carries its own two leading spaces), and the

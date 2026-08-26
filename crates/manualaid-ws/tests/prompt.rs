@@ -43,6 +43,15 @@ fn with_locale(lang: &str, f: impl FnOnce()) {
     f();
 }
 
+/// An isolated workspace root for tests that trigger truncation and thus
+/// write persist files. Uses a unique per-test path under the system temp
+/// directory so real workspaces are never touched.
+/// 用于触发截断并写暂存文件的隔离工作区根目录。使用系统临时目录下的
+/// 唯一路径，确保真实工作区永不被触碰。
+fn test_workspace_root(tag: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("manualaid-ws-prompt-{tag}-{}", std::process::id()))
+}
+
 #[test]
 fn tools_list_uses_localized_descriptions() {
     with_locale("en", || {
@@ -319,7 +328,7 @@ fn format_results_joins_multiple_results() {
         ToolResult::success("read", "a", true),
         ToolResult::failure("edit", "b"),
     ];
-    let text = format_results(&results, MAX);
+    let text = format_results(&results, MAX, Path::new(""));
     assert_eq!(text.matches("[TOOL_RESULT").count(), 2);
     assert!(text.contains("success=true"));
     assert!(text.contains("success=false"));
@@ -329,7 +338,7 @@ fn format_results_joins_multiple_results() {
 fn format_results_embeds_summary_verbatim() {
     let result = ToolResult::success("read", "content", true)
         .with_params_summary("{\"file_path\":\"/a.txt\"}".into());
-    let text = format_results(&[result], MAX);
+    let text = format_results(&[result], MAX, Path::new(""));
     assert!(text.contains("[TOOL_RESULT read success=true params={\"file_path\":\"/a.txt\"}]"));
     assert!(text.contains("success=true"));
 }
@@ -337,14 +346,14 @@ fn format_results_embeds_summary_verbatim() {
 #[test]
 fn format_results_omits_empty_summary() {
     let result = ToolResult::success("shell", "done", false);
-    let text = format_results(&[result], MAX);
+    let text = format_results(&[result], MAX, Path::new(""));
     assert!(text.contains("[TOOL_RESULT shell success=true]"));
     assert!(!text.contains("params="));
 }
 
 #[test]
 fn format_results_empty_input_returns_empty_string() {
-    assert_eq!(format_results(&[], MAX), "");
+    assert_eq!(format_results(&[], MAX, Path::new("")), "");
 }
 
 #[test]
@@ -353,7 +362,7 @@ fn format_results_within_limit_is_unchanged() {
         ToolResult::success("read", "hello", true),
         ToolResult::failure("edit", "world"),
     ];
-    let text = format_results(&results, MAX);
+    let text = format_results(&results, MAX, Path::new(""));
     assert_eq!(
         text,
         "[TOOL_RESULT read success=true]\nhello\n[END TOOL_RESULT read]\n\n\
@@ -364,75 +373,83 @@ fn format_results_within_limit_is_unchanged() {
 #[test]
 fn format_results_preserves_whitespace_of_slices() {
     let result = ToolResult::success("read", "    indented\n  second  \n", true);
-    let text = format_results(&[result], MAX);
+    let text = format_results(&[result], MAX, Path::new(""));
     assert!(text.contains("    indented\n  second  \n\n[END TOOL_RESULT read]"));
 }
 
 #[test]
 fn format_results_truncates_proportionally_with_notices_and_warning() {
     with_locale("en", || {
+        let root = test_workspace_root("trunc-prop");
         let results = vec![
-            ToolResult::success("read", "χ".repeat(90_000), true),
-            ToolResult::failure("shell", "λ".repeat(30_000)),
+            ToolResult::success("read", "χ".repeat(3_000), true),
+            ToolResult::failure("shell", "λ".repeat(1_001)),
         ];
-        let text = format_results(&results, 60_000);
-        // 90k and 30k out of 120k total get 45k and 15k of the 60k budget.
-        // 9 万与 3 万字符按 12 万总量分配 6 万预算，分别得到 4.5 万与 1.5 万。
-        assert_eq!(text.matches('χ').count(), 45_000);
-        assert_eq!(text.matches('λ').count(), 15_000);
-        assert!(text.contains("[Output truncated: 45000 of 90000 chars removed]"));
-        assert!(text.contains("[Output truncated: 15000 of 30000 chars removed]"));
-        assert!(text.ends_with(
-            "Output exceeded 60000 characters (total: 120000). Truncated proportionally. \
-             Please adjust tool call parameters to avoid frequently exceeding the character limit."
-        ));
+        let text = format_results(&results, 2_500, &root);
+        // 3000 and 1001 out of 4001 total get 1500 and 1000 of the 2500
+        // budget; the smaller result is pushed up to the floor and the
+        // overshoot is cut from the larger one.
+        // 3000 与 1001 字符按 4001 总量分配 2500 预算，分别得到 1500 与
+        // 1000；较小结果被推到保底，超出部分从较大结果回扣。
+        assert_eq!(text.matches('χ').count(), 1_500);
+        assert_eq!(text.matches('λ').count(), 1_000);
+        assert!(text.contains("[Output truncated: 1500 of 3000 chars removed]"));
+        assert!(text.contains("[Output truncated: 1 of 1001 chars removed]"));
+        assert!(text.contains("Output exceeded 2500 characters (total: 4001)"));
+        assert!(text.contains("have been saved to"));
+        let _ = std::fs::remove_dir_all(&root);
     });
 }
 
 #[test]
 fn format_results_keeps_short_results_whole() {
     with_locale("en", || {
+        let root = test_workspace_root("keep-short");
         let results = vec![
-            ToolResult::success("read", "χ".repeat(90_000), true),
-            ToolResult::failure("shell", "λ".repeat(500)),
+            ToolResult::success("read", "χ".repeat(3_000), true),
+            ToolResult::failure("shell", "λ".repeat(50)),
         ];
-        let text = format_results(&results, 50_000);
-        // The 500-char result is below the keep floor and stays untouched.
-        // 500 字符的结果低于保底阈值，保持完整。
-        assert_eq!(text.matches('λ').count(), 500);
-        assert_eq!(text.matches('χ').count(), 49_500);
+        let text = format_results(&results, 1_500, &root);
+        // The 50-char result is below the keep floor and stays untouched.
+        // 50 字符的结果低于保底阈值，保持完整。
+        assert_eq!(text.matches('λ').count(), 50);
+        assert_eq!(text.matches('χ').count(), 1_450);
         assert_eq!(text.matches("[Output truncated:").count(), 1);
-        assert!(text.contains("[Output truncated: 40500 of 90000 chars removed]"));
+        assert!(text.contains("[Output truncated: 1550 of 3000 chars removed]"));
+        let _ = std::fs::remove_dir_all(&root);
     });
 }
 
 #[test]
 fn format_results_floor_overshoot_is_taken_from_largest_allocation() {
     with_locale("en", || {
+        let root = test_workspace_root("floor-over");
         let results = vec![
-            ToolResult::success("read", "χ".repeat(10_000), true),
-            ToolResult::failure("shell", "λ".repeat(100_000)),
+            ToolResult::success("read", "χ".repeat(1_001), true),
+            ToolResult::failure("shell", "λ".repeat(10_000)),
         ];
-        let text = format_results(&results, 10_500);
-        // The small result's proportional share is below the 1000-char floor, so
-        // it is kept at the floor and the overshoot is cut from the larger one.
-        // 小结果的按比例份额低于 1000 字符保底，按保底保留，超出部分从大结果中扣减。
+        let text = format_results(&results, 1_050, &root);
+        // Both results sit at the 1000-char floor because the budget cannot
+        // cover them; the overshoot stays unpaid.
+        // 预算无法覆盖两个结果，二者都停在 1000 字符保底；超出部分无法回扣。
         assert_eq!(text.matches('χ').count(), 1_000);
-        assert_eq!(text.matches('λ').count(), 9_500);
+        assert_eq!(text.matches('λ').count(), 1_000);
+        assert!(text.contains("[Output truncated: 1 of 1001 chars removed]"));
         assert!(text.contains("[Output truncated: 9000 of 10000 chars removed]"));
-        assert!(text.contains("[Output truncated: 90500 of 100000 chars removed]"));
+        let _ = std::fs::remove_dir_all(&root);
     });
 }
 
 #[test]
 fn format_results_all_short_drops_whole_results_from_the_end() {
     with_locale("en", || {
+        let root = test_workspace_root("drop-end");
         let results = vec![
             ToolResult::success("read", "χ".repeat(500), true),
             ToolResult::failure("edit", "λ".repeat(500)),
             ToolResult::success("shell", "π".repeat(500), false),
         ];
-        let text = format_results(&results, 1_000);
+        let text = format_results(&results, 1_000, &root);
         // Nothing can be shortened, so whole results are dropped from the end.
         // 没有可缩短的结果，从末尾整块丢弃。
         assert_eq!(text.matches("[TOOL_RESULT").count(), 2);
@@ -440,18 +457,20 @@ fn format_results_all_short_drops_whole_results_from_the_end() {
         assert_eq!(text.matches('λ').count(), 500);
         assert_eq!(text.matches('π').count(), 0);
         assert!(text.contains("Output exceeded 1000 characters (total: 1500)"));
+        let _ = std::fs::remove_dir_all(&root);
     });
 }
 
 #[test]
 fn format_results_unpayable_overshoot_stays_at_floor() {
     with_locale("en", || {
+        let root = test_workspace_root("unpayable");
         let results = vec![
             ToolResult::success("read", "χ".repeat(1_001), true),
             ToolResult::failure("edit", "λ".repeat(1_001)),
             ToolResult::success("shell", "π".repeat(1_001), false),
         ];
-        let text = format_results(&results, 1_500);
+        let text = format_results(&results, 1_500, &root);
         // Every result's proportional share falls below the 1000-char floor,
         // so all three sit at the floor and the overshoot stays unpaid.
         // 每个结果的按比例份额都低于 1000 字符保底，三者都停在保底值，
@@ -461,17 +480,87 @@ fn format_results_unpayable_overshoot_stays_at_floor() {
         assert_eq!(text.matches('π').count(), 1_000);
         assert_eq!(text.matches("[Output truncated:").count(), 3);
         assert!(text.contains("Output exceeded 1500 characters (total: 3003)"));
+        let _ = std::fs::remove_dir_all(&root);
     });
 }
 
 #[test]
 fn format_results_notice_is_localized() {
     with_locale("zh-CN", || {
-        let results = vec![ToolResult::success("read", "χ".repeat(90_000), true)];
-        let text = format_results(&results, 60_000);
-        // The single 90k-char result gets the whole 60k budget; 30k removed.
-        // 单个 9 万字符结果获得全部 6 万预算，被截断 3 万字符。
-        assert!(text.contains("[输出已截断：原输出 90000 字符，已截断 30000 字符]"));
+        let root = test_workspace_root("localized");
+        let results = vec![ToolResult::success("read", "χ".repeat(3_000), true)];
+        let text = format_results(&results, 2_000, &root);
+        // The single 3000-char result gets the whole 2000 budget; 1000 removed.
+        // 单个 3000 字符结果获得全部 2000 预算，被截断 1000 字符。
+        assert!(text.contains("[输出已截断：原输出 3000 字符，已截断 1000 字符]"));
         assert!(text.contains("已按比例截断"));
+        assert!(text.contains("暂存"));
+        let _ = std::fs::remove_dir_all(&root);
+    });
+}
+
+#[test]
+fn format_results_persists_full_output_when_truncated() {
+    with_locale("en", || {
+        let root = test_workspace_root("persist-full");
+        let results = vec![
+            ToolResult::success("read", "χ".repeat(900), true)
+                .with_params_summary("file_path=\"/a.txt\"".to_string()),
+            ToolResult::failure("shell", "λ".repeat(300)),
+        ];
+        let text = format_results(&results, 600, &root);
+        assert!(text.contains("have been saved to"));
+        assert!(text.contains("- read (file_path=\"/a.txt\"): line 1"));
+        assert!(text.contains("- shell: line"));
+
+        // The persisted file must exist under `.ManualAid/temp/` and contain
+        // the complete un-truncated tool outputs.
+        // 暂存文件必须存在于 `.ManualAid/temp/` 下，并包含完整的未截断工具输出。
+        let temp_dir = root.join(".ManualAid").join("temp");
+        assert!(temp_dir.is_dir());
+        let saved: Vec<_> = std::fs::read_dir(&temp_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
+        assert_eq!(saved.len(), 1);
+        let content = std::fs::read_to_string(saved[0].path()).unwrap();
+        assert_eq!(content.matches('χ').count(), 900);
+        assert_eq!(content.matches('λ').count(), 300);
+        assert!(content.contains("[TOOL_RESULT read success=true params=file_path=\"/a.txt\"]"));
+        assert!(content.contains("[END TOOL_RESULT read]"));
+        assert!(content.contains("[TOOL_RESULT shell success=false]"));
+        assert!(content.contains("[END TOOL_RESULT shell]"));
+        let _ = std::fs::remove_dir_all(&root);
+    });
+}
+
+#[test]
+fn format_results_no_file_when_within_limit() {
+    with_locale("en", || {
+        let root = test_workspace_root("within-limit");
+        let results = vec![ToolResult::success("read", "hello", true)];
+        let text = format_results(&results, 500, &root);
+        assert!(!text.contains("saved to"));
+        assert!(!root.join(".ManualAid").exists());
+    });
+}
+
+#[test]
+fn format_results_persist_failure_silently_degrades() {
+    with_locale("en", || {
+        // A workspace root pointing at a regular file makes `create_dir_all`
+        // fail, so the persisted notice must be absent while the original
+        // truncation warning stays.
+        // 将工作区根指向一个普通文件会使 `create_dir_all` 失败，因此暂存
+        // 通知必须缺失，而原有截断警告保留。
+        let root = test_workspace_root("fail-path");
+        std::fs::create_dir_all(&root).unwrap();
+        let file_path = root.join("blocker");
+        std::fs::write(&file_path, "x").unwrap();
+        let results = vec![ToolResult::success("read", "χ".repeat(3_000), true)];
+        let text = format_results(&results, 2_000, &file_path);
+        assert!(text.contains("Output exceeded"));
+        assert!(!text.contains("have been saved to"));
+        let _ = std::fs::remove_dir_all(&root);
     });
 }

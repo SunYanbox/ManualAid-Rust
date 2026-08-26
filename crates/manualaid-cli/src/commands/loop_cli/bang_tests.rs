@@ -29,6 +29,7 @@ async fn bang_runs_shell_command_and_records_round() {
     run_bang_command(
         &provider,
         &executor,
+        &root,
         &mut config,
         &mut session,
         &mut options,
@@ -65,6 +66,7 @@ async fn bang_empty_command_prints_message_and_does_not_record() {
     run_bang_command(
         &provider,
         &executor,
+        &root,
         &mut config,
         &mut session,
         &mut options,
@@ -99,6 +101,7 @@ async fn bang_nonzero_exit_records_failure() {
     run_bang_command(
         &provider,
         &executor,
+        &root,
         &mut config,
         &mut session,
         &mut options,
@@ -130,6 +133,7 @@ async fn bang_blacklisted_command_is_denied_and_recorded() {
     run_bang_command(
         &provider,
         &executor,
+        &root,
         &mut config,
         &mut session,
         &mut options,
@@ -165,6 +169,7 @@ async fn bang_auto_copy_off_asks_copy_and_writes_on_yes() {
     run_bang_command(
         &provider,
         &executor,
+        &root,
         &mut config,
         &mut session,
         &mut options,
