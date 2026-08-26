@@ -4,7 +4,7 @@
 use crate::LOCALE_LOCK;
 use crate::common;
 use manualaid_cli::commands::loop_cli::{
-    copy_enabled_tools_with_provider, copy_intent_rule_with_provider,
+    copy_context_with_provider, copy_enabled_tools_with_provider, copy_intent_rule_with_provider,
     copy_line_ending_rule_with_provider, copy_plan_mode_rule_with_provider, copy_round_result,
     copy_round_result_with_provider, copy_switch_mode_rule_with_provider,
     copy_system_prompt_with_provider, copy_task_planning_rule_with_provider,
@@ -58,6 +58,24 @@ fn copy_system_prompt_includes_selected_context_files() {
         .unwrap_or_default();
     assert!(reminder.contains("Instructions from: AGENTS.md"));
     assert!(reminder.contains("# project rules"));
+}
+
+#[test]
+fn copy_context_with_no_files_prints_notice_and_keeps_clipboard_empty() {
+    let _capture = manualaid_cli::console::capture();
+    let _lock = LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
+    let mock = MockClipboard::new();
+    let root = common::TempDir::new("copy-context-empty");
+    copy_context_with_provider(&mock, root.path());
+    assert!(mock.read().unwrap().is_empty());
+    assert!(
+        _capture
+            .text()
+            .contains(&i18n::t_str("cli.message.no_context_files"))
+    );
 }
 
 #[test]

@@ -103,7 +103,7 @@ pub fn render_context_reminder(context_files_text: &str) -> String {
     // The locale value already ends with a newline; this second newline
     // turns it into the blank line between the reminder and the files.
     // locale 值已自带换行；此处再补一个换行，使引导语与文件之间空一行。
-    out.push_str("\n");
+    out.push('\n');
     out.push_str(context_files_text);
     out.push_str("</system-reminder>");
     out

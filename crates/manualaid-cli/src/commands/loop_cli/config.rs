@@ -1228,7 +1228,13 @@ mod tests {
     #[tokio::test]
     async fn skill_menu_toggles_all_and_single() {
         let _capture = crate::console::capture();
-        let _lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        let _locale = crate::test_support::LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        i18n::set_locale("en");
+        let _lock = crate::test_support::SKILL_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = crate::test_support::temp_dir("skill-menu-root");
         let home = crate::test_support::temp_dir("skill-menu-home");
         write_skill(&home, "alpha", "alpha");
@@ -1256,7 +1262,13 @@ mod tests {
     #[test]
     fn build_skill_menu_empty_skills_handling() {
         // 覆盖 config.rs:356 - build_skill_menu 中 skills 为空时的循环处理
-        let _lock = crate::test_support::SKILL_LOCK.lock().unwrap();
+        let _locale = crate::test_support::LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        i18n::set_locale("en");
+        let _lock = crate::test_support::SKILL_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         // 确保没有任何 skill
         manualaid_core::skill::reset_skills();
         let menu = build_skill_menu();
