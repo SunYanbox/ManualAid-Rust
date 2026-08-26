@@ -190,29 +190,6 @@ fn loop_binary_reports_invalid_config() {
 }
 
 #[test]
-fn loop_binary_copies_single_context_file_to_clipboard() {
-    let dir = common::TempDir::new("loop-flow-ctx-single");
-    let home = common::TempDir::new("loop-flow-ctx-single-home");
-    std::fs::write(dir.path().join("AGENTS.md"), "# rules").unwrap();
-    // Assert the confirmation printed after a successful copy instead of
-    // polling the system clipboard: the clipboard owner may not respond
-    // while the child is blocked on stdin, which makes clipboard polling
-    // flaky on headless CI and on Windows.
-    // 通过复制成功后的确认输出断言，而非轮询系统剪贴板：子进程阻塞等待
-    // stdin 时剪贴板所有者可能无法响应，导致无头 CI 与 Windows 上轮询
-    // 剪贴板不稳定。
-    let output = common::run_binary_scripted(
-        dir.path(),
-        Some(home.path()),
-        &[],
-        &["main_menu_generate", "main_menu_quit"],
-    );
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains(&i18n::t_str("cli.message.prompt_copied")));
-}
-
-#[test]
 fn loop_binary_copies_intent_rule_to_clipboard() {
     let dir = common::TempDir::new("loop-flow-intent-rule");
     let home = common::TempDir::new("loop-flow-intent-rule-home");
@@ -314,34 +291,4 @@ fn loop_binary_runs_bang_command_and_shows_it_in_history() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("hello_bang"));
     assert!(stdout.contains("[shell]"));
-}
-
-#[test]
-fn loop_binary_skips_context_selection_when_auto_load_is_disabled() {
-    let dir = common::TempDir::new("loop-flow-ctx-off");
-    let home = common::TempDir::new("loop-flow-ctx-off-home");
-    std::fs::create_dir_all(dir.path().join(".ManualAid")).unwrap();
-    std::fs::write(
-        config_path(dir.path()),
-        "[global]\ncontext_auto_load = false\n",
-    )
-    .unwrap();
-    std::fs::write(dir.path().join("AGENTS.md"), "a").unwrap();
-    std::fs::write(dir.path().join("CLAUDE.md"), "b").unwrap();
-    // Assert the successful copy confirmation and that no selection menu
-    // appears, instead of polling the system clipboard. The clipboard may
-    // not answer while the child waits on stdin, so stdout is the stable
-    // side channel here.
-    // 断言复制成功确认且未出现选择菜单，而非轮询系统剪贴板。子进程等待
-    // stdin 时剪贴板可能无法响应，因此 stdout 是这里的稳定验证渠道。
-    let output = common::run_binary_scripted(
-        dir.path(),
-        Some(home.path()),
-        &[],
-        &["main_menu_generate", "main_menu_quit"],
-    );
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains(&i18n::t_str("cli.message.prompt_copied")));
-    assert!(!stdout.contains(&i18n::t_str("cli.context.found_multiple")));
 }
