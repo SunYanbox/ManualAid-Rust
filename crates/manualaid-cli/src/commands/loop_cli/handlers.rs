@@ -138,6 +138,17 @@ pub fn copy_task_planning_rule_with_provider<P: ClipboardProvider>(provider: &P)
     write_copied(provider, &text);
 }
 
+/// Copy the compressed-session prompt wrapped in a `<system-reminder>`
+/// block to the clipboard. The body is localized; the wrapper tags are
+/// fixed so external LLM chats always receive the same structure.
+/// 将包裹在 `<system-reminder>` 块中的压缩会话提示词复制到剪贴板。
+/// 正文本地化；包裹标签固定，确保外部 LLM 聊天始终收到相同结构。
+pub fn copy_compressed_session_prompt_with_provider<P: ClipboardProvider>(provider: &P) {
+    let body = i18n::t_str("prompt.copy.compressed-session");
+    let text = format!("<system-reminder>\n{}\n</system-reminder>", body.trim());
+    write_copied(provider, &text);
+}
+
 /// Write prompt text to the clipboard and print the shared confirmation.
 /// 将提示词文本写入剪贴板并打印统一的确认信息。
 fn write_copied<P: ClipboardProvider>(provider: &P, text: &str) {

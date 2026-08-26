@@ -73,6 +73,7 @@ pub(super) enum LoopCommand {
     CopyPlanModeRule,
     CopySwitchModeRule,
     CopyTaskPlanningRule,
+    CopyCompressedSessionPrompt,
     Exit,
     ToggleMode,
     SwitchLang(Option<usize>),
@@ -212,6 +213,12 @@ pub(super) async fn run_command<P: ClipboardProvider>(
         }
         LoopCommand::CopyTaskPlanningRule => {
             copy_task_planning_rule_with_provider(provider);
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopyCompressedSessionPrompt => {
+            // Only reached through the copy-prompt submenu; kept here so the
+            // exhaustive match stays complete.
+            // 仅通过复制提示词二级菜单进入；保留该分支以保证穷尽匹配。
             CommandOutcome::Continue
         }
         LoopCommand::Exit => CommandOutcome::ExitLoop,
@@ -619,6 +626,7 @@ mod tests {
             LoopCommand::CopyPlanModeRule,
             LoopCommand::CopySwitchModeRule,
             LoopCommand::CopyTaskPlanningRule,
+            LoopCommand::CopyCompressedSessionPrompt,
         ];
         for cmd in &commands {
             let mut ctx = CommandContext {

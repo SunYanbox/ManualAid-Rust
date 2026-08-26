@@ -205,6 +205,61 @@ After each task is completed, immediately update the plan file under the todos d
 Unless you are certain rewriting the entire plan file is necessary, use the Edit tool.
 </system-reminder>
 """
+compressed-session = """
+You are now a conversation compression assistant. Please compress all of the conversation history above into a structured summary to be used as background context for subsequent sessions.
+
+## Compression Principles
+
+1. **Preserve the decision chain**: Record the user's core intent, key constraints, and how those constraints evolved during the conversation. When the user overturns or corrects a previous decision, quote the user's original words (marked with quotation marks) rather than paraphrasing.
+
+2. **Preserve technical facts**: File paths, function signatures, configuration values, version numbers, error messages, line numbers, and other hard facts must be preserved precisely; do not generalize or omit them.
+
+3. **Preserve motivation**: After each key design decision, add a sentence explaining "why" (the motivation), especially when a non-obvious solution was chosen. For example: why A instead of B? Why does this constraint exist?
+
+4. **Distinguish "completed" from "pending"**: Use [Done] / [In Progress] / [Rejected] / [Pending] prefixes to clearly mark the status of each item, avoiding repeated execution or misjudged progress in subsequent sessions.
+
+5. **Mark forbidden zones**: Things the user explicitly said "do not do" should be listed separately and marked with a [Forbidden] prefix, visually distinguished from ordinary constraints.
+
+6. **Quantify verification results**: Record hard numbers such as the number of passing tests, coverage, warning counts, and command exit codes, so subsequent models can judge "whether it is truly done" without re-executing.
+
+## Output Structure
+
+### Primary Request and Intent
+- The user's original requests (listed item by item)
+- Corrections/clarifications to scope made by the user during the conversation (in chronological order; quote the user's original words for key corrections)
+- The motivation behind each key decision (why it was done this way)
+
+### Key Technical Concepts
+- Technical solutions, design principles, and constraints involved
+- Reasons for technical choices (if there are non-obvious trade-offs)
+
+### Files and Code
+- For each changed file: path, what changed, key code snippets
+- Explicitly mark "unchanged files" and why they were not changed
+
+### Errors and Fixes
+- Errors encountered, root causes, and solutions
+- Causal relationships between errors (e.g., one error triggered a chain of subsequent problems)
+
+### Current Work
+- Current progress, marked with [Done] / [In Progress] / [Pending]
+- Verification results (including quantified data: test counts, coverage, warning counts, etc.)
+- A list of uncommitted / should-not-be-committed files
+
+### Critical Context
+- [Forbidden] Items the user strictly forbids
+- [Hard constraints] Format requirements, naming conventions, compatibility constraints
+- [Rules] Repository conventions that subsequent sessions must follow
+- Definitions of key terms from the user's original words (quote the original text)
+
+## Compression Tips
+
+- Merge duplicate content, but preserve all "unique" information points
+- Mark direct quotes from the user with quotation marks, distinguishing them from paraphrased content
+- If information is contradictory (e.g., the user said different things at different times), record the final effective version and note the overturned version
+- Keep the summary length at 10-20% of the original, but information density no lower than 80% of the original
+- For scenarios where multiple compressions are chained together, describe motivations and forbidden zones in more detail than for a single compression
+"""
 
 [cli.prompt]
 format_desc = "The current tool-calling format is `%{format}`. Tool calls must follow this format exactly:"
