@@ -9,11 +9,15 @@
 ### 新增
 
 - 系统提示词 `path-rules` 新增 @ 前缀文件读取规则
+- 复制提示词二级菜单新增“复制上下文”，复用多上下文文件选择询问
+- `manualaid-ws::prompt` 新增 `render_context_reminder` 公开函数，供系统提示词构建与复制上下文菜单共用
 
 ### 变更
 
 - `<directory_listing>` 块开头新增本地化快照说明，提醒 LLM 目录结构为启动时快照不会后续更新；修复闭合标签前缺换行的问题
 - JSON 代码块工具调用模板的行尾转义说明细化：区分 LF 与 CRLF 的转义写法
+- 工作区上下文文件从 `<dynamic-context>` 移出，改为在 `</system_prompt>` 后输出独立 `<system-reminder>` 块；`render_context_files` 输出改为按文件的 `Instructions from` 小节，文件标签本地化
+- 系统提示词 `path-rules` 移除对 `<context_files>` 的路径来源引用
 
 ### 修复
 
