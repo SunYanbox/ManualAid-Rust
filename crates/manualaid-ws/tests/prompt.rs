@@ -271,6 +271,45 @@ fn system_prompt_includes_git_status_snapshot_note() {
 }
 
 #[test]
+fn system_prompt_includes_directory_listing_snapshot_note() {
+    // A directory with at least one entry is needed so `<directory_listing>`
+    // renders. Use a temp directory and write a dummy file to guarantee output.
+    // 需要含至少一个条目的目录才会输出 `<directory_listing>` 块。
+    // 使用临时目录并写入占位文件以确保非空。
+    let root = std::env::temp_dir().join(format!("manualaid-ws-prompt-dl-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("placeholder.txt"), "").unwrap();
+    with_locale("en", || {
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(&Config::default(), &root, &registry, &[], &[]);
+        assert!(prompt.contains("<directory_listing>"));
+        assert!(prompt.contains(
+            "<directory_listing>\nThis is the directory structure at the start of the conversation."
+        ));
+        assert!(
+            prompt.contains(
+                "point-in-time snapshot and will not update during the conversation.\n\n"
+            )
+        );
+        // The closing tag must be on its own line, not glued to the last entry.
+        // 闭合标签必须独占一行，不能与末尾条目粘连。
+        assert!(
+            prompt.contains("\n</directory_listing>\n"),
+            "expected </directory_listing> on its own line"
+        );
+    });
+    with_locale("zh-CN", || {
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(&Config::default(), &root, &registry, &[], &[]);
+        assert!(prompt.contains("<directory_listing>"));
+        assert!(prompt.contains(
+            "<directory_listing>\n这是对话开始时的目录结构快照。注意此列表是时间点快照，在对话期间不会更新。"
+        ));
+    });
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn format_results_joins_multiple_results() {
     let results = vec![
         ToolResult::success("read", "a", true),

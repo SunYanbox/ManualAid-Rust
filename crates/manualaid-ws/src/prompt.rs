@@ -230,8 +230,12 @@ fn workspace_info_text(workspace_root: &Path) -> String {
     }
     if !dir_list.is_empty() {
         result.push_str("<directory_listing>\n");
+        // The directory listing block opens with a localized snapshot note.
+        // 目录列表块开头附本地化快照备注。
+        result.push_str(&i18n::t_str("prompt.system.directory-listing-note"));
+        result.push_str("\n\n");
         result.push_str(&dir_list);
-        result.push_str("</directory_listing>\n");
+        result.push_str("\n</directory_listing>\n");
     }
     result
 }
