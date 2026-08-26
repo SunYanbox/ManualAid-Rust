@@ -52,7 +52,7 @@ impl ToolCallFormatParser for JsonCodeblockParser {
         }
         out.push_str("\n  }\n}");
         out.push_str(
-            "\nNote: all string values must be valid JSON strings: escape `\"` as `\\\"`, `\\` as `\\\\`, newline as `\\n`.",
+            "\nNote: all string values must be valid JSON strings: escape `\"` as `\\\"`, `\\` as `\\\\`, LF as `\\n`, CRLF as `\\r\\n`.",
         );
         out
     }
