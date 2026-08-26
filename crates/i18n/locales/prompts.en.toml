@@ -38,6 +38,7 @@ common-rules = """
 - To learn what is inside a directory, list its contents first; do not assume a file exists until you have seen it.
 - When a tool call fails because of a wrong path, correct the path from the error message — do not retry the same guess.
 - Prefer absolute paths under the workspace root; on Windows use forward slashes (e.g. `crates/foo/src/lib.rs`).
+- Paths prefixed with @ are files the user explicitly referenced. When their content is needed, use the read tool; do not claim to have inspected the file before reading it.
 </path-rules>
 
 <code-style>
