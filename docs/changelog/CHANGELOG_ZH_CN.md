@@ -9,6 +9,7 @@
 ### 变更
 
 - `<directory_listing>` 块开头新增快照说明，提示目录结构为启动时快照不会后续更新
+- JSON 代码块（json-codeblock）工具调用模板的行尾转义说明细化：区分 LF 与 CRLF 的转义写法
 
 ### 修复
 
