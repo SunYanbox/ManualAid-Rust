@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use manualaid_core::parser::FormatRegistry;
 use manualaid_core::skill::Skill;
 use manualaid_core::tools::{ToolKind, ToolResult};
+use sha2::{Digest, Sha256};
 
 use crate::config::Config;
 use crate::context;
@@ -376,6 +377,8 @@ struct ResultPart {
     header: String,
     content: String,
     footer: String,
+    tool_name: String,
+    params_summary: String,
 }
 
 /// Render one round's execution results as XML-wrapped text for pasting
@@ -393,7 +396,11 @@ struct ResultPart {
 /// 大小比例截断，且至少保留 `MIN_KEEP_CHARS` 字符；较短的结果保持
 /// 完整。每个被截断的结果附带一条含被截断字符数的标注，末尾追加轮次
 /// 警告，让用户与 LLM 都能知晓内容已被省略。
-pub fn format_results(results: &[ToolResult], max_result_chars: usize) -> String {
+pub fn format_results(
+    results: &[ToolResult],
+    max_result_chars: usize,
+    workspace_root: &Path,
+) -> String {
     if results.is_empty() {
         return String::new();
     }
@@ -408,6 +415,8 @@ pub fn format_results(results: &[ToolResult], max_result_chars: usize) -> String
                 // 保留工具输出原文：trim 会丢失 read 切片或代码块中可能有意义的尾部空格。
                 content: result.output.to_string(),
                 footer: result_footer(result),
+                tool_name: result.tool_name.clone(),
+                params_summary: result.params_summary.clone(),
             }
         })
         .collect();
@@ -423,12 +432,39 @@ pub fn format_results(results: &[ToolResult], max_result_chars: usize) -> String
             .join(separator);
     }
 
-    let round_warning = format!(
+    let mut round_warning = format!(
         "\n\n{}",
         i18n::t_str("truncated_round_warning")
             .replace("%{max_chars}", &max_result_chars.to_string())
             .replace("%{total_chars}", &content_total.to_string())
     );
+
+    // Persist the complete un-truncated tool outputs to
+    // `<workspace_root>/.ManualAid/temp/<sha256>.md` so the model can still
+    // inspect the omitted content when needed. Failures are silent: the
+    // truncated text remains usable and the copy flow is not interrupted.
+    // 将未截断的完整工具输出写入 `<workspace_root>/.ManualAid/temp/<sha256>.md`，
+    // 使模型在需要时仍可查看被省略的内容。写文件失败时静默降级：截断文本
+    // 保持可用，复制流程不被中断。
+    if let Some((temp_path, start_lines)) = persist_full_output(&parts, workspace_root) {
+        let tools: Vec<String> = parts
+            .iter()
+            .enumerate()
+            .map(|(i, part)| {
+                let display = if part.params_summary.is_empty() {
+                    part.tool_name.clone()
+                } else {
+                    format!("{} ({})", part.tool_name, part.params_summary)
+                };
+                format!("- {display}: line {}", start_lines[i])
+            })
+            .collect();
+        round_warning.push_str(
+            &i18n::t_str("truncated_persisted_notice")
+                .replace("%{temp_path}", &temp_path.to_string_lossy())
+                .replace("%{tools}", &tools.join("\n")),
+        );
+    }
 
     // Short results are never shortened and do not take part in the
     // proportional split; they still occupy their full length in the budget.
@@ -525,6 +561,44 @@ pub fn format_results(results: &[ToolResult], max_result_chars: usize) -> String
     let mut result = blocks.join(separator);
     result.push_str(&round_warning);
     result
+}
+
+/// Lowercase hex encoding of `SHA-256(content)` (64 hex characters).
+/// `SHA-256(content)` 的小写十六进制编码（64 个十六进制字符）。
+fn sha256_hex(content: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    let hash = hasher.finalize();
+    hash.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Persist the complete un-truncated tool outputs to
+/// `<workspace_root>/.ManualAid/temp/<sha256>.md`. Returns the written file
+/// path and the 1-based start line of each part within that file, or `None`
+/// when the directory cannot be created or the write fails.
+/// 将未截断的完整工具输出写入 `<workspace_root>/.ManualAid/temp/<sha256>.md`。
+/// 返回写入的文件路径以及每个部分在该文件中的 1 基起始行号；目录创建或
+/// 写入失败时返回 `None`。
+fn persist_full_output(parts: &[ResultPart], workspace_root: &Path) -> Option<(PathBuf, Vec<usize>)> {
+    let separator = "\n\n";
+    let mut full = String::new();
+    let mut start_lines = Vec::with_capacity(parts.len());
+    for (i, part) in parts.iter().enumerate() {
+        // Record the 1-based start line before appending this part so the
+        // first block starts at line 1.
+        // 在追加当前块之前记录 1 基起始行号，使第一个块从第 1 行开始。
+        start_lines.push(full.lines().count() + 1);
+        if i > 0 {
+            full.push_str(separator);
+        }
+        full.push_str(&format!("{}{}{}", part.header, part.content, part.footer));
+    }
+
+    let temp_dir = workspace_root.join(".ManualAid").join("temp");
+    std::fs::create_dir_all(&temp_dir).ok()?;
+    let file_path = temp_dir.join(format!("{}.md", sha256_hex(&full)));
+    std::fs::write(&file_path, &full).ok()?;
+    Some((file_path, start_lines))
 }
 
 /// Render the opening bracket line of a tool result. The parameter summary
