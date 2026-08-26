@@ -34,7 +34,7 @@ common-rules = """
 </available-tools>
 
 <path-rules>
-- 仅使用已确认路径（workspace_root、directory_listing、context_files 或工具返回结果）；失败时根据错误修正，不重试猜测。
+- 仅使用已确认路径（workspace_root、directory_listing 或工具返回结果）；失败时根据错误修正，不重试猜测。
 - 要了解目录内部内容，先列出其内容；在看到文件之前不要假设它存在。
 - 在确认前不假设文件/目录存在；优先使用工作区根目录下的绝对路径；Windows 下使用正斜杠（如 `crates/foo/src/lib.rs`）。
 - 以 @ 为前缀的路径是用户明确引用的文件。当需要其内容时，请使用读取工具；不得在读取之前声称已检查过该文件。
@@ -110,10 +110,15 @@ Intent 块内按顺序写：
 dynamic-context = """
 <dynamic-context>
 %{workspace_info}
-%{context_files}
 %{skills_list}
 </dynamic-context>
 """
+
+context-files-reminder = """
+以下工作区说明可能与你当前的工作相关。适用时请将其作为指导，更具体的指令优先于更宽泛的指令，并且它们不会覆盖系统、开发者或用户的直接指令。
+"""
+
+context-file-label = "来自 %{name} 文件的指令："
 
 git-status-note = "这是对话开始时的git状态。注意此状态是时间点快照，在对话期间不会更新。"
 

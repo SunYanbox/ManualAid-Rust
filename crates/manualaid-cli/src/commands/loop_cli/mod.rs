@@ -308,6 +308,7 @@ async fn loop_main_at(
                 &manualaid_core::clipboard::RealClipboard,
                 &config,
                 &registry,
+                current_dir,
             )
             .await;
             continue;

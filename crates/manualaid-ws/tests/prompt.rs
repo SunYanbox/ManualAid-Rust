@@ -188,8 +188,10 @@ fn system_prompt_includes_selected_context_files() {
             &[],
             &[root.join("AGENTS.md")],
         );
-        assert!(prompt.contains("<context_files path=\"AGENTS.md\">"));
+        assert!(prompt.contains(&i18n::t_str("prompt.system.context-files-reminder")));
+        assert!(prompt.contains("Instructions from: AGENTS.md"));
         assert!(prompt.contains("coverage >= 80%"));
+        assert!(prompt.ends_with("</system-reminder>"));
         let _ = std::fs::remove_dir_all(&root);
     });
 }
@@ -215,12 +217,14 @@ fn system_prompt_omits_context_when_auto_load_is_disabled() {
             &[],
             &[root.join("AGENTS.md")],
         );
-        // The rules text references the <context_files> tag name as a path
-        // source, so the assertion targets the rendered block form only.
-        // 规则文本会把 <context_files> 标签名作为路径来源引用，因此断言
-        // 只针对渲染出的区块形式。
-        assert!(!prompt.contains("<context_files path="));
+        // Assert on the reminder copy rather than the tag because the
+        // top-of-prompt system-reminder note always contains the tag text.
+        // 用引导语文案而非标签断言：提示词开头的 system-reminder 备注始终
+        // 含有标签文本。
+        assert!(!prompt.contains(&i18n::t_str("prompt.system.context-files-reminder")));
+        assert!(!prompt.contains("Instructions from:"));
         assert!(!prompt.contains("secret rules"));
+        assert!(prompt.ends_with("</system_prompt>"));
         let _ = std::fs::remove_dir_all(&root);
     });
 }

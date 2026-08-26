@@ -56,15 +56,14 @@ fn discover_returns_empty_for_empty_root() {
 
 #[test]
 fn render_wraps_content_and_adds_trailing_newline() {
+    i18n::set_locale("en");
     let root = temp_root("render");
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(root.join("AGENTS.md"), "# rules\n").unwrap();
     std::fs::write(root.join("CLAUDE.md"), "no trailing newline").unwrap();
     let text = render_context_files(&[root.join("AGENTS.md"), root.join("CLAUDE.md")]);
-    assert!(text.contains("<context_files path=\"AGENTS.md\">\n# rules\n</context_files>"));
-    assert!(
-        text.contains("<context_files path=\"CLAUDE.md\">\nno trailing newline\n</context_files>")
-    );
+    assert!(text.contains("Instructions from: AGENTS.md\n# rules\n"));
+    assert!(text.contains("Instructions from: CLAUDE.md\nno trailing newline\n"));
     let _ = std::fs::remove_dir_all(&root);
 }
 

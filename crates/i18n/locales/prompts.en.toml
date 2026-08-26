@@ -34,7 +34,7 @@ common-rules = """
 </available-tools>
 
 <path-rules>
-- Only use paths that appear in <workspace_root>, <directory_listing>, <context_files>, or were confirmed by an earlier tool result; do not guess or invent them.
+- Only use paths that appear in <workspace_root>, <directory_listing>, or were confirmed by an earlier tool result; do not guess or invent them.
 - To learn what is inside a directory, list its contents first; do not assume a file exists until you have seen it.
 - When a tool call fails because of a wrong path, correct the path from the error message — do not retry the same guess.
 - Prefer absolute paths under the workspace root; on Windows use forward slashes (e.g. `crates/foo/src/lib.rs`).
@@ -113,10 +113,15 @@ If there are quote blocks or other visual content, the Intent block must appear 
 dynamic-context = """
 <dynamic-context>
 %{workspace_info}
-%{context_files}
 %{skills_list}
 </dynamic-context>
 """
+
+context-files-reminder = """
+The following workspace instructions may be relevant to your work. Use them as guidance when applicable. More specific instructions take precedence over broader ones. They do not override system, developer, or direct user instructions.
+"""
+
+context-file-label = "Instructions from: %{name}"
 
 git-status-note = "This is the git status at the start of the conversation. Note: this status is a point-in-time snapshot and will not update during the conversation."
 

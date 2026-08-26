@@ -19,6 +19,7 @@ pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
     provider: &P,
     config: &Config,
     registry: &FormatRegistry,
+    root: &Path,
 ) {
     loop {
         let menu = build_copy_prompt_menu();
@@ -49,6 +50,9 @@ pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
             }
             super::command::LoopCommand::CopyEnabledTools => {
                 super::handlers::copy_enabled_tools_with_provider(provider, config);
+            }
+            super::command::LoopCommand::CopyContext => {
+                super::handlers::copy_context_with_provider(provider, root);
             }
             super::command::LoopCommand::CopyLineEndingRule => {
                 super::handlers::copy_line_ending_rule_with_provider(provider);
@@ -95,6 +99,14 @@ fn build_copy_prompt_menu() -> Menu {
                 MenuAction::Command(LoopCommand::CopyEnabledTools),
             )
             .unique("copy_prompt_menu_enabled_tools"),
+        )
+        .expect("unique menu key")
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.context"),
+                MenuAction::Command(LoopCommand::CopyContext),
+            )
+            .unique("copy_prompt_menu_context"),
         )
         .expect("unique menu key")
         .add(
@@ -703,6 +715,7 @@ mod tests {
             "cli.copy_prompt.intent_rule",
             "cli.copy_prompt.tool_format",
             "cli.copy_prompt.enabled_tools",
+            "cli.copy_prompt.context",
             "cli.copy_prompt.line_ending",
             "cli.copy_prompt.plan_mode",
             "cli.copy_prompt.switch_mode",
@@ -721,8 +734,14 @@ mod tests {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let mock = manualaid_core::clipboard::MockClipboard::new();
-        push_test_input(&["1", "0"]);
-        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        push_test_input(&["copy_prompt_menu_intent_rule", "0"]);
+        copy_prompt_menu(
+            &mock,
+            &Config::default(),
+            &FormatRegistry::new(),
+            Path::new("."),
+        )
+        .await;
         assert_eq!(
             mock.read().unwrap(),
             i18n::t_str("prompt.system.intent-output-rule")
@@ -736,8 +755,18 @@ mod tests {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let mock = manualaid_core::clipboard::MockClipboard::new();
-        push_test_input(&["4", "5", "0"]);
-        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        push_test_input(&[
+            "copy_prompt_menu_line_ending",
+            "copy_prompt_menu_plan_mode",
+            "0",
+        ]);
+        copy_prompt_menu(
+            &mock,
+            &Config::default(),
+            &FormatRegistry::new(),
+            Path::new("."),
+        )
+        .await;
         // The last copied text is the plan-mode rule because the line-ending
         // rule was written first and then overwritten.
         assert_eq!(
@@ -753,12 +782,42 @@ mod tests {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let mock = manualaid_core::clipboard::MockClipboard::new();
-        push_test_input(&["2", "3", "6", "7", "0"]);
-        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        push_test_input(&[
+            "copy_prompt_menu_tool_format",
+            "copy_prompt_menu_enabled_tools",
+            "copy_prompt_menu_switch_mode",
+            "copy_prompt_menu_task_planning",
+            "0",
+        ]);
+        copy_prompt_menu(
+            &mock,
+            &Config::default(),
+            &FormatRegistry::new(),
+            Path::new("."),
+        )
+        .await;
         assert_eq!(
             mock.read().unwrap(),
             i18n::t_str("prompt.copy.task-planning-rule")
         );
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_copies_context_block() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        let root = crate::test_support::temp_dir("copy-prompt-context-menu");
+        std::fs::write(root.join("AGENTS.md"), "# project rules").unwrap();
+        push_test_input(&["copy_prompt_menu_context", "0"]);
+        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new(), &root).await;
+        let copied = mock.read().unwrap();
+        assert!(copied.starts_with("<system-reminder>\n"));
+        assert!(copied.contains("Instructions from: AGENTS.md"));
+        assert!(copied.contains("# project rules"));
+        assert!(copied.ends_with("</system-reminder>"));
     }
 
     #[allow(clippy::await_holding_lock)]
@@ -769,7 +828,13 @@ mod tests {
         i18n::set_locale("en");
         let mock = manualaid_core::clipboard::MockClipboard::new();
         push_test_input(&["", "0"]);
-        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        copy_prompt_menu(
+            &mock,
+            &Config::default(),
+            &FormatRegistry::new(),
+            Path::new("."),
+        )
+        .await;
     }
 
     #[allow(clippy::await_holding_lock)]
@@ -780,7 +845,13 @@ mod tests {
         i18n::set_locale("en");
         let mock = manualaid_core::clipboard::MockClipboard::new();
         push_test_input(&["invalid", "0"]);
-        copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new()).await;
+        copy_prompt_menu(
+            &mock,
+            &Config::default(),
+            &FormatRegistry::new(),
+            Path::new("."),
+        )
+        .await;
         let output = _capture.text();
         assert!(output.contains(&i18n::t_str("cli.loop.menu_invalid")));
     }

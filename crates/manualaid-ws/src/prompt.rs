@@ -75,11 +75,37 @@ pub fn build_system_prompt(
         "prompt.system.dynamic-context",
         &[
             ("workspace_info", &workspace_info),
-            ("context_files", &context_files_text),
             ("skills_list", &skills_list),
         ],
     ));
     out.push_str("\n</system_prompt>");
+
+    // Context files live outside the system prompt so they are not treated
+    // as system-level instructions; the optional block keeps the output
+    // ending at </system_prompt> when no context file can be rendered.
+    // 上下文文件位于 system prompt 之外，避免被当作系统级指令；无可渲染
+    // 上下文文件时不追加该块，使输出仍以 </system_prompt> 结尾。
+    if !context_files_text.is_empty() {
+        out.push_str("\n\n");
+        out.push_str(&render_context_reminder(&context_files_text));
+    }
+    out
+}
+
+/// Render the full `<system-reminder>` block for the given context-file
+/// text. Shared by the system-prompt builder and the copy-context menu.
+/// 为给定上下文文件文本渲染完整的 `<system-reminder>` 块。系统提示词构建器
+/// 与复制上下文菜单共用。
+pub fn render_context_reminder(context_files_text: &str) -> String {
+    let mut out = String::new();
+    out.push_str("<system-reminder>\n");
+    out.push_str(&i18n::t_str("prompt.system.context-files-reminder"));
+    // The locale value already ends with a newline; this second newline
+    // turns it into the blank line between the reminder and the files.
+    // locale 值已自带换行；此处再补一个换行，使引导语与文件之间空一行。
+    out.push_str("\n");
+    out.push_str(context_files_text);
+    out.push_str("</system-reminder>");
     out
 }
 

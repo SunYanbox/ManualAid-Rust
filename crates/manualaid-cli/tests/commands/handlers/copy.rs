@@ -32,6 +32,10 @@ fn copy_system_prompt_writes_prompt_to_clipboard() {
 #[test]
 fn copy_system_prompt_includes_selected_context_files() {
     let _capture = manualaid_cli::console::capture();
+    let _lock = LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
     let mock = MockClipboard::new();
     let root = common::TempDir::new("copy-prompt-context");
     std::fs::write(root.path().join("AGENTS.md"), "# project rules").unwrap();
@@ -42,13 +46,18 @@ fn copy_system_prompt_includes_selected_context_files() {
         &FormatRegistry::new(),
     );
     let clipboard = mock.read().unwrap();
-    let dynamic = clipboard
-        .split_once("<dynamic-context>")
-        .and_then(|(_, rest)| rest.split_once("</dynamic-context>"))
-        .map(|(inner, _)| inner)
+    let reminder = clipboard
+        .split_once("</system_prompt>")
+        .and_then(|(_, rest)| rest.split_once("<system-reminder>"))
+        .map(|(_, inner)| {
+            inner
+                .split_once("</system-reminder>")
+                .map(|(inner, _)| inner)
+                .unwrap_or_default()
+        })
         .unwrap_or_default();
-    assert!(dynamic.contains("<context_files path=\"AGENTS.md\">"));
-    assert!(dynamic.contains("# project rules"));
+    assert!(reminder.contains("Instructions from: AGENTS.md"));
+    assert!(reminder.contains("# project rules"));
 }
 
 #[test]
