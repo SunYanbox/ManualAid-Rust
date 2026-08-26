@@ -1,6 +1,6 @@
 ---
 files: [
-    doc/zh-cn/规格/Agent规范.md
+    docs/zh-cn/规格/Agent规范.md
 ]
 author: https://github.com/anomalyco
 repo: https://github.com/anomalyco/opencode

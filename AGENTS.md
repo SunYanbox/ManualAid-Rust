@@ -23,7 +23,7 @@
 
 **生成提交消息前，必须先查看相对上一提交的实际变更，再根据该 diff 内容编写消息。严禁仅根据文件列表、对话历史或任何其他上下文推断变更内容。**
 
-详细说明见 `doc/commit-conventions.md`。
+详细说明见 `docs/commit-conventions.md`。
 
 ---
 
@@ -40,15 +40,15 @@
 
 **文档注释格式**：
 - 模块级（`//!`）和函数/结构体（`///`）均需双语（英文在前，中文在后）
-- 格式示例见 `doc/comment-style.md`
+- 格式示例见 `docs/comment-style.md`
 
-详细说明见 `doc/comment-style.md`。
+详细说明见 `docs/comment-style.md`。
 
 ---
 
 ### Issue 与 PR 指南
 
-创建 Issue 或 PR 前，必须先查看 `doc/issue-pr-guide.md` 并遵循其中规范。
+创建 Issue 或 PR 前，必须先查看 `docs/issue-pr-guide.md` 并遵循其中规范。
 
 **核心要求**：
 - 标题遵循提交规范主题行格式（Bug 用 `bug: <简短描述>`，功能请求用 `feat(<范围>): <简短描述>`）。
@@ -56,11 +56,11 @@
 - 创建 PR 时必须根据实际变更添加匹配的 label。
 - 生成 PR 的标题和内容前，必须先查看相对目标分支（基础分支）的实际变更，再根据该 diff 内容编写。严禁仅根据文件列表、对话历史或任何其他上下文推断变更内容。
 
-详细标题、正文模板、标签列表与 PR 检查说明见 `doc/issue-pr-guide.md`。
+详细标题、正文模板、标签列表与 PR 检查说明见 `docs/issue-pr-guide.md`。
 
 ### 测试文件组织与代码占比检查
 
-**编写代码或测试前，必须先阅读 `doc/source-test-organization.md` 了解源码与测试的组织方式。**
+**编写代码或测试前，必须先阅读 `docs/source-test-organization.md` 了解源码与测试的组织方式。**
 
 涉及公共 API 的测试，应优先放置于 `tests` 目录下对应的测试文件中，严禁将大量实现代码与测试代码混杂在同一源文件内。
 可通过 `metron --per-file [PATH]` 命令查看指定路径下代码、注释及测试的占比信息，并注意避免 `crates/*/src/*.rs` 中的源代码（不含测试代码）测试占比过高。通常情况下，直接使用 `metron --per-file crates` 即可完成检查。针对`pub(crate)`或私有 API 的测试

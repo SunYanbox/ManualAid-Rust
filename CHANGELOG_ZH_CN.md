@@ -73,7 +73,7 @@
 
 - Read 工具新增 `show_line_numbers` 和 `show_line_endings` 诊断参数
 - 新增 `AGENTS.md` 开发指南
-- 新增 `doc/comment-style.md`、`doc/commit-conventions.md`、`doc/issue-pr-guide.md` 文档
+- 新增 `docs/comment-style.md`、`docs/commit-conventions.md`、`docs/issue-pr-guide.md` 文档
 - 新增 `scripts/ci.cmd`、`scripts/ci.ps1`、`scripts/ci.sh` CI 检查脚本
 
 ### 变更
@@ -89,7 +89,7 @@
 - 新增 `debug plan_edit`：通过真实校验路径预检 Edit `old_string` 是否匹配，报告出现次数与搜索文本，不修改文件
 - 新增 `debug shell`：预览、确认并执行 Shell 命令，展示 stdout、stderr、退出码与耗时
 - `debug plan_edit` 和 `debug shell` 支持 `@文件路径` 语法从文件读取内容参数
-- 新增 `doc/zh-cn/工具系统/关于XML解析器的逻辑.md` 文档
+- 新增 `docs/zh-cn/工具系统/关于XML解析器的逻辑.md` 文档
 
 ### 变更
 
@@ -162,7 +162,7 @@
 - 新增 Codecov 配置，将覆盖率门槛固定为 80%
 - 新增自动化发布工作流，构建并附带各平台二进制
 - 新增 Windows 和 Linux 安装/卸载脚本 `scripts/setup-cli.*`、`scripts/uninstall-cli.*`
-- 新增 `doc/zh-cn/提示词设计.md`
+- 新增 `docs/zh-cn/提示词设计.md`
 
 ### 变更
 
@@ -210,5 +210,5 @@
 - 新增目录树渲染 `dir_tree.rs`、环境路径辅助 `env.rs`
 - 新增子命令：`init`、`dir`、`mask`、`restore`、`skill`
 - 新增交互式 Agent Copy-Paste Loop：主循环、数字菜单、配置菜单、审批队列、系统提示词生成、粘贴提交、结果复制、会话历史、inline 快捷命令、审批预览与 diff 显示
-- 新增 `doc/zh-cn/` 中文设计文档
+- 新增 `docs/zh-cn/` 中文设计文档
 - 新增大量模块测试与集成测试
