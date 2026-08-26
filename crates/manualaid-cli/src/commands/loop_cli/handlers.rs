@@ -94,6 +94,22 @@ pub fn copy_enabled_tools_with_provider<P: ClipboardProvider>(provider: &P, conf
     write_copied(provider, &text);
 }
 
+/// Copy the selected workspace context files as a full `<system-reminder>`
+/// block. Reuses the same selection flow as system-prompt generation, so the
+/// question is only asked when several context files exist.
+/// 将选中的工作区上下文文件以完整 `<system-reminder>` 块复制到剪贴板。
+/// 复用系统提示词生成时的选择流程，因此仅在存在多个上下文文件时提问。
+pub fn copy_context_with_provider<P: ClipboardProvider>(provider: &P, root: &Path) {
+    let selected = select_context_files(root);
+    if selected.is_empty() {
+        crate::console::out_println!("{}", i18n::t_str("cli.message.no_context_files"));
+        return;
+    }
+    let files_text = manualaid_ws::context::render_context_files(&selected);
+    let text = manualaid_ws::prompt::render_context_reminder(&files_text);
+    write_copied(provider, &text);
+}
+
 /// Copy the line-ending handling prompt to the clipboard.
 /// 将行尾处理提示词复制到剪贴板。
 pub fn copy_line_ending_rule_with_provider<P: ClipboardProvider>(provider: &P) {

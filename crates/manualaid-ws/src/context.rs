@@ -45,11 +45,16 @@ fn read_context_file(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
 }
 
-/// Render one `<context_files>` block per given file. Files that cannot be
-/// read are skipped, and every block ends with a newline.
-/// 为给定文件逐个渲染 `<context_files>` 区块。无法读取的文件被跳过，每个区块以换行结尾。
+/// Render one `Instructions from: <name>` section per given file. Files
+/// that cannot be read are skipped, and every rendered file's content ends
+/// with a newline. The label is localized so the same output works for both
+/// the system-reminder block and the copy-context menu.
+/// 为给定文件逐个渲染 `Instructions from: <name>` 小节。无法读取的文件被
+/// 跳过，每个已渲染文件的内容以换行结尾。标签经过本地化，使同一输出同时
+/// 适用于 system-reminder 块与复制上下文菜单。
 pub fn render_context_files(paths: &[PathBuf]) -> String {
     let mut out = String::new();
+    let label = i18n::t_str("prompt.system.context-file-label");
     for path in paths {
         let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
@@ -57,12 +62,12 @@ pub fn render_context_files(paths: &[PathBuf]) -> String {
         let Some(content) = read_context_file(path) else {
             continue;
         };
-        out.push_str(&format!("<context_files path=\"{name}\">\n"));
+        out.push_str(&label.replace("%{name}", name));
+        out.push('\n');
         out.push_str(&content);
         if !content.ends_with('\n') {
             out.push('\n');
         }
-        out.push_str("</context_files>\n");
     }
     out
 }
