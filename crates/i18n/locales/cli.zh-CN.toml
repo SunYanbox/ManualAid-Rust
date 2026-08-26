@@ -194,6 +194,7 @@ line_ending = "复制行尾处理提示词"
 plan_mode = "复制计划模式提示词"
 switch_mode = "复制切换执行模式提示词"
 task_planning = "复制任务规划提示词"
+compressed_session = "复制压缩会话提示词"
 
 [cli.tool_config]
 title = "工具启用/禁用"

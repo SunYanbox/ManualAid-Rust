@@ -194,6 +194,7 @@ line_ending = "Copy line-ending handling prompt"
 plan_mode = "Copy plan mode prompt"
 switch_mode = "Copy switch execution mode prompt"
 task_planning = "Copy task planning prompt"
+compressed_session = "Copy compressed session prompt"
 
 [cli.tool_config]
 title = "Tools enable/disable"

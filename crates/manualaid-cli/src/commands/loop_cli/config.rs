@@ -66,6 +66,9 @@ pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
             super::command::LoopCommand::CopyTaskPlanningRule => {
                 super::handlers::copy_task_planning_rule_with_provider(provider);
             }
+            super::command::LoopCommand::CopyCompressedSessionPrompt => {
+                super::handlers::copy_compressed_session_prompt_with_provider(provider);
+            }
             _ => {
                 crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
             }
@@ -139,6 +142,14 @@ fn build_copy_prompt_menu() -> Menu {
                 MenuAction::Command(LoopCommand::CopyTaskPlanningRule),
             )
             .unique("copy_prompt_menu_task_planning"),
+        )
+        .expect("unique menu key")
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.compressed_session"),
+                MenuAction::Command(LoopCommand::CopyCompressedSessionPrompt),
+            )
+            .unique("copy_prompt_menu_compressed_session"),
         )
         .expect("unique menu key")
         .add(
@@ -720,6 +731,7 @@ mod tests {
             "cli.copy_prompt.plan_mode",
             "cli.copy_prompt.switch_mode",
             "cli.copy_prompt.task_planning",
+            "cli.copy_prompt.compressed_session",
             "cli.config.back",
         ] {
             assert!(rendered.contains(&i18n::t_str(key)));
@@ -818,6 +830,27 @@ mod tests {
         assert!(copied.contains("Instructions from: AGENTS.md"));
         assert!(copied.contains("# project rules"));
         assert!(copied.ends_with("</system-reminder>"));
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_copies_compressed_session_prompt() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["copy_prompt_menu_compressed_session", "0"]);
+        copy_prompt_menu(
+            &mock,
+            &Config::default(),
+            &FormatRegistry::new(),
+            Path::new("."),
+        )
+        .await;
+        let copied = mock.read().unwrap();
+        assert!(copied.starts_with("<system-reminder>\n"));
+        assert!(copied.ends_with("\n</system-reminder>"));
+        assert!(copied.contains("conversation compression assistant"));
     }
 
     #[allow(clippy::await_holding_lock)]
