@@ -504,12 +504,13 @@ fn format_results_persists_full_output_when_truncated() {
     with_locale("en", || {
         let root = test_workspace_root("persist-full");
         let results = vec![
-            ToolResult::success("read", "χ".repeat(900), true),
+            ToolResult::success("read", "χ".repeat(900), true)
+                .with_params_summary("file_path=\"/a.txt\"".to_string()),
             ToolResult::failure("shell", "λ".repeat(300)),
         ];
         let text = format_results(&results, 600, &root);
         assert!(text.contains("have been saved to"));
-        assert!(text.contains("- read: line 1"));
+        assert!(text.contains("- read (file_path=\"/a.txt\"): line 1"));
         assert!(text.contains("- shell: line"));
 
         // The persisted file must exist under `.ManualAid/temp/` and contain
@@ -525,7 +526,7 @@ fn format_results_persists_full_output_when_truncated() {
         let content = std::fs::read_to_string(saved[0].path()).unwrap();
         assert_eq!(content.matches('χ').count(), 900);
         assert_eq!(content.matches('λ').count(), 300);
-        assert!(content.contains("[TOOL_RESULT read success=true]"));
+        assert!(content.contains("[TOOL_RESULT read success=true params=file_path=\"/a.txt\"]"));
         assert!(content.contains("[END TOOL_RESULT read]"));
         assert!(content.contains("[TOOL_RESULT shell success=false]"));
         assert!(content.contains("[END TOOL_RESULT shell]"));
