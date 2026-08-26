@@ -158,12 +158,7 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             CommandOutcome::Continue
         }
         LoopCommand::CopyRoundResult => {
-            copy_round_result_with_provider(
-                provider,
-                root,
-                session,
-                config.max_result_chars,
-            );
+            copy_round_result_with_provider(provider, root, session, config.max_result_chars);
             CommandOutcome::Continue
         }
         LoopCommand::ConfigMenu => {

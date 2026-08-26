@@ -49,10 +49,7 @@ fn with_locale(lang: &str, f: impl FnOnce()) {
 /// 用于触发截断并写暂存文件的隔离工作区根目录。使用系统临时目录下的
 /// 唯一路径，确保真实工作区永不被触碰。
 fn test_workspace_root(tag: &str) -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "manualaid-ws-prompt-{tag}-{}",
-        std::process::id()
-    ))
+    std::env::temp_dir().join(format!("manualaid-ws-prompt-{tag}-{}", std::process::id()))
 }
 
 #[test]

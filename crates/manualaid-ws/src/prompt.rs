@@ -579,7 +579,10 @@ fn sha256_hex(content: &str) -> String {
 /// 将未截断的完整工具输出写入 `<workspace_root>/.ManualAid/temp/<sha256>.md`。
 /// 返回写入的文件路径以及每个部分在该文件中的 1 基起始行号；目录创建或
 /// 写入失败时返回 `None`。
-fn persist_full_output(parts: &[ResultPart], workspace_root: &Path) -> Option<(PathBuf, Vec<usize>)> {
+fn persist_full_output(
+    parts: &[ResultPart],
+    workspace_root: &Path,
+) -> Option<(PathBuf, Vec<usize>)> {
     let separator = "\n\n";
     let mut full = String::new();
     let mut start_lines = Vec::with_capacity(parts.len());

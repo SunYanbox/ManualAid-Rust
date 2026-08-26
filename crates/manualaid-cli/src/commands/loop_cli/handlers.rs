@@ -259,6 +259,7 @@ pub async fn submit_text(
     .await;
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn submit_text_with_provider<P: ClipboardProvider>(
     provider: &P,
     executor: &Executor,
@@ -353,11 +354,7 @@ pub fn ask_copy() -> bool {
 
 /// Copy the `index`-th latest round (default: latest) to the clipboard.
 /// 把从最新算起的第 `index` 轮（默认最新）复制到剪贴板。
-pub fn copy_round_result(
-    root: &Path,
-    session: &SessionLog,
-    max_result_chars: usize,
-) {
+pub fn copy_round_result(root: &Path, session: &SessionLog, max_result_chars: usize) {
     copy_round_result_with_provider(&RealClipboard, root, session, max_result_chars);
 }
 
@@ -418,8 +415,7 @@ pub(super) fn copy_round_index_with_provider<P: ClipboardProvider>(
     max_result_chars: usize,
 ) {
     let record = session.latest(index).expect("validated index");
-    let content =
-        manualaid_ws::prompt::format_results(&record.results, max_result_chars, root);
+    let content = manualaid_ws::prompt::format_results(&record.results, max_result_chars, root);
     let preview = [
         format_round_header_muted(index, session.len()),
         format_round_detail(record),

@@ -373,12 +373,11 @@ mod tests {
         // 轮总数中输入文本恰好计一次。
         assert!(total >= input_tokens);
         for result in &results {
-            let own_output =
-                tokenx_rs::estimate_token_count(&manualaid_ws::prompt::format_results(
-                    std::slice::from_ref(result),
-                    usize::MAX,
-                    std::path::Path::new(""),
-                )) as u64;
+            let own_output = tokenx_rs::estimate_token_count(&manualaid_ws::prompt::format_results(
+                std::slice::from_ref(result),
+                usize::MAX,
+                std::path::Path::new(""),
+            )) as u64;
             assert_eq!(result.estimated_tokens, input_tokens / 2 + own_output);
         }
     }
