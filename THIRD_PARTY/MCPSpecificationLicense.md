@@ -1,6 +1,6 @@
 ---
 files: [
-    doc/zh-cn/规格/MCP规范.md
+    docs/zh-cn/规格/MCP规范.md
 ]
 author: https://github.com/modelcontextprotocol
 repo: https://github.com/modelcontextprotocol/modelcontextprotocol

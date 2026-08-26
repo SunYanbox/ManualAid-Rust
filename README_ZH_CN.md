@@ -19,7 +19,7 @@
 - **技能系统** — 技能定义为 `SKILL.md` 文件（YAML frontmatter + Markdown 正文），从项目与全局 agent 目录（`.claude/`、`.ManualAid/` 等）发现。仅技能名称与描述加载到系统提示词中；完整指令仅在 Agent 调用 Skill 工具时注入。
 - **会话日志** — 每轮工具调用均记录在内存中；可通过内置命令复制最新第 `i` 轮结果。
 
-详细设计与使用方法请参阅[文档](./doc/zh-cn/README.md)。
+详细设计与使用方法请参阅[文档](./docs/zh-cn/README.md)。
 
 ## 安装
 

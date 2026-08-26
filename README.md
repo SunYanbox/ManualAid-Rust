@@ -17,7 +17,7 @@ A **local-only, human-in-the-loop** copypaste assistant for LLM workflows.
 - **Skill System** — Skills are defined as `SKILL.md` files with YAML frontmatter and Markdown body, discovered from project and global agent directories (`.claude/`, `.ManualAid/`, etc.). Only skill names and descriptions are loaded into the system prompt; full instructions are injected only when the agent calls the Skill tool.
 - **Session Logging** — Every tool call round is recorded in memory; you can copy the latest `i`-th result with built-in commands.
 
-For detailed design and usage, see the [documentation](./doc/zh-cn/README.md).
+For detailed design and usage, see the [documentation](./docs/zh-cn/README.md).
 
 ## Installation
 
