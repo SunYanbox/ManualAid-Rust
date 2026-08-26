@@ -87,10 +87,18 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
             let list = manualaid_ws::prompt::render_tools_list(config, registry);
             let _ = crate::pager::print_paged(&list);
         }
-        ["/c"] => copy_round_result_with_provider(provider, session, config.max_result_chars),
+        ["/c"] => {
+            copy_round_result_with_provider(provider, root, session, config.max_result_chars)
+        }
         ["/c", index] => {
             if let Some(index) = parse_round_index(index, session.len()) {
-                copy_round_index_with_provider(provider, session, index, config.max_result_chars);
+                copy_round_index_with_provider(
+                    provider,
+                    root,
+                    session,
+                    index,
+                    config.max_result_chars,
+                );
             } else {
                 crate::console::out_println!(
                     "{}",

@@ -164,6 +164,7 @@ pub async fn paste_and_submit_with_provider<P: ClipboardProvider>(
     provider: &P,
     executor: &Executor,
     registry: &FormatRegistry,
+    root: &Path,
     session: &mut SessionLog,
     options: &mut LoopOptions,
     max_result_chars: usize,
@@ -183,6 +184,7 @@ pub async fn paste_and_submit_with_provider<P: ClipboardProvider>(
         provider,
         executor,
         registry,
+        root,
         session,
         options,
         &text,
@@ -204,6 +206,7 @@ const INPUT_END_MARKER: &str = "/end";
 pub async fn input_and_submit(
     executor: &Executor,
     registry: &FormatRegistry,
+    root: &Path,
     session: &mut SessionLog,
     options: &mut LoopOptions,
     max_result_chars: usize,
@@ -223,6 +226,7 @@ pub async fn input_and_submit(
     submit_text(
         executor,
         registry,
+        root,
         session,
         options,
         &text,
@@ -236,6 +240,7 @@ pub async fn input_and_submit(
 pub async fn submit_text(
     executor: &Executor,
     registry: &FormatRegistry,
+    root: &Path,
     session: &mut SessionLog,
     options: &mut LoopOptions,
     text: &str,
@@ -245,6 +250,7 @@ pub async fn submit_text(
         &RealClipboard,
         executor,
         registry,
+        root,
         session,
         options,
         text,
@@ -257,6 +263,7 @@ pub async fn submit_text_with_provider<P: ClipboardProvider>(
     provider: &P,
     executor: &Executor,
     registry: &FormatRegistry,
+    root: &Path,
     session: &mut SessionLog,
     options: &mut LoopOptions,
     text: &str,
@@ -267,6 +274,7 @@ pub async fn submit_text_with_provider<P: ClipboardProvider>(
         Ok((calls, results, stats)) => {
             finish_round_with_provider(
                 provider,
+                root,
                 session,
                 options,
                 max_result_chars,
@@ -291,6 +299,7 @@ pub async fn submit_text_with_provider<P: ClipboardProvider>(
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn finish_round_with_provider<P: ClipboardProvider>(
     provider: &P,
+    root: &Path,
     session: &mut SessionLog,
     options: &mut LoopOptions,
     max_result_chars: usize,
@@ -318,6 +327,7 @@ pub(super) async fn finish_round_with_provider<P: ClipboardProvider>(
         && let Err(e) = provider.write(&manualaid_ws::prompt::format_results(
             &results,
             max_result_chars,
+            root,
         ))
     {
         eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
@@ -343,12 +353,17 @@ pub fn ask_copy() -> bool {
 
 /// Copy the `index`-th latest round (default: latest) to the clipboard.
 /// 把从最新算起的第 `index` 轮（默认最新）复制到剪贴板。
-pub fn copy_round_result(session: &SessionLog, max_result_chars: usize) {
-    copy_round_result_with_provider(&RealClipboard, session, max_result_chars);
+pub fn copy_round_result(
+    root: &Path,
+    session: &SessionLog,
+    max_result_chars: usize,
+) {
+    copy_round_result_with_provider(&RealClipboard, root, session, max_result_chars);
 }
 
 pub fn copy_round_result_with_provider<P: ClipboardProvider>(
     provider: &P,
+    root: &Path,
     session: &SessionLog,
     max_result_chars: usize,
 ) {
@@ -367,7 +382,9 @@ pub fn copy_round_result_with_provider<P: ClipboardProvider>(
     crate::console::flush();
     let input = read_line().unwrap_or_default();
     match parse_round_index(&input, session.len()) {
-        Some(index) => copy_round_index_with_provider(provider, session, index, max_result_chars),
+        Some(index) => {
+            copy_round_index_with_provider(provider, root, session, index, max_result_chars)
+        }
         None => crate::console::out_println!(
             "{}",
             t_fmt(
@@ -395,12 +412,14 @@ const COPY_PREVIEW_MAX_LINES: usize = 10;
 
 pub(super) fn copy_round_index_with_provider<P: ClipboardProvider>(
     provider: &P,
+    root: &Path,
     session: &SessionLog,
     index: usize,
     max_result_chars: usize,
 ) {
     let record = session.latest(index).expect("validated index");
-    let content = manualaid_ws::prompt::format_results(&record.results, max_result_chars);
+    let content =
+        manualaid_ws::prompt::format_results(&record.results, max_result_chars, root);
     let preview = [
         format_round_header_muted(index, session.len()),
         format_round_detail(record),
