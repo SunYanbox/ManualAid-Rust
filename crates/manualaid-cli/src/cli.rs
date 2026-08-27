@@ -28,6 +28,68 @@ impl From<ModeArg> for manualaid_core::audit::SessionMode {
     }
 }
 
+/// The prompt kind accepted by the `copy` subcommand.
+/// `copy` 子命令接受的提示词类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CopyKind {
+    /// (`system`) Generate the workspace system prompt.
+    /// 生成工作区系统提示词。
+    #[value(alias = "system")]
+    SystemPrompt,
+    /// (`compress`) Copy the compressed-session reminder prompt.
+    /// 复制压缩会话提醒提示词。
+    #[value(alias = "compress")]
+    CompressedSession,
+    /// (`intent`) Copy the intent-output-rule prompt.
+    /// 复制意图输出规则提示词。
+    #[value(alias = "intent")]
+    IntentRule,
+    /// (`tool-fmt`) Copy the tool-calling format description.
+    /// 复制工具调用格式说明。
+    #[value(alias = "tool-fmt")]
+    ToolFormat,
+    /// Copy the currently enabled tool names.
+    /// 复制当前已启用的工具名称。
+    EnabledTools,
+    /// (`ctx`) Copy the workspace context files block.
+    /// 复制工作区上下文文件块。
+    #[value(alias = "ctx")]
+    Context,
+    /// (`line-ending`) Copy the line-ending handling prompt.
+    /// 复制行尾处理提示词。
+    #[value(alias = "line-ending")]
+    LineEndingRule,
+    /// (`plan`) Copy the plan-mode prompt.
+    /// 复制计划模式提示词。
+    #[value(alias = "plan")]
+    PlanModeRule,
+    /// (`build`) Copy the switch-execution-mode prompt.
+    /// 复制切换执行模式提示词。
+    #[value(alias = "build")]
+    SwitchModeRule,
+    /// (`task`) Copy the task-planning prompt.
+    /// 复制任务规划提示词。
+    #[value(alias = "task")]
+    TaskPlanningRule,
+}
+
+/// Context-file selection modes for `copy system-prompt` and
+/// `copy context`.
+/// `copy system-prompt` 与 `copy context` 的上下文文件选择模式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ContextFilesSpec {
+    /// Load the first discovered context file (usually `AGENTS.md`).
+    /// 加载发现的第一个上下文文件（通常是 `AGENTS.md`）。
+    #[value(name = "First")]
+    First,
+    /// Load all discovered context files.
+    /// 加载发现的全部上下文文件。
+    All,
+    /// Load no context files.
+    /// 不加载任何上下文文件。
+    None,
+}
+
 /// The parsed command line arguments.
 /// 解析后的命令行参数。
 #[derive(Parser, Debug)]
@@ -114,6 +176,19 @@ pub enum Command {
         /// 清理时跳过确认提示
         #[arg(long)]
         yes: bool,
+    },
+    /// Copy a prompt snippet to the clipboard.
+    /// 将提示词片段复制到剪贴板。
+    Copy {
+        /// Which prompt snippet to copy
+        /// 要复制的提示词片段
+        kind: CopyKind,
+        /// Which context files to load; only used by `system-prompt` and
+        /// `context` (defaults to `First`, the first discovered file)
+        /// 要加载的上下文文件；仅 `system-prompt` 与 `context` 使用
+        /// （默认 `First`，即第一个发现的文件）
+        #[arg(long, default_value = "First")]
+        context_files: Option<ContextFilesSpec>,
     },
 }
 

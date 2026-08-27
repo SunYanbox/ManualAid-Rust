@@ -6,15 +6,17 @@
 
 use std::path::Path;
 
-use crate::cli::{Cli, Command};
+use crate::cli::{Cli, Command, ContextFilesSpec};
 use crate::env::default_message;
 use crate::{format_default_output, format_error_output, style};
 
+mod copy;
 pub mod debug;
 mod dir;
 mod init;
 pub mod loop_cli;
 
+pub use copy::run_copy;
 pub use debug::{
     run_mask, run_mask_with_home, run_plan_edit, run_restore, run_shell_debug, run_skill,
     run_skill_with_home, run_whitelist,
@@ -71,6 +73,14 @@ pub fn run(cli: Cli, home: Option<&Path>) -> Result<(), String> {
             };
             run_dir(action, project, global, limit, depth, yes, home)
         }
+        Some(Command::Copy {
+            kind,
+            context_files,
+        }) => run_copy(
+            kind,
+            cli.lang,
+            context_files.unwrap_or(ContextFilesSpec::First),
+        ),
     }
 }
 
