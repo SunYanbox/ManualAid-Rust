@@ -737,4 +737,17 @@ mod tests {
             CommandOutcome::ExitLoop
         );
     }
+
+    #[test]
+    fn report_copy_error_handles_err_without_panicking() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+
+        // `report_copy_error` prints the localized clipboard error to stderr;
+        // this test only proves the Err branch is exercised without panic.
+        // `report_copy_error` 将本地化剪贴板错误打印到 stderr；此测试仅证明
+        // Err 分支被覆盖且不会 panic。
+        report_copy_error(Err("mock clipboard failure".to_string()));
+    }
 }

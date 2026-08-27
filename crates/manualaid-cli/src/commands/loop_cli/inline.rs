@@ -520,4 +520,29 @@ mod tests {
             "/clear",
         );
     }
+
+    #[test]
+    fn inline_ws_copy_write_error_leaves_clipboard_empty() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+
+        // `/ws` prints the localized clipboard error to stderr and leaves the
+        // mock clipboard empty because the write was rejected.
+        // `/ws` 将本地化剪贴板错误打印到 stderr，由于写入被拒绝，mock
+        // 剪贴板保持为空。
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/ws",
+        );
+        assert!(mock.read().unwrap().is_empty());
+    }
 }
