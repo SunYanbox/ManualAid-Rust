@@ -1,7 +1,7 @@
 //! Menu action handlers for the interactive loop.
 //! 交互式 loop 的菜单动作处理函数。
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use manualaid_core::executor::Executor;
 use manualaid_core::parser::FormatRegistry;
@@ -32,19 +32,40 @@ pub fn copy_system_prompt_with_provider<P: ClipboardProvider>(
     config: &Config,
     root: &Path,
     registry: &FormatRegistry,
-) {
-    let start = std::time::Instant::now();
+) -> Result<(), String> {
     let context_files = if config.context_auto_load {
         select_context_files(root)
     } else {
         Vec::new()
     };
+    copy_system_prompt_with_context_files_with_provider(
+        provider,
+        config,
+        root,
+        registry,
+        &context_files,
+    )
+}
+
+/// Copy the system prompt built from an explicit context-file list. The
+/// caller decides which files to load so the non-interactive `copy`
+/// subcommand can pass `--context-files` directly without asking questions.
+/// 从显式上下文文件列表构建并复制系统提示词。由调用方决定加载哪些文件，
+/// 使非交互的 `copy` 子命令可直接传递 `--context-files` 而不提问。
+pub fn copy_system_prompt_with_context_files_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    config: &Config,
+    root: &Path,
+    registry: &FormatRegistry,
+    context_files: &[PathBuf],
+) -> Result<(), String> {
+    let start = std::time::Instant::now();
     let text = manualaid_ws::prompt::build_system_prompt(
         config,
         root,
         registry,
         &all_skills(),
-        &context_files,
+        context_files,
     );
     let tokens = tokenx_rs::estimate_token_count(&text);
     let mut block = vec![
@@ -57,22 +78,20 @@ pub fn copy_system_prompt_with_provider<P: ClipboardProvider>(
             &[("tokens", &tokens.to_string())],
         ),
     ];
-    match provider.write(&text) {
-        Ok(()) => block.insert(0, i18n::t_str("cli.message.prompt_copied")),
-        Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
-    }
+    provider.write(&text)?;
+    block.insert(0, i18n::t_str("cli.message.prompt_copied"));
     print_muted_block(&block);
+    Ok(())
 }
 
 /// Copy the intent-output-rule text to the clipboard so the user can
 /// paste it into an external LLM chat to re-emphasise the rule mid-session.
 /// 将意图规则文本复制到剪贴板，方便用户在外部 LLM 聊天中途重新强调该规则。
-pub fn copy_intent_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+pub fn copy_intent_rule_with_provider<P: ClipboardProvider>(provider: &P) -> Result<(), String> {
     let text = i18n::t_str("prompt.system.intent-output-rule");
-    match provider.write(&text) {
-        Ok(()) => print_muted_block(&[i18n::t_str("cli.message.intent_rule_copied")]),
-        Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
-    }
+    provider.write(&text)?;
+    print_muted_block(&[i18n::t_str("cli.message.intent_rule_copied")]);
+    Ok(())
 }
 
 /// Copy the current tool-calling format description to the clipboard.
@@ -81,17 +100,20 @@ pub fn copy_tool_format_with_provider<P: ClipboardProvider>(
     provider: &P,
     config: &Config,
     registry: &FormatRegistry,
-) {
+) -> Result<(), String> {
     let text = manualaid_ws::prompt::tool_calling_format_description(config, registry);
-    write_copied(provider, &text);
+    write_copied(provider, &text)
 }
 
 /// Copy the names of the currently enabled tools to the clipboard.
 /// 将当前已启用工具的名称复制到剪贴板。
-pub fn copy_enabled_tools_with_provider<P: ClipboardProvider>(provider: &P, config: &Config) {
+pub fn copy_enabled_tools_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    config: &Config,
+) -> Result<(), String> {
     let tools = config.enabled_tool_names().join(", ");
     let text = t_fmt("prompt.copy.enabled-tools", &[("tools", &tools)]);
-    write_copied(provider, &text);
+    write_copied(provider, &text)
 }
 
 /// Copy the selected workspace context files as a full `<system-reminder>`
@@ -99,43 +121,65 @@ pub fn copy_enabled_tools_with_provider<P: ClipboardProvider>(provider: &P, conf
 /// question is only asked when several context files exist.
 /// 将选中的工作区上下文文件以完整 `<system-reminder>` 块复制到剪贴板。
 /// 复用系统提示词生成时的选择流程，因此仅在存在多个上下文文件时提问。
-pub fn copy_context_with_provider<P: ClipboardProvider>(provider: &P, root: &Path) {
+pub fn copy_context_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    root: &Path,
+) -> Result<(), String> {
     let selected = select_context_files(root);
-    if selected.is_empty() {
+    copy_context_with_context_files_with_provider(provider, root, &selected)
+}
+
+/// Copy the workspace context files block from an explicit file list. The
+/// caller decides which files to load so the non-interactive `copy`
+/// subcommand can pass `--context-files` directly without asking questions.
+/// 从显式文件列表复制工作区上下文文件块。由调用方决定加载哪些文件，
+/// 使非交互的 `copy` 子命令可直接传递 `--context-files` 而不提问。
+pub fn copy_context_with_context_files_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    _root: &Path,
+    context_files: &[PathBuf],
+) -> Result<(), String> {
+    if context_files.is_empty() {
         crate::console::out_println!("{}", i18n::t_str("cli.message.no_context_files"));
-        return;
+        return Ok(());
     }
-    let files_text = manualaid_ws::context::render_context_files(&selected);
+    let files_text = manualaid_ws::context::render_context_files(context_files);
     let text = manualaid_ws::prompt::render_context_reminder(&files_text);
-    write_copied(provider, &text);
+    write_copied(provider, &text)
 }
 
 /// Copy the line-ending handling prompt to the clipboard.
 /// 将行尾处理提示词复制到剪贴板。
-pub fn copy_line_ending_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+pub fn copy_line_ending_rule_with_provider<P: ClipboardProvider>(
+    provider: &P,
+) -> Result<(), String> {
     let text = i18n::t_str("prompt.copy.line-ending-rule");
-    write_copied(provider, &text);
+    write_copied(provider, &text)
 }
 
 /// Copy the plan-mode prompt to the clipboard.
 /// 将计划模式提示词复制到剪贴板。
-pub fn copy_plan_mode_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+pub fn copy_plan_mode_rule_with_provider<P: ClipboardProvider>(provider: &P) -> Result<(), String> {
     let text = i18n::t_str("prompt.copy.plan-mode-rule");
-    write_copied(provider, &text);
+    write_copied(provider, &text)
 }
 
 /// Copy the switch-execution-mode prompt to the clipboard.
 /// 将切换执行模式提示词复制到剪贴板。
-pub fn copy_switch_mode_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+pub fn copy_switch_mode_rule_with_provider<P: ClipboardProvider>(
+    provider: &P,
+) -> Result<(), String> {
     let text = i18n::t_str("prompt.copy.switch-mode-rule");
-    write_copied(provider, &text);
+    write_copied(provider, &text)
 }
 
 /// Copy the task-planning prompt to the clipboard.
 /// 将任务规划提示词复制到剪贴板。
-pub fn copy_task_planning_rule_with_provider<P: ClipboardProvider>(provider: &P) {
+pub fn copy_task_planning_rule_with_provider<P: ClipboardProvider>(
+    provider: &P,
+) -> Result<(), String> {
     let text = i18n::t_str("prompt.copy.task-planning-rule");
-    write_copied(provider, &text);
+    write_copied(provider, &text)
 }
 
 /// Copy the compressed-session prompt wrapped in a `<system-reminder>`
@@ -143,19 +187,20 @@ pub fn copy_task_planning_rule_with_provider<P: ClipboardProvider>(provider: &P)
 /// fixed so external LLM chats always receive the same structure.
 /// 将包裹在 `<system-reminder>` 块中的压缩会话提示词复制到剪贴板。
 /// 正文本地化；包裹标签固定，确保外部 LLM 聊天始终收到相同结构。
-pub fn copy_compressed_session_prompt_with_provider<P: ClipboardProvider>(provider: &P) {
+pub fn copy_compressed_session_prompt_with_provider<P: ClipboardProvider>(
+    provider: &P,
+) -> Result<(), String> {
     let body = i18n::t_str("prompt.copy.compressed-session");
     let text = format!("<system-reminder>\n{}\n</system-reminder>", body.trim());
-    write_copied(provider, &text);
+    write_copied(provider, &text)
 }
 
 /// Write prompt text to the clipboard and print the shared confirmation.
 /// 将提示词文本写入剪贴板并打印统一的确认信息。
-fn write_copied<P: ClipboardProvider>(provider: &P, text: &str) {
-    match provider.write(text) {
-        Ok(()) => print_muted_block(&[i18n::t_str("cli.loop.copied")]),
-        Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
-    }
+fn write_copied<P: ClipboardProvider>(provider: &P, text: &str) -> Result<(), String> {
+    provider.write(text)?;
+    print_muted_block(&[i18n::t_str("cli.loop.copied")]);
+    Ok(())
 }
 
 /// Read the clipboard and submit its text as one round.

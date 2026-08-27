@@ -12,7 +12,7 @@ use manualaid_ws::session::BatchRecord;
 
 /// Translate `key` and replace `%{name}` placeholders.
 /// 翻译 `key` 并替换 `%{name}` 占位符。
-pub(super) fn t_fmt(key: &str, args: &[(&str, &str)]) -> String {
+pub(crate) fn t_fmt(key: &str, args: &[(&str, &str)]) -> String {
     let mut template = i18n::t_str(key);
     for (name, value) in args {
         template = template.replace(&format!("%{{{name}}}"), value);
@@ -22,7 +22,7 @@ pub(super) fn t_fmt(key: &str, args: &[(&str, &str)]) -> String {
 
 /// Format one config-file validation issue as a user-facing warning line.
 /// 把一条配置校验问题格式化为面向用户的警告行。
-pub(super) fn format_config_issue(issue: &ConfigIssue) -> String {
+pub(crate) fn format_config_issue(issue: &ConfigIssue) -> String {
     match issue.kind {
         ConfigIssueKind::InvalidValue => t_fmt(
             "cli.warning.invalid_config_value",
@@ -151,7 +151,7 @@ fn clear_command_status(
 /// values are ignored so a typo never breaks the loop startup.
 /// 把显式传入的 `-l/--lang` 覆盖到会话配置。非法值会被忽略，避免拼写
 /// 错误导致 loop 无法启动。
-pub(super) fn apply_cli_lang(cli_lang: Option<String>, config: &mut Config) {
+pub(crate) fn apply_cli_lang(cli_lang: Option<String>, config: &mut Config) {
     if let Some(lang) = cli_lang.filter(|lang| Config::is_valid_lang(lang)) {
         config.lang = lang;
     }
@@ -231,7 +231,7 @@ fn changed_global_hint(path: &str, key: &str, value: &str, default: &str) -> Str
 
 /// Apply the configured format label to the registry.
 /// 将配置的格式标签应用到注册表。
-pub(super) fn apply_format_mode(registry: &FormatRegistry, config: &Config) -> Result<(), String> {
+pub(crate) fn apply_format_mode(registry: &FormatRegistry, config: &Config) -> Result<(), String> {
     let mode = RegistryMode::from_label(&config.tool_call_format)
         .ok_or_else(|| format!("Unknown format label `{}`", config.tool_call_format))?;
     registry.set_mode(mode).map_err(|e| e.to_string())

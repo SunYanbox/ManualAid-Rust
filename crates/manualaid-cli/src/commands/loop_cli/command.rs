@@ -26,6 +26,17 @@ use super::utils::{
     print_muted_block, t_fmt,
 };
 
+/// Print the clipboard error produced by a copy handler in the TUI command
+/// path. The handlers return `Result` so the non-interactive `copy`
+/// subcommand can propagate failures to its exit code.
+/// 在 TUI 命令路径中打印复制处理函数产生的剪贴板错误。处理函数返回
+/// `Result`，使非交互的 `copy` 子命令能把失败传播为退出码。
+fn report_copy_error(result: Result<(), String>) {
+    if let Err(e) = result {
+        eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+    }
+}
+
 /// The result of running a command.
 /// 执行命令的结果。
 #[derive(Debug, PartialEq, Eq)]
@@ -129,7 +140,9 @@ pub(super) async fn run_command<P: ClipboardProvider>(
     let session = &mut *ctx.session;
     match cmd {
         LoopCommand::GeneratePrompt => {
-            copy_system_prompt_with_provider(provider, config, root, registry);
+            report_copy_error(copy_system_prompt_with_provider(
+                provider, config, root, registry,
+            ));
             CommandOutcome::Continue
         }
         LoopCommand::PasteAndSubmit => {
@@ -177,7 +190,7 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             CommandOutcome::Continue
         }
         LoopCommand::CopyIntentRule => {
-            copy_intent_rule_with_provider(provider);
+            report_copy_error(copy_intent_rule_with_provider(provider));
             CommandOutcome::Continue
         }
         LoopCommand::CopyPromptMenu => {
@@ -188,11 +201,11 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             CommandOutcome::Continue
         }
         LoopCommand::CopyToolFormat => {
-            copy_tool_format_with_provider(provider, config, registry);
+            report_copy_error(copy_tool_format_with_provider(provider, config, registry));
             CommandOutcome::Continue
         }
         LoopCommand::CopyEnabledTools => {
-            copy_enabled_tools_with_provider(provider, config);
+            report_copy_error(copy_enabled_tools_with_provider(provider, config));
             CommandOutcome::Continue
         }
         LoopCommand::CopyContext => {
@@ -202,19 +215,19 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             CommandOutcome::Continue
         }
         LoopCommand::CopyLineEndingRule => {
-            copy_line_ending_rule_with_provider(provider);
+            report_copy_error(copy_line_ending_rule_with_provider(provider));
             CommandOutcome::Continue
         }
         LoopCommand::CopyPlanModeRule => {
-            copy_plan_mode_rule_with_provider(provider);
+            report_copy_error(copy_plan_mode_rule_with_provider(provider));
             CommandOutcome::Continue
         }
         LoopCommand::CopySwitchModeRule => {
-            copy_switch_mode_rule_with_provider(provider);
+            report_copy_error(copy_switch_mode_rule_with_provider(provider));
             CommandOutcome::Continue
         }
         LoopCommand::CopyTaskPlanningRule => {
-            copy_task_planning_rule_with_provider(provider);
+            report_copy_error(copy_task_planning_rule_with_provider(provider));
             CommandOutcome::Continue
         }
         LoopCommand::CopyCompressedSessionPrompt => {

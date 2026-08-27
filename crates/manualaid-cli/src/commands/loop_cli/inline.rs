@@ -82,7 +82,11 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
     // Commands with optional positional arguments.
     // 带可选位置参数的命令。
     match parts.as_slice() {
-        ["/ws"] => copy_system_prompt_with_provider(provider, config, root, registry),
+        ["/ws"] => {
+            if let Err(e) = copy_system_prompt_with_provider(provider, config, root, registry) {
+                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+            }
+        }
         ["/tools"] => {
             let list = manualaid_ws::prompt::render_tools_list(config, registry);
             let _ = crate::pager::print_paged(&list);

@@ -13,6 +13,17 @@ use super::command::LoopCommand;
 use super::menu::{Menu, MenuAction, MenuItem};
 use super::utils::{format_changelog_text, mode_label, t_fmt};
 
+/// Print the clipboard error produced by a copy handler in the TUI. The
+/// handlers return `Result` now so the non-interactive `copy` subcommand can
+/// propagate failures to its exit code; the TUI keeps the previous message.
+/// 在 TUI 中打印复制处理函数产生的剪贴板错误。处理函数现在返回 `Result`，
+/// 使非交互的 `copy` 子命令能把失败传播为退出码；TUI 保持原有提示文案。
+fn report_copy_error(result: Result<(), String>) {
+    if let Err(e) = result {
+        eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+    }
+}
+
 /// The copy-prompt submenu: copy reusable prompt snippets to the clipboard.
 /// 复制提示词二级菜单：将可复用的提示词片段复制到剪贴板。
 pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
@@ -43,31 +54,43 @@ pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
         match command {
             super::command::LoopCommand::Back => break,
             super::command::LoopCommand::CopyIntentRule => {
-                super::handlers::copy_intent_rule_with_provider(provider);
+                report_copy_error(super::handlers::copy_intent_rule_with_provider(provider));
             }
             super::command::LoopCommand::CopyToolFormat => {
-                super::handlers::copy_tool_format_with_provider(provider, config, registry);
+                report_copy_error(super::handlers::copy_tool_format_with_provider(
+                    provider, config, registry,
+                ));
             }
             super::command::LoopCommand::CopyEnabledTools => {
-                super::handlers::copy_enabled_tools_with_provider(provider, config);
+                report_copy_error(super::handlers::copy_enabled_tools_with_provider(
+                    provider, config,
+                ));
             }
             super::command::LoopCommand::CopyContext => {
-                super::handlers::copy_context_with_provider(provider, root);
+                report_copy_error(super::handlers::copy_context_with_provider(provider, root));
             }
             super::command::LoopCommand::CopyLineEndingRule => {
-                super::handlers::copy_line_ending_rule_with_provider(provider);
+                report_copy_error(super::handlers::copy_line_ending_rule_with_provider(
+                    provider,
+                ));
             }
             super::command::LoopCommand::CopyPlanModeRule => {
-                super::handlers::copy_plan_mode_rule_with_provider(provider);
+                report_copy_error(super::handlers::copy_plan_mode_rule_with_provider(provider));
             }
             super::command::LoopCommand::CopySwitchModeRule => {
-                super::handlers::copy_switch_mode_rule_with_provider(provider);
+                report_copy_error(super::handlers::copy_switch_mode_rule_with_provider(
+                    provider,
+                ));
             }
             super::command::LoopCommand::CopyTaskPlanningRule => {
-                super::handlers::copy_task_planning_rule_with_provider(provider);
+                report_copy_error(super::handlers::copy_task_planning_rule_with_provider(
+                    provider,
+                ));
             }
             super::command::LoopCommand::CopyCompressedSessionPrompt => {
-                super::handlers::copy_compressed_session_prompt_with_provider(provider);
+                report_copy_error(
+                    super::handlers::copy_compressed_session_prompt_with_provider(provider),
+                );
             }
             _ => {
                 crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
