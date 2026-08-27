@@ -35,26 +35,27 @@ pub fn run_copy(
     lang: Option<String>,
     context_files: ContextFilesSpec,
 ) -> Result<(), String> {
-    let current_dir = std::env::current_dir()
-        .map_err(|e| t_fmt("cli.error.current_dir", &[("error", &e.to_string())]))?;
-    let home = home_dir().map_err(|e| e.to_string())?;
-    run_copy_at(&current_dir, &home, kind, lang, context_files)
+    run_copy_with_provider(kind, lang, context_files, &RealClipboard)
 }
 
-/// Run `copy` against explicit project and home directories so tests can
-/// target a temporary workspace.
-/// 面向显式项目目录与主目录运行 `copy`，测试可指向临时工作区。
-fn run_copy_at(
-    current_dir: &Path,
-    home: &Path,
+/// Resolve the process working directory and home directory, then run the
+/// copy through an injectable provider so tests can target a temporary
+/// workspace and mock clipboard.
+/// 解析进程工作目录与主目录，再通过可注入提供者执行复制，测试可指向临时
+/// 工作区并模拟剪贴板。
+fn run_copy_with_provider<P: ClipboardProvider>(
     kind: CopyKind,
     lang: Option<String>,
     context_files: ContextFilesSpec,
+    provider: &P,
 ) -> Result<(), String> {
-    run_copy_at_with_provider(current_dir, home, kind, lang, context_files, &RealClipboard)
+    let current_dir = std::env::current_dir()
+        .map_err(|e| t_fmt("cli.error.current_dir", &[("error", &e.to_string())]))?;
+    let home = home_dir().map_err(|e| e.to_string())?;
+    run_copy_at_with_provider(&current_dir, &home, kind, lang, context_files, provider)
 }
 
-/// Shared implementation for `run_copy_at` with an injectable clipboard
+/// Shared implementation for `run_copy` with an injectable clipboard
 /// provider so tests can assert clipboard contents and write failures.
 /// `run_copy_at` 的共享实现，剪贴板提供者可注入，便于测试断言剪贴板内容与写失败。
 fn run_copy_at_with_provider<P: ClipboardProvider>(

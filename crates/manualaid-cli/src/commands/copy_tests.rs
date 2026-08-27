@@ -185,6 +185,8 @@ fn static_copy_kinds_produce_expected_reminder_content() {
     let cases = [
         (CopyKind::CompressedSession, "<system-reminder>"),
         (CopyKind::IntentRule, ""),
+        (CopyKind::ToolFormat, ""),
+        (CopyKind::EnabledTools, ""),
         (CopyKind::LineEndingRule, ""),
         (CopyKind::PlanModeRule, ""),
         (CopyKind::SwitchModeRule, ""),
@@ -209,6 +211,72 @@ fn static_copy_kinds_produce_expected_reminder_content() {
             assert!(copied.contains(expected_marker), "{kind:?}");
         }
     }
+}
+
+#[test]
+fn run_copy_with_provider_uses_process_directories() {
+    let _capture = crate::console::capture();
+    let _lang = crate::test_support::acquire_locale_lock();
+    let _skills = crate::test_support::SKILL_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _cwd = crate::test_support::CWD_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
+    let root = crate::test_support::temp_dir("copy-run-with-provider");
+    let original = std::env::current_dir().unwrap();
+    std::env::set_current_dir(&root).unwrap();
+    let mock = MockClipboard::new();
+
+    let result = run_copy_with_provider(
+        CopyKind::IntentRule,
+        Some("en".to_string()),
+        ContextFilesSpec::None,
+        &mock,
+    );
+
+    std::env::set_current_dir(&original).unwrap();
+    result.unwrap();
+    let copied = mock.read().unwrap();
+    assert_eq!(copied, i18n::t_str("prompt.system.intent-output-rule"));
+}
+
+#[test]
+fn copy_reports_config_validation_issues() {
+    let _capture = crate::console::capture();
+    let _lang = crate::test_support::acquire_locale_lock();
+    let _skills = crate::test_support::SKILL_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
+    let root = crate::test_support::temp_dir("copy-config-issue");
+    let manualaid_dir = root.join(".ManualAid");
+    std::fs::create_dir_all(&manualaid_dir).unwrap();
+    std::fs::write(
+        manualaid_dir.join("config.toml"),
+        "[global]\nlang = \"xx\"\n",
+    )
+    .unwrap();
+    let mock = MockClipboard::new();
+    let home = crate::test_support::temp_dir("copy-config-issue-home");
+
+    run_copy_at_with_provider(
+        &root,
+        &home,
+        CopyKind::IntentRule,
+        Some("en".to_string()),
+        ContextFilesSpec::None,
+        &mock,
+    )
+    .unwrap();
+
+    let output = _capture.text();
+    assert!(!output.is_empty(), "config issue warning should be printed");
+    assert!(
+        output.contains("lang"),
+        "warning should mention the lang key"
+    );
 }
 
 #[test]

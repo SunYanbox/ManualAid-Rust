@@ -90,6 +90,7 @@ stdout 重定向与剪贴板测试同理：通过 mock 或输出断言隔离外�
 以下文件暂不纳入覆盖率提升要求：
 - `crates/manualaid-core/src/user_dir.rs`：其错误分支依赖操作系统状态，Windows 下 `dirs` 会调用 KnownFolder API，测试进程内无法模拟 `None` 场景。
 - `crates/i18n/src/init.rs`：仅包含一行编译期宏调用，不存在可执行的运行时逻辑。
+- `crates/manualaid-cli/src/commands/copy.rs`：`run_copy` 公开入口唯一使用真实系统剪贴板，按剪贴板隔离规范不应在测试中直接操作真实剪贴板；可注入 provider 的核心分发路径已由单元测试覆盖。
 
 ### 测试编写规范
 
