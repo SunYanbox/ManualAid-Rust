@@ -82,7 +82,11 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
     // Commands with optional positional arguments.
     // 带可选位置参数的命令。
     match parts.as_slice() {
-        ["/ws"] => copy_system_prompt_with_provider(provider, config, root, registry),
+        ["/ws"] => {
+            if let Err(e) = copy_system_prompt_with_provider(provider, config, root, registry) {
+                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+            }
+        }
         ["/tools"] => {
             let list = manualaid_ws::prompt::render_tools_list(config, registry);
             let _ = crate::pager::print_paged(&list);
@@ -515,5 +519,30 @@ mod tests {
             &mut options,
             "/clear",
         );
+    }
+
+    #[test]
+    fn inline_ws_copy_write_error_leaves_clipboard_empty() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+
+        // `/ws` prints the localized clipboard error to stderr and leaves the
+        // mock clipboard empty because the write was rejected.
+        // `/ws` 将本地化剪贴板错误打印到 stderr，由于写入被拒绝，mock
+        // 剪贴板保持为空。
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/ws",
+        );
+        assert!(mock.read().unwrap().is_empty());
     }
 }

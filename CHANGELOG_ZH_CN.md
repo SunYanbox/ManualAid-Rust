@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 新增
+
+- `manualaid-cli` 新增 `copy` 子命令，无需进入 TUI 即可复制 10 种提示词片段；其中 `system-prompt` 与 `context` 支持 `--context-files` 覆盖开关（取值 `all`/`none`/`First`，默认 `First`），`--lang` 对子命令生效，剪贴板写失败返回非零退出码
+
 ## [0.9.0] - 2026-08-26
 
 ### 新增

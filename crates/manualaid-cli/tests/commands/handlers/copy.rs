@@ -25,7 +25,8 @@ fn copy_system_prompt_writes_prompt_to_clipboard() {
         &Config::default(),
         root.path(),
         &FormatRegistry::new(),
-    );
+    )
+    .unwrap();
     let clipboard = mock.read().unwrap();
     assert!(clipboard.contains("\"tool_use\": \"read\""));
 }
@@ -45,7 +46,8 @@ fn copy_system_prompt_includes_selected_context_files() {
         &Config::default(),
         root.path(),
         &FormatRegistry::new(),
-    );
+    )
+    .unwrap();
     let clipboard = mock.read().unwrap();
     let reminder = clipboard
         .split_once("</system_prompt>")
@@ -70,7 +72,7 @@ fn copy_context_with_no_files_prints_notice_and_keeps_clipboard_empty() {
     i18n::set_locale("en");
     let mock = MockClipboard::new();
     let root = common::TempDir::new("copy-context-empty");
-    copy_context_with_provider(&mock, root.path());
+    copy_context_with_provider(&mock, root.path()).unwrap();
     assert!(mock.read().unwrap().is_empty());
     assert!(
         _capture
@@ -85,12 +87,14 @@ fn copy_system_prompt_with_write_error_does_not_panic() {
     let mock = MockClipboard::new();
     mock.set_write_error("mock write failure");
     let root = common::TempDir::new("copy-prompt-err");
-    copy_system_prompt_with_provider(
+    let err = copy_system_prompt_with_provider(
         &mock,
         &Config::default(),
         root.path(),
         &FormatRegistry::new(),
-    );
+    )
+    .unwrap_err();
+    assert_eq!(err, "mock write failure");
     assert!(mock.read().unwrap().is_empty());
 }
 
@@ -103,7 +107,7 @@ fn copy_intent_rule_writes_rule_text_to_clipboard() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     i18n::set_locale("en");
     let mock = MockClipboard::new();
-    copy_intent_rule_with_provider(&mock);
+    copy_intent_rule_with_provider(&mock).unwrap();
     let clipboard = mock.read().unwrap();
     assert_eq!(clipboard, i18n::t_str("prompt.system.intent-output-rule"));
     assert!(!clipboard.is_empty());
@@ -119,7 +123,8 @@ fn copy_intent_rule_with_write_error_does_not_panic() {
     i18n::set_locale("en");
     let mock = MockClipboard::new();
     mock.set_write_error("mock write failure");
-    copy_intent_rule_with_provider(&mock);
+    let err = copy_intent_rule_with_provider(&mock).unwrap_err();
+    assert_eq!(err, "mock write failure");
     assert!(mock.read().unwrap().is_empty());
 }
 
@@ -133,7 +138,7 @@ fn copy_tool_format_writes_current_format_to_clipboard() {
     i18n::set_locale("en");
     let mock = MockClipboard::new();
     let registry = FormatRegistry::new();
-    copy_tool_format_with_provider(&mock, &Config::default(), &registry);
+    copy_tool_format_with_provider(&mock, &Config::default(), &registry).unwrap();
     let clipboard = mock.read().unwrap();
     assert!(clipboard.contains(&i18n::t_str("cli.prompt.func_calls_notes")));
     assert!(clipboard.contains("\"tool_use\": \"read\""));
@@ -148,7 +153,7 @@ fn copy_enabled_tools_writes_names_only_to_clipboard() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     i18n::set_locale("en");
     let mock = MockClipboard::new();
-    copy_enabled_tools_with_provider(&mock, &Config::default());
+    copy_enabled_tools_with_provider(&mock, &Config::default()).unwrap();
     let clipboard = mock.read().unwrap();
     assert!(clipboard.contains("read"));
     assert!(clipboard.contains("edit"));
@@ -170,7 +175,7 @@ fn copy_enabled_tools_respects_disabled_switch() {
         shell: false,
         ..Config::default()
     };
-    copy_enabled_tools_with_provider(&mock, &config);
+    copy_enabled_tools_with_provider(&mock, &config).unwrap();
     let clipboard = mock.read().unwrap();
     assert!(!clipboard.contains("shell"));
     assert!(clipboard.contains("read"));
@@ -186,25 +191,25 @@ fn copy_rule_prompts_write_expected_text_to_clipboard() {
     i18n::set_locale("en");
     let cases = [
         (
-            copy_line_ending_rule_with_provider as fn(&MockClipboard),
+            copy_line_ending_rule_with_provider as fn(&MockClipboard) -> Result<(), String>,
             i18n::t_str("prompt.copy.line-ending-rule"),
         ),
         (
-            copy_plan_mode_rule_with_provider as fn(&MockClipboard),
+            copy_plan_mode_rule_with_provider as fn(&MockClipboard) -> Result<(), String>,
             i18n::t_str("prompt.copy.plan-mode-rule"),
         ),
         (
-            copy_switch_mode_rule_with_provider as fn(&MockClipboard),
+            copy_switch_mode_rule_with_provider as fn(&MockClipboard) -> Result<(), String>,
             i18n::t_str("prompt.copy.switch-mode-rule"),
         ),
         (
-            copy_task_planning_rule_with_provider as fn(&MockClipboard),
+            copy_task_planning_rule_with_provider as fn(&MockClipboard) -> Result<(), String>,
             i18n::t_str("prompt.copy.task-planning-rule"),
         ),
     ];
     for (copy_fn, expected) in cases {
         let mock = MockClipboard::new();
-        copy_fn(&mock);
+        copy_fn(&mock).unwrap();
         assert_eq!(mock.read().unwrap(), expected);
     }
 }
@@ -218,15 +223,16 @@ fn copy_rule_prompts_with_write_error_do_not_panic() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     i18n::set_locale("en");
     let copy_fns = [
-        copy_line_ending_rule_with_provider as fn(&MockClipboard),
-        copy_plan_mode_rule_with_provider as fn(&MockClipboard),
-        copy_switch_mode_rule_with_provider as fn(&MockClipboard),
-        copy_task_planning_rule_with_provider as fn(&MockClipboard),
+        copy_line_ending_rule_with_provider as fn(&MockClipboard) -> Result<(), String>,
+        copy_plan_mode_rule_with_provider as fn(&MockClipboard) -> Result<(), String>,
+        copy_switch_mode_rule_with_provider as fn(&MockClipboard) -> Result<(), String>,
+        copy_task_planning_rule_with_provider as fn(&MockClipboard) -> Result<(), String>,
     ];
     for copy_fn in copy_fns {
         let mock = MockClipboard::new();
         mock.set_write_error("mock write failure");
-        copy_fn(&mock);
+        let err = copy_fn(&mock).unwrap_err();
+        assert_eq!(err, "mock write failure");
         assert!(mock.read().unwrap().is_empty());
     }
 }
@@ -240,7 +246,7 @@ fn copy_compressed_session_prompt_writes_verbatim_text() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     i18n::set_locale("en");
     let mock = MockClipboard::new();
-    copy_compressed_session_prompt_with_provider(&mock);
+    copy_compressed_session_prompt_with_provider(&mock).unwrap();
     let copied = mock.read().unwrap();
     assert!(copied.starts_with("<system-reminder>\n"));
     assert!(copied.ends_with("\n</system-reminder>"));
@@ -259,7 +265,7 @@ fn copy_compressed_session_prompt_writes_localized_chinese_text() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     i18n::set_locale("zh-CN");
     let mock = MockClipboard::new();
-    copy_compressed_session_prompt_with_provider(&mock);
+    copy_compressed_session_prompt_with_provider(&mock).unwrap();
     let copied = mock.read().unwrap();
     assert!(copied.starts_with("<system-reminder>\n"));
     assert!(copied.ends_with("\n</system-reminder>"));

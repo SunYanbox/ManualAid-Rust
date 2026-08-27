@@ -41,23 +41,25 @@ pub use utils::{
 // handlers 重导出供 tests/commands/handlers.rs 集成测试使用；
 // 不带 provider 的薄包装保持私有。
 pub use handlers::{
-    ask_copy, copy_compressed_session_prompt_with_provider, copy_context_with_provider,
+    ask_copy, copy_compressed_session_prompt_with_provider,
+    copy_context_with_context_files_with_provider, copy_context_with_provider,
     copy_enabled_tools_with_provider, copy_intent_rule_with_provider,
     copy_line_ending_rule_with_provider, copy_plan_mode_rule_with_provider, copy_round_result,
     copy_round_result_with_provider, copy_switch_mode_rule_with_provider,
-    copy_system_prompt_with_provider, copy_task_planning_rule_with_provider,
-    copy_tool_format_with_provider, input_and_submit, paste_and_submit_with_provider,
-    print_session_summary, show_tool_history, submit_text, submit_text_with_provider,
-    truncate_preview_lines,
+    copy_system_prompt_with_context_files_with_provider, copy_system_prompt_with_provider,
+    copy_task_planning_rule_with_provider, copy_tool_format_with_provider, input_and_submit,
+    paste_and_submit_with_provider, print_session_summary, show_tool_history, submit_text,
+    submit_text_with_provider, truncate_preview_lines,
 };
 
 use command::{CommandOutcome, run_command};
 use inline::handle_inline_command;
 use menu::{MenuAction, build_main_menu};
-use utils::{
-    apply_cli_lang, apply_format_mode, clear_screen, format_config_issue, mode_hint, read_line,
-    sync_global_config, t_fmt,
-};
+use utils::{clear_screen, mode_hint, read_line, sync_global_config};
+// Re-exported for the sibling `copy` subcommand, which reuses the same
+// initialization steps as the interactive loop.
+// 为同级的 `copy` 子命令重新导出，使其复用交互式 loop 的初始化步骤。
+pub(crate) use utils::{apply_cli_lang, apply_format_mode, format_config_issue, t_fmt};
 
 /// How the user answered one approval-queue item.
 /// 用户对单个审批队列项的答复。
