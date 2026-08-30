@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 变更
+
+- 意图输出规则从 `<rules>` 内移出，改为在规则块前渲染的独立 `<system-reminder>`；规则内容替换为新的 `# Intent`/`# ToolCall`/`# Clarify`/`# Answer` 格式，并移除 `capabilities` 中重复的意图说明
+
 ## [0.10.0] - 2026-08-27
 
 ### 新增

@@ -45,13 +45,13 @@ pub fn build_system_prompt(
     out.push('\n');
     out.push_str(&i18n::t_str("prompt.copy.task-planning-rule"));
     out.push('\n');
-    let intent_output_rule = i18n::t_str("prompt.system.intent-output-rule");
+    out.push_str(&i18n::t_str("prompt.system.intent-output-rule"));
+    out.push('\n');
     out.push_str(&t_fmt(
         "prompt.system.common-rules",
         &[
             ("current_tool_format_description", &format_desc),
             ("tools_list", &tools_list),
-            ("intent_output_rule", &intent_output_rule),
         ],
     ));
     if skill_active {
