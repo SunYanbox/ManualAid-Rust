@@ -59,6 +59,11 @@
 
 > `docs/changelog/CHANGELOG_ZH_CN.md` 被内置更新日志查看器编译嵌入并解析（`crates/i18n`），必须保持 `## [版本]` / `## [Unreleased]` 块结构。
 
+**维护规则**：
+- `[Unreleased]` 标题必须始终保留，不可删除。
+- 日常新增内容时，直接在 `[Unreleased]` 下添加对应子标题（`### 新增`、`### 变更`、`### 修复` 等）。
+- 发布新版本时，将 `[Unreleased]` 下所有内容移至新版本标题（如 `## [x.y.z] - yyyy-mm-dd`）下，然后保留一个空白的 `[Unreleased]` 标题供后续使用。
+
 ## PR 检查
 
 CI（`.github/workflows/ci.yml`）在变更涉及 `crates/**`、`Cargo.toml`、`Cargo.lock`、`.github/workflows/**`、`codecov.yml` 时自动运行格式、lint、编译、文档与测试等检查；无代码变更时无需在本地手动运行 `./scripts/ci.*`。
