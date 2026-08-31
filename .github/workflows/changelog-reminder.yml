@@ -50,6 +50,8 @@ jobs:
         with:
           header: changelog-reminder  # 唯一标识符，用于更新同一评论
           message: |
+            ## ChangeLog Check Report
+
             👋 Thank you for your PR! Changes have been detected in the `crates/`, `Cargo.toml`, `Cargo.lock`, or `.github/` directories, but no updates to `CHANGELOG*.md` files were found.
 
             If this PR has an impact on users or developers, please consider updating the CHANGELOG. If not, you may ignore this message.
@@ -59,3 +61,19 @@ jobs:
             👋 感谢你的 PR！检测到 `crates/`、`Cargo.toml`、`Cargo.lock` 或 `.github/` 目录有变更，但未发现 `CHANGELOG*.md` 文件的更新。
 
             如果此 PR 对用户或开发者有影响，请考虑更新 CHANGELOG。如果不需要，可以忽略此消息。
+
+      # 步骤4：如果 CHANGELOG 已更新，且存在旧提醒评论，则将其更新为通过状态
+      - name: Update CHANGELOG reminder to success status
+        if: steps.changelog_check.outputs.changelog_exists == 'true'
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: changelog-reminder
+          create: false  # 仅当评论已存在时才更新，若不存在则跳过
+          message: |
+            ## ChangeLog Check Report
+
+            :white_check_mark: Thank you for updating the CHANGELOG!
+
+            ---
+
+            :white_check_mark: 感谢你更新了 CHANGELOG！
