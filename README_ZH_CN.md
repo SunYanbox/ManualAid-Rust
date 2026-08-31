@@ -7,17 +7,19 @@
 ![GitHub License](https://img.shields.io/github/license/SunYanbox/ManualAid-Rust)
 ![Codecov](https://img.shields.io/codecov/c/github/SunYanbox/ManualAid-Rust)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/SunYanbox/ManualAid-Rust/.github%2Fworkflows%2Fci.yml)
+[![Changelog](https://img.shields.io/badge/Changelog-View-blue)](CHANGELOG_ZH_CN.md)
 
-一款**纯本地、需人工介入**的复制粘贴助手，专为 LLM 工作流设计。
+一款**纯本地、需人工介入**的复制粘贴助手，专为 LLM 工作流设计，基于提示词工程驱动。
 
 > 当前项目为对原 `ManualAid（Python 版）` 的基于 Rust 的重构版本。
 
 ## 功能特性
 
-- **交互式 Agent Loop** — 无参数运行 `manualaid-cli` 进入交互式会话。系统构建上下文感知提示词（工作区布局、git 状态、已启用工具、已加载技能），你将其粘贴到 LLM 聊天中，然后将 LLM 返回的工具调用响应粘贴回来。ManualAid 解析、审计、执行工具，并将结果返回用于下一轮对话。
+- **基于提示词工程的交互式 Agent Loop** — 无参数运行 `manualaid-cli` 进入交互式会话。系统基于提示词工程原则构建上下文感知提示词（工作区布局、git 状态、已启用工具、已加载技能），你将其粘贴到 LLM 聊天中，然后将 LLM 返回的工具调用响应粘贴回来。ManualAid 解析、审计、执行工具，并将结果返回用于下一轮对话。
 - **工具系统** — 内置工具：`Read`、`Edit`、`Write`、`Shell` 和 `Skill`。读取操作即时执行；编辑/写入操作默认需要用户明确审批（`manual` 模式），工作区内的变更可使用 `accept-edit` 模式自动放行。
 - **技能系统** — 技能定义为 `SKILL.md` 文件（YAML frontmatter + Markdown 正文），从项目与全局 agent 目录（`.claude/`、`.ManualAid/` 等）发现。仅技能名称与描述加载到系统提示词中；完整指令仅在 Agent 调用 Skill 工具时注入。
-- **会话日志** — 每轮工具调用均记录在内存中；可通过内置命令复制最新第 `i` 轮结果。
+- **会话日志与监控** — 每轮工具调用均记录执行耗时与 Token 估算；可通过内置命令查看内存占用与历史轮次。
+- **实用命令** — 通过 `copy` 子命令快速复制系统提示词、上下文片段与压缩会话摘要；通过 `debug` 子命令安全验证编辑操作与预览 Shell 命令。
 
 详细设计与使用方法请参阅[文档](./docs/zh-cn/README.md)。
 

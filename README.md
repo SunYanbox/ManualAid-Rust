@@ -7,15 +7,17 @@
 ![GitHub License](https://img.shields.io/github/license/SunYanbox/ManualAid-Rust)
 ![Codecov](https://img.shields.io/codecov/c/github/SunYanbox/ManualAid-Rust)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/SunYanbox/ManualAid-Rust/.github%2Fworkflows%2Fci.yml)
+[![Changelog](https://img.shields.io/badge/Changelog-View-blue)](CHANGELOG_ZH_CN.md)
 
-A **local-only, human-in-the-loop** copypaste assistant for LLM workflows.
+A **local-only, human-in-the-loop** copypaste assistant for LLM workflows, powered by prompt engineering.
 
 ## Features
 
-- **Interactive Agent Loop** — Run `manualaid-cli` with no arguments to start an interactive session. The system builds a context-aware prompt (workspace layout, git status, enabled tools, loaded skills), you paste it into an LLM chat, then paste the LLM's tool-call response back. ManualAid parses, audits, executes the tools, and returns the results for the next turn.
+- **Prompt-Engineering Driven Interactive Loop** — Run `manualaid-cli` with no arguments to start an interactive session. The system builds a context-aware prompt (workspace layout, git status, enabled tools, loaded skills) based on prompt engineering principles; you paste it into an LLM chat, then paste the LLM's tool-call response back. ManualAid parses, audits, executes the tools, and returns the results for the next turn.
 - **Tool System** — Built-in tools: `Read`, `Edit`, `Write`, `Shell`, and `Skill`. Read operations are immediate; edit/write operations require explicit user approval by default (`manual` mode), with an `accept-edit` mode available for workspace-internal changes.
 - **Skill System** — Skills are defined as `SKILL.md` files with YAML frontmatter and Markdown body, discovered from project and global agent directories (`.claude/`, `.ManualAid/`, etc.). Only skill names and descriptions are loaded into the system prompt; full instructions are injected only when the agent calls the Skill tool.
-- **Session Logging** — Every tool call round is recorded in memory; you can copy the latest `i`-th result with built-in commands.
+- **Session Logging & Monitoring** — Every tool call round is recorded with execution duration and token estimation; inspect memory usage and historical rounds with built-in commands.
+- **Utility Commands** — Quickly copy system prompts, context snippets, and compressed session summaries with the `copy` subcommand; validate edits and preview shell commands safely with the `debug` subcommand.
 
 For detailed design and usage, see the [documentation](./docs/zh-cn/README.md).
 
