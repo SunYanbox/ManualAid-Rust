@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 新增 `.github/workflows/changelog-reminder.yml` 工作流：在 PR 检测到 `crates/`、`Cargo.toml`、`Cargo.lock` 或 `.github/` 目录变更时，若未更新 `CHANGELOG*.md` 则发布提醒评论；若后续更新了 CHANGELOG，则自动将已有评论更新为通过状态。
+
 ### 变更
 
 - 意图输出规则从 `<rules>` 内移出，改为在规则块前渲染的独立 `<system-reminder>`；规则内容替换为新的 `# Intent`/`# ToolCall`/`# Clarify`/`# Answer` 格式，并移除 `capabilities` 中重复的意图说明
