@@ -76,7 +76,7 @@ whitelist_ignored = "Ignored dangerous entries (%{count})"
 more = "(press q to quit, any other key to continue)"
 
 [cli.approval]
-denied_result = "Operation denied by user: %{reason}"
+denied_result = "Operation denied by user"
 description = "Description: %{description}"
 item = "[%{tool}] parameter `%{param}` needs approval: %{reason}"
 

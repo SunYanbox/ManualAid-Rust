@@ -76,7 +76,7 @@ whitelist_ignored = "已忽略的危险条目（%{count} 条）"
 more = "（按 q 退出，按其他键继续）"
 
 [cli.approval]
-denied_result = "操作已被用户拒绝：%{reason}"
+denied_result = "操作已被用户拒绝"
 description = "描述：%{description}"
 item = "[%{tool}] 参数 `%{param}` 需要批准：%{reason}"
 
