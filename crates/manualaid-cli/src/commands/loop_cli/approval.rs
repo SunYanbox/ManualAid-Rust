@@ -128,12 +128,7 @@ pub async fn execute_round_with_approval(
             continue;
         }
         if !approved[index] {
-            let decision = item.pending.first().map(|(_, d)| d);
-            results.push(denied_result(
-                &item.call,
-                decision,
-                denied_texts[index].clone(),
-            ));
+            results.push(denied_result(&item.call, denied_texts[index].clone()));
             continue;
         }
         // Auto-approved calls (AcceptEdit) skip the approval preview, so
@@ -206,22 +201,17 @@ fn estimate_round_tokens(input: &str, results: &mut [ToolResult]) -> u64 {
 }
 
 /// Build the failure result of a denied call.
+///
+/// The default message states only that the operation was denied; the
+/// command is already present in the result's parameter summary, so
+/// repeating the audit reason would distract the model and carry no extra
+/// information.
 /// 构建被拒绝调用的失败结果。
-pub(super) fn denied_result(
-    call: &ParsedToolCall,
-    decision: Option<&AuditDecision>,
-    denied_text: Option<String>,
-) -> ToolResult {
-    let output = if let Some(text) = denied_text {
-        text
-    } else {
-        match decision {
-            Some(AuditDecision::NeedsApproval(reason)) | Some(AuditDecision::Denied(reason)) => {
-                t_fmt("cli.approval.denied_result", &[("reason", reason)])
-            }
-            _ => i18n::t_str("cli.approval.denied_result"),
-        }
-    };
+///
+/// 默认提示只声明操作已被拒绝；命令已包含在结果的参数摘要中，重复审计
+/// 原因只会分散模型注意力，不带来额外信息。
+pub(super) fn denied_result(call: &ParsedToolCall, denied_text: Option<String>) -> ToolResult {
+    let output = denied_text.unwrap_or_else(|| i18n::t_str("cli.approval.denied_result"));
     ToolResult::failure(&call.tool_name, output).with_params_summary(params_summary_of(
         ToolKind::from_name(&call.tool_name),
         &call.params,
@@ -321,29 +311,16 @@ mod tests {
 
     #[test]
     fn denied_result_prefers_typed_text() {
-        let result = denied_result(&parsed_call(), None, Some("use the other tool".into()));
+        let result = denied_result(&parsed_call(), Some("use the other tool".into()));
         assert!(!result.success);
         assert_eq!(result.output, "use the other tool");
-    }
-
-    #[test]
-    fn denied_result_uses_decision_reason() {
-        let call = parsed_call();
-        let needs = denied_result(
-            &call,
-            Some(&AuditDecision::NeedsApproval("blocked".into())),
-            None,
-        );
-        assert!(needs.output.contains("blocked"));
-        let denied = denied_result(&call, Some(&AuditDecision::Denied("rejected".into())), None);
-        assert!(denied.output.contains("rejected"));
     }
 
     #[test]
     fn denied_result_falls_back_to_default_message() {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
-        let result = denied_result(&parsed_call(), None, None);
+        let result = denied_result(&parsed_call(), None);
         assert!(result.output.contains("denied"));
     }
 

@@ -57,7 +57,7 @@ async fn approved_round_executes_tools() {
 }
 
 #[tokio::test]
-async fn denied_round_returns_failure_with_reason() {
+async fn denied_round_returns_default_failure_without_reason() {
     let _capture = manualaid_cli::console::capture();
     let root = std::env::temp_dir().join("manualaid-loop-ws");
     // An absolute path next to the workspace root stays outside the
@@ -77,10 +77,13 @@ async fn denied_round_returns_failure_with_reason() {
             .await
             .unwrap();
     assert!(!results[0].success);
-    // The audit reason embeds the original path, so this assertion holds in
-    // every locale without pinning the process-wide i18n setting.
-    // 审计原因包含原始路径，断言在所有语言下都成立，无需固定进程级 locale。
-    assert!(results[0].output.contains(&*outside));
+    // The default denial message is just the denial statement; the command
+    // lives in the parameter summary, so the audit reason must not be
+    // repeated. This holds in every locale without pinning process i18n.
+    // 默认拒绝提示只是单纯的拒绝声明；命令位于参数摘要中，不应重复审计
+    // 原因。该断言在所有语言下都成立，无需固定进程级 locale。
+    assert!(!results[0].output.is_empty());
+    assert!(!results[0].output.contains(&*outside));
 }
 
 #[tokio::test]
