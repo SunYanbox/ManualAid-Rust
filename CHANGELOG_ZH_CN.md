@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-09-05
+
 ### 新增
 
 - Skill 工具成功执行时，返回的 `invoke_skill` JSON 头部新增 `path` 字段，值为技能文件夹绝对路径（`/` 分隔），供 Agent 解析技能内 `scripts/`、`references/` 等相对资源路径
