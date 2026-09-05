@@ -333,7 +333,8 @@ async fn edit_missing_old_string_crlf_only_diff() {
     let result = ToolKind::Edit.run(&params).await;
     assert!(!result.success);
     assert!(result.output.contains("line endings differ"));
-    assert!(result.output.contains("CRLF"));
+    assert!(result.output.contains("switch the line endings"));
+    assert!(result.output.contains("uses CRLF"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -349,7 +350,8 @@ async fn edit_missing_old_string_crlf_reverse_only_diff() {
     let result = ToolKind::Edit.run(&params).await;
     assert!(!result.success);
     assert!(result.output.contains("line endings differ"));
-    assert!(result.output.contains("`old_string` uses CRLF"));
+    assert!(result.output.contains("switch the line endings"));
+    assert!(result.output.contains("uses LF"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -365,6 +367,8 @@ async fn edit_missing_old_string_mixed_line_endings() {
     let result = ToolKind::Edit.run(&params).await;
     assert!(!result.success);
     assert!(result.output.contains("line endings differ"));
+    assert!(result.output.contains("switch the line endings"));
+    assert!(result.output.contains("uses LF"));
     let _ = std::fs::remove_file(&path);
 }
 
