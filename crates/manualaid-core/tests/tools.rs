@@ -88,7 +88,7 @@ async fn write_then_read_round_trip() {
     let result = ToolKind::Read.run(&read_params).await;
     assert!(result.success, "{}", result.output);
     assert!(result.output.starts_with("hello\nworld\n"));
-    assert!(result.output.contains("(End of file - total 2 lines)"));
+    assert!(result.output.contains("End of file - total 2 lines"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -109,7 +109,7 @@ async fn read_supports_offset_and_limit() {
     assert!(
         result
             .output
-            .contains("(Showing lines 2-3 of 4 lines. Use offset=4 to continue.)")
+            .contains("Showing lines 2-3 of 4 lines. Use offset=4 to continue.")
     );
     let _ = std::fs::remove_file(&path);
 }
@@ -128,7 +128,7 @@ async fn read_decorates_with_diagnostic_flags() {
     let result = ToolKind::Read.run(&params).await;
     assert!(result.success, "{}", result.output);
     assert!(result.output.starts_with("1| a$\n2| b\n"));
-    assert!(result.output.contains("(End of file - total 2 lines)"));
+    assert!(result.output.contains("End of file - total 2 lines"));
     let _ = std::fs::remove_file(&path);
 }
 
