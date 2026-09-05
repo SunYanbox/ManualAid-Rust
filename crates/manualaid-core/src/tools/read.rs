@@ -57,21 +57,18 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
     if !output.is_empty() && !output.ends_with('\n') {
         output.push('\n');
     }
-    match footer.strip_suffix(')') {
-        Some(prefix) => {
-            // Separate the range marker from the line-ending note with one
-            // sentence break. Some footer variants already end with a period
-            // (the "Use offset=... to continue." form), so avoid doubling it.
-            // 用句号分隔范围标记与行尾说明；部分页脚变体本身以句号结尾
-            // （如 Use offset=... to continue.），需避免重复句号。
-            let separator = if prefix.ends_with('.') { "" } else { "." };
-            output.push_str(&format!("{prefix}{separator} {summary})\n"));
-        }
-        None => {
-            output.push_str(&footer);
-            output.push('\n');
-        }
-    }
+    // `read_footer` always ends its marker with ')' and the summary is
+    // appended inside the same parentheses. `trim_end_matches` avoids an
+    // unreachable fallback branch for a footer without ')'. Some footer
+    // variants already end with a period ("Use offset=... to continue."),
+    // so the separator avoids doubling it.
+    // `read_footer` 始终以 ')' 结束其标记，行尾摘要拼入同一括号内。
+    // `trim_end_matches` 省去了 footer 不含 ')' 时不可达的回退分支。
+    // 部分页脚变体本身以句号结尾（Use offset=... to continue.），
+    // 分隔符避免重复句号。
+    let prefix = footer.trim_end_matches(')');
+    let separator = if prefix.ends_with('.') { "" } else { "." };
+    output.push_str(&format!("{prefix}{separator} {summary})\n"));
 
     ToolResult::success("read", output, true)
 }
