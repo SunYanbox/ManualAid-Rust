@@ -155,25 +155,31 @@ fn line_ending_mismatch(content: &str, old: &str) -> Option<String> {
         return None;
     }
 
-    let content_crlf = content.contains("\r\n");
-    let old_crlf = old.contains("\r\n");
-    let content_lf = content.contains('\n') && !content_crlf;
-    let old_lf = old.contains('\n') && !old_crlf;
+    // The normalized forms match, so simply switching the line endings of
+    // `old_string` (and `new_string`) to the file's style makes the edit
+    // apply to the existing content.
+    // 归一化后即可匹配，因此只需将 `old_string`（及 `new_string`）的换行
+    // 切换为文件该片段的换行风格，即可让编辑命中现有内容。
+    let actionable = "Note: line endings differ — switch the line endings of `old_string` \
+                      and `new_string` to match the file's style and retry"
+        .to_string();
 
-    if content_crlf && old_lf {
-        return Some(
-            "Note: line endings differ — file uses CRLF, `old_string` uses LF".to_string(),
-        );
-    }
-    if old_crlf && content_lf {
-        return Some(
-            "Note: line endings differ — `old_string` uses CRLF, file uses LF".to_string(),
-        );
-    }
+    // Try the CRLF and LF variants directly against the original content.
+    // This avoids byte offsets that would drift after CRLF->LF normalization.
+    // 直接在原始内容上尝试 CRLF 与 LF 两种变体，避免 CRLF->LF 归一化后
+    // 字节偏移漂移的问题。
+    let crlf_variant = old_normalized.replace('\n', "\r\n");
+    let uses_crlf = !old_normalized.is_empty() && content.contains(&crlf_variant);
 
-    // Fallback: line endings differ but neither side is clearly CRLF/LF-only.
-    // 回退：换行风格不同，但无法明确归类为仅 CRLF 或仅 LF。
-    Some("Note: line endings differ — try matching the file's line endings".to_string())
+    if uses_crlf {
+        Some(format!(
+            "{actionable}\nHint: the matching snippet in the file uses CRLF"
+        ))
+    } else {
+        Some(format!(
+            "{actionable}\nHint: the matching snippet in the file uses LF"
+        ))
+    }
 }
 
 /// Finds the most similar line or multi-line window in `content` to `old`.
