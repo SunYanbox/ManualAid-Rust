@@ -15,15 +15,22 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
     let skill_name = get_string(params, "skill").unwrap_or_default();
     let args = get_string(params, "args").unwrap_or_default();
 
-    let mut output = json!({
-        "action": "invoke_skill",
-        "skill": skill_name,
-        "args": args,
-    })
-    .to_string();
-
     match get_skill(&skill_name) {
         Some(skill) if skill.is_enabled => {
+            // `path` uses the same `/`-separated form as the config-file skill
+            // keys, so agents can join skill-relative resource paths on every
+            // platform.
+            // `path` 使用与配置文件技能键相同的 `/` 分隔形式，代理可在所有
+            // 平台上拼接技能内的相对资源路径。
+            let skill_path = skill.path.to_string_lossy().replace('\\', "/");
+            let mut output = json!({
+                "action": "invoke_skill",
+                "skill": skill_name,
+                "args": args,
+                "path": skill_path,
+            })
+            .to_string();
+
             if !skill.body.trim().is_empty() {
                 output.push_str("\n\n");
                 output.push_str(&skill.body);

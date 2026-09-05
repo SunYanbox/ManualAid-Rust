@@ -48,10 +48,19 @@ async fn enabled_project_skill_returns_body() {
     let _guard = SKILL_LOCK.lock().await;
     let root = temp_root("enabled");
     setup_project_skill(&root, "demo-skill", "demo description");
+    let skills = manualaid_core::skill::all_skills();
+    let skill = skills
+        .iter()
+        .find(|skill| skill.unique_name == "demo-skill")
+        .expect("skill loaded");
+    let expected_path = skill.path.to_string_lossy().replace('\\', "/");
+
     let result = ToolKind::Skill.run(&skill_params("demo-skill")).await;
     assert!(result.success, "{}", result.output);
     assert!(result.output.contains("body text"));
     assert!(result.output.contains("invoke_skill"));
+    assert!(result.output.contains("\"path\""));
+    assert!(result.output.contains(&expected_path));
     reset_skills();
     let _ = std::fs::remove_dir_all(&root);
 }
