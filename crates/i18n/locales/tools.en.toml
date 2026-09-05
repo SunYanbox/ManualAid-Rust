@@ -37,6 +37,7 @@ Read a file from the local filesystem.
 - You can optionally specify a line offset and limit (especially useful for long files), but it is recommended to read the entire file by omitting these parameters.
 - Reading a directory, a missing file, or an empty file will return an error or system notice, not content.
 - Do not re-read a file you just edited to verify — if the change fails, Edit/Write will report an error, and the system tracks file state for you.
+- The footer reports the file's line-ending style: `LF` (default), `CRLF`, or mixed. For per-line inspection of mixed endings, enable `show_line_endings`.
 """
 
 [tool.read.param.file_path]
@@ -52,7 +53,7 @@ desc = "The number of lines to read. Only provide if the file is too large to re
 desc = "Display absolute 1-based line numbers in cat -n format (right-aligned numbers + `| ` marker). Only provide when detailed line numbers are needed."
 
 [tool.read.param.show_line_endings]
-desc = "Display line endings in cat -E format: `$` for LF, `^M$` for CRLF. Only provide when you need to confirm file line-ending style."
+desc = "Display line endings in cat -E format: `$` for LF, `^M$` for CRLF. Only provide when you need per-line inspection of mixed line-ending styles; the footer already reports consistent LF or CRLF."
 
 [tool.edit]
 desc = """

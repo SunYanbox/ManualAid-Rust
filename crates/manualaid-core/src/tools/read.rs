@@ -47,15 +47,28 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
         sliced
     };
 
-    // Append the range/count marker as a separate line so the model can
-    // tell how much of the file was returned and how to continue.
-    // 将范围/行数标记作为独立行追加，使模型知道返回了文件的多少内容以及如何继续。
+    // Append the range/count marker and the line-ending summary as a single
+    // parenthesized footer line so the model can tell how much of the file was
+    // returned, how to continue, and which line-ending style the file uses.
+    // 将范围/行数标记与行尾摘要合并为同一括号内的页脚行，使模型同时知道
+    // 返回了多少内容、如何继续，以及文件使用的行尾风格。
     let footer = read_footer(&content, offset, limit);
+    let summary = line_ending_summary(&content);
     if !output.is_empty() && !output.ends_with('\n') {
         output.push('\n');
     }
-    output.push_str(&footer);
-    output.push('\n');
+    // `read_footer` always ends its marker with ')' and the summary is
+    // appended inside the same parentheses. `trim_end_matches` avoids an
+    // unreachable fallback branch for a footer without ')'. Some footer
+    // variants already end with a period ("Use offset=... to continue."),
+    // so the separator avoids doubling it.
+    // `read_footer` 始终以 ')' 结束其标记，行尾摘要拼入同一括号内。
+    // `trim_end_matches` 省去了 footer 不含 ')' 时不可达的回退分支。
+    // 部分页脚变体本身以句号结尾（Use offset=... to continue.），
+    // 分隔符避免重复句号。
+    let prefix = footer.trim_end_matches(')');
+    let separator = if prefix.ends_with('.') { "" } else { "." };
+    output.push_str(&format!("{prefix}{separator} {summary})\n"));
 
     ToolResult::success("read", output, true)
 }
@@ -117,6 +130,32 @@ fn read_footer(content: &str, offset: i64, limit: i64) -> String {
         // 包括 `limit` 超出末尾、`offset > 0, limit == 0` 读到末尾，以及
         // 只给 `limit` 的情况；这些场景都不存在可继续的下一个 offset。
         format!("(Showing lines {start}-{end} of {total} lines)")
+    }
+}
+
+/// Summarize the file's line-ending style for the footer. The returned
+/// fragment is inserted inside the footer parentheses without its own
+/// parentheses or trailing newline. Consistent LF is the default and is
+/// reported compactly; consistent CRLF is called out explicitly because Edit
+/// matching is case-sensitive to it; mixed styles need per-line inspection via
+/// `show_line_endings`.
+/// 为页脚总结文件的行尾风格。返回的片段不带括号与末尾换行，
+/// 由调用方拼入页脚括号内。LF 一致是默认情况，以精简方式报告；
+/// CRLF 一致需明确说明，因为 Edit 匹配对行尾敏感；混合风格需要借助
+/// `show_line_endings` 逐行检查。
+fn line_ending_summary(content: &str) -> &'static str {
+    let has_crlf = content.contains("\r\n");
+    // Detect a bare LF that is not part of a CRLF pair. This distinguishes
+    // mixed endings from a file that only contains CRLF.
+    // 检测不属于 CRLF 的裸 LF，以区分混合行尾与仅含 CRLF 的文件。
+    let has_lone_lf = content.replace("\r\n", "").contains('\n');
+
+    if has_crlf && !has_lone_lf {
+        "File line endings: CRLF"
+    } else if has_crlf {
+        "File line endings: mixed — enable show_line_endings to inspect per line"
+    } else {
+        "File line endings: LF"
     }
 }
 

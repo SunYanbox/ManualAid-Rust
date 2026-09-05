@@ -57,3 +57,23 @@ fn footer_crlf_and_missing_trailing_newline() {
         "(Showing lines 1-1 of 2 lines. Use offset=2 to continue.)"
     );
 }
+
+#[test]
+fn line_ending_summary_detects_lf_only() {
+    assert_eq!(line_ending_summary("a\nb\n"), "File line endings: LF");
+    assert_eq!(line_ending_summary("a"), "File line endings: LF");
+    assert_eq!(line_ending_summary(""), "File line endings: LF");
+}
+
+#[test]
+fn line_ending_summary_detects_crlf_only() {
+    assert_eq!(line_ending_summary("a\r\nb\r\n"), "File line endings: CRLF");
+}
+
+#[test]
+fn line_ending_summary_detects_mixed_endings() {
+    assert_eq!(
+        line_ending_summary("a\r\nb\n"),
+        "File line endings: mixed — enable show_line_endings to inspect per line"
+    );
+}
