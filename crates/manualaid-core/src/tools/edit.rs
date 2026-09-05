@@ -169,7 +169,7 @@ fn line_ending_mismatch(content: &str, old: &str) -> Option<String> {
     // 直接在原始内容上尝试 CRLF 与 LF 两种变体，避免 CRLF->LF 归一化后
     // 字节偏移漂移的问题。
     let crlf_variant = old_normalized.replace('\n', "\r\n");
-    let uses_crlf = !old_normalized.is_empty() && content.contains(&crlf_variant);
+    let uses_crlf = content.contains(&crlf_variant);
 
     if uses_crlf {
         Some(format!(
