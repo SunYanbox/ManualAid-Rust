@@ -1,3 +1,14 @@
+## 开发流程
+
+核心开发流程如下，提交与 PR 相关细节见本文件后续章节与 `docs/issue-pr-guide.md`。
+
+1. **签出新分支**：从最新 `main` 签出分支（先 `git fetch` 拉取最新 `origin/main`）。分支命名沿用 `<type>/<short-desc>` 或 `<type>/<issue>-<desc>` 格式（如 `fix/24-...`、`ci/...`）。
+2. **提交前检查**：暂存（stage）要提交的文件前运行三项本地检查：`cargo fmt`、`cargo clippy -- -D warnings`、`cargo check`。此即每次提交的门槛，无需重复 `fmt -- --check`，也无需在本地每次跑全量 CI。
+3. **全量检查由 PR CI 承担**：跨平台的全量检查（fmt/clippy/doc/test/coverage）由 PR 的 CI（`.github/workflows/ci.yml`）自动运行，本地**不必**每次提交都跑全量 `./scripts/ci.*`。
+4. **创建 PR 前**：更新 CHANGELOG（规则见「CHANGELOG 维护规则」）；尽可能解决基础的测试与覆盖率问题（详见「测试与交付检查」）。
+5. **创建 PR 后**：依据 PR CI 结果继续优化测试与覆盖率。
+6. **PR 严格按模板编写**：PR 正文**必须**按 `.github/pull_request_template.md` 模板编写（见「PR / Issue 规范」），并添加匹配的 label。
+
 ## 包管理与构建工具
 
 本项目统一使用以下工具进行依赖管理和项目构建：
@@ -24,7 +35,7 @@
 - **PR 标签**：依据变更添加匹配 label（如 `bug`, `enhancement`, `documentation`, `refactor`, `prompt`）。
 - **Issue语境**：Issue语境保持过去时，只描述问题发生的背景、发生时的情况等信息。
 
-PR/Issue 正文统一使用以下模板，**生成时必须完整保留模板中的所有空行以确保 Markdown 正确渲染**：
+创建/编辑 PR 时，正文**必须**按 `.github/pull_request_template.md` 模板文件编写，完整保留其 `**Summary**`、`---`、`<details><summary>中文</summary>` 等空行与双语结构；下为与之一致的模板摘要：
 
 ```markdown
 [英文正文]
@@ -73,10 +84,11 @@ PR/Issue 正文统一使用以下模板，**生成时必须完整保留模板中
   - 实现较长或测试需按主题拆分时，采用同名 `.rs` + 同名子目录：文件末尾用 `#[cfg(test)] mod tests;` 指向 `<name>/tests/`；实现仍是单文件时，用 `#[cfg(test)] #[path = "<source_name>_tests.rs"] mod tests;`，测试文件开头 `use super::*;`。默认优先少建目录，测试主题多、文件长时再拆目录。
   - 各 crate 集成测试目录与 `src` 模块一一对应：`manualaid-core/tests/`、`manualaid-cli/tests/`（`api.rs`、`commands.rs` 以 `#[path]` 聚合对应子目录）、`manualaid-ws/tests/`（`config.rs`、`context.rs`、`prompt.rs`）、`i18n/tests/`。
 
-- **交付前检查**：每次交付前，必须执行`./scripts/ci.*`命令(根据平台选择合适的)，其中包含以下检查子命令：`cargo clippy -- -D warnings`、`cargo fmt -- --check`、`cargo llvm-cov -q --show-missing-lines > coverage_with_lines.txt`等。
+- **提交前本地检查（每次提交的门槛）**：暂存要提交的文件前，运行 `cargo fmt`、`cargo clippy -- -D warnings`、`cargo check` 三项（见「开发流程」）。跨平台全量检查由 PR 的 CI（`.github/workflows/ci.yml`）承担，本地每次提交**不必**运行全量 `./scripts/ci.*`。
+- **交付/PR 前全量检查**：交付前运行`./scripts/ci.*`(根据平台选择合适的)做全量检查，其中包含：`cargo clippy -- -D warnings`、`cargo fmt -- --check`、`cargo llvm-cov -q --show-missing-lines > coverage_with_lines.txt`等。
 - 单个文件的测试代码覆盖率应尽可能**不低于85%**，其中核心模块的覆盖率应尽可能**不低于95%**；总体覆盖率（Function、Line、Region 三项）均需**不低于80%**。
-- 没有代码修改时避免重复检查覆盖率。
-- 代码测试率结果在`./scripts/ci.*`运行后也会被缓存到`coverage_with_lines.txt`中。
+- 全量覆盖率测试（`cargo llvm-cov`，同时运行测试并统计覆盖）优先于仅运行全量测试。
+- 覆盖率结果会被缓存到`coverage_with_lines.txt`；仅查看覆盖率信息（如 TOTAL 行）时优先读取缓存，代码未更改时**不要**重跑全量覆盖率测试。
 
 ### 外部有状态资源隔离
 
