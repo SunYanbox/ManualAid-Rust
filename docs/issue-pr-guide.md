@@ -1,16 +1,5 @@
 # Issue 与 Pull Request 指南
 
-## 开发流程
-
-核心开发流程如下，与文档约定（分支命名、CHANGELOG、PR 规范）配合使用：
-
-1. **签出新分支**：先 `git fetch` 拉取最新 `origin/main`，再从最新 `main` 签出分支，命名沿用 `<type>/<desc>` 或 `<type>/<issue>-<desc>`（如 `fix/24-...`、`ci/...`）。
-2. **提交前检查（每次提交的门槛）**：暂存要提交的文件前，运行 `cargo fmt`、`cargo clippy -- -D warnings`、`cargo check` 三项；无需重复 `cargo fmt -- --check`，也无需在本地每次跑全量 CI。
-3. **全量检查由 PR CI 承担**：跨平台全量检查（格式、lint、编译、文档、测试、覆盖率）由 PR 的 CI（`.github/workflows/ci.yml`）自动运行。
-4. **创建 PR 前**：更新 CHANGELOG（见「CHANGELOG 更新」）；尽可能解决基础的测试与覆盖率问题（代码已改变则重跑全量覆盖率更新 `coverage_with_lines.txt`；仅查看信息时读缓存）。
-5. **创建 PR 后**：依据 PR CI 结果继续优化测试与覆盖率。
-6. **PR 严格按模板编写**：正文**必须**按 `.github/pull_request_template.md` 模板编写（见下），并添加匹配的 label。
-
 ## 标题格式
 
 - Bug：`bug: <简短描述>`（英文）
