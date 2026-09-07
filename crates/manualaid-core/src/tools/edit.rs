@@ -119,67 +119,134 @@ pub async fn plan_edit(params: &IndexMap<String, Value>) -> Result<EditPlan, Str
 /// 保留原有失败文本，并补充两类诊断之一：明确的换行符差异提示，或文件中
 /// 高度相似的最接近字符串。
 fn missing_old_string_message(file_path: &str, old_string: &str, content: &str) -> String {
-    let base = format!(
+    // 1. Check for line-ending differences first.
+    // 首先检查换行符差异。
+    if let Some(style) = detect_matched_line_endings(content, old_string) {
+        return match style {
+            LineEndingStyle::ConsistentCrlf => {
+                "The matched snippet uses consistent CRLF line endings. \
+                 Please adjust the line endings in your `old_string` and `new_string` \
+                 to CRLF and retry."
+                    .to_string()
+            }
+            LineEndingStyle::ConsistentLf => {
+                "The matched snippet uses consistent LF line endings. \
+                 Please adjust the line endings in your `old_string` and `new_string` \
+                 to LF and retry."
+                    .to_string()
+            }
+            LineEndingStyle::Mixed => {
+                "The matched snippet contains mixed line endings (CRLF and LF). \
+                 Use the `read` tool with `show_line_endings: true` to inspect \
+                 the actual line endings in the matched snippet, then adjust \
+                 your `old_string` and `new_string` accordingly."
+                    .to_string()
+            }
+        };
+    }
+
+    // 2. No line-ending match, check for close similarity.
+    // 无换行符匹配，检查高度相似候选。
+    if let Some(candidate) = closest_match(content, old_string) {
+        return format!("Closest match in the file (similarity >= 90%):\n{candidate}");
+    }
+
+    // 3. Fallback to the original base message.
+    // 回退到基础消息。
+    format!(
         "`old_string` not found in `{file_path}` — it may have already been applied \
          or the content has changed. Use the `read` tool to re-read `{file_path}` \
          and re-issue the edit with the current content.\n\
          String:\n{old_string}"
-    );
+    )
+}
 
-    if let Some(note) = line_ending_mismatch(content, old_string) {
-        return format!("{base}\n{note}");
-    }
-
-    if let Some(candidate) = closest_match(content, old_string) {
-        return format!("{base}\nClosest match in the file (similarity >= 90%):\n{candidate}");
-    }
-
-    base
+/// Line ending style of matched snippets.
+/// 匹配片段的行尾风格。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineEndingStyle {
+    /// The matched region uses consistent CRLF.
+    /// 匹配区域行尾一致为 CRLF。
+    ConsistentCrlf,
+    /// The matched region uses consistent LF.
+    /// 匹配区域行尾一致为 LF。
+    ConsistentLf,
+    /// The matched region contains mixed line endings.
+    /// 匹配区域包含混合行尾。
+    Mixed,
 }
 
 /// Detects whether the only difference between `content` and `old` is line
-/// ending style, returning a note describing which side uses CRLF vs LF.
-/// 检测 `content` 与 `old` 是否仅换行风格不同，返回描述哪一侧使用
-/// CRLF/LF 的提示。
+/// ending style, returning the line ending style of the matched region in
+/// the original file content.
+/// 检测 `content` 与 `old` 是否仅换行风格不同，返回原文件匹配区域的行尾风格。
 ///
 /// # Description
 /// Only used after the raw `contains` check failed, so a hit here means the
-/// normalized forms are equal.
+/// normalized forms are equal. The style is judged from the matched region
+/// of the original file, not from `old` itself.
 /// # 描述
 /// 仅在原始 `contains` 检查失败后调用，因此命中即表示规范化后完全一致。
-fn line_ending_mismatch(content: &str, old: &str) -> Option<String> {
-    let content_normalized = content.replace("\r\n", "\n");
-    let old_normalized = old.replace("\r\n", "\n");
-
-    if !content_normalized.contains(&old_normalized) {
+/// 行尾风格只依据原文件匹配区域判断，与 `old` 自身无关。
+fn detect_matched_line_endings(content: &str, old: &str) -> Option<LineEndingStyle> {
+    // If old already matches in the original content, there is no line-ending mismatch.
+    // 如果 old 在原始 content 中已匹配，则不存在行尾差异问题。
+    if content.contains(old) {
         return None;
     }
 
-    // The normalized forms match, so simply switching the line endings of
-    // `old_string` (and `new_string`) to the file's style makes the edit
-    // apply to the existing content.
-    // 归一化后即可匹配，因此只需将 `old_string`（及 `new_string`）的换行
-    // 切换为文件该片段的换行风格，即可让编辑命中现有内容。
-    let actionable = "Note: line endings differ — switch the line endings of `old_string` \
-                      and `new_string` to match the file's style and retry"
-        .to_string();
+    let content_normalized = content.replace("\r\n", "\n");
+    let old_normalized = old.replace("\r\n", "\n");
 
-    // Try the CRLF and LF variants directly against the original content.
-    // This avoids byte offsets that would drift after CRLF->LF normalization.
-    // 直接在原始内容上尝试 CRLF 与 LF 两种变体，避免 CRLF->LF 归一化后
-    // 字节偏移漂移的问题。
-    let crlf_variant = old_normalized.replace('\n', "\r\n");
-    let uses_crlf = content.contains(&crlf_variant);
+    // If normalized forms don't match, the difference is not purely line endings.
+    // 如果归一化后不匹配，则差异不仅仅是行尾。
+    let start = content_normalized.find(&old_normalized)?;
+    let end = start + old_normalized.len();
 
-    if uses_crlf {
-        Some(format!(
-            "{actionable}\nHint: the matching snippet in the file uses CRLF"
-        ))
-    } else {
-        Some(format!(
-            "{actionable}\nHint: the matching snippet in the file uses LF"
-        ))
+    // Consistency is judged from the matched region of the original file
+    // content, never from `old` itself, so the suggestion points at the
+    // file's actual style.
+    // 一致与否仅依据原文件匹配区域判断，与 `old` 自身风格无关，
+    // 这样建议才指向文件的真实行尾。
+    let (crlf, lf) = count_line_endings_in_region(content, start, end);
+    match (crlf, lf) {
+        // Degenerate: matched region has no newline; unreachable in practice.
+        // 退化情况：匹配区域内没有换行符，实际不会出现。
+        (0, 0) => None,
+        (_, 0) => Some(LineEndingStyle::ConsistentCrlf),
+        (0, _) => Some(LineEndingStyle::ConsistentLf),
+        _ => Some(LineEndingStyle::Mixed),
     }
+}
+
+/// Counts CRLF and lone-LF endings inside the region of `content` that maps
+/// to the byte range `[start, end)` of the normalized text.
+/// 统计 `content` 中映射到规范化文本字节区间 `[start, end)` 的区域内的
+/// CRLF 与单独 LF 数量。
+fn count_line_endings_in_region(content: &str, start: usize, end: usize) -> (usize, usize) {
+    let mut crlf = 0;
+    let mut lf = 0;
+    // Byte offset of the next char in the normalized text.
+    // 下一字符在规范化文本中的字节偏移。
+    let mut norm = 0;
+    let mut chars = content.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\r' && chars.peek() == Some(&'\n') {
+            chars.next();
+            if norm >= start && norm < end {
+                crlf += 1;
+            }
+            // The paired "\n" occupies one byte in the normalized text.
+            // 配对的 "\n" 在规范化文本中占一个字节。
+            norm += 1;
+        } else {
+            if c == '\n' && norm >= start && norm < end {
+                lf += 1;
+            }
+            norm += c.len_utf8();
+        }
+    }
+    (crlf, lf)
 }
 
 /// Finds the most similar line or multi-line window in `content` to `old`.
