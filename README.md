@@ -72,11 +72,9 @@ To uninstall, replace `setup-cli.sh` with `uninstall-cli.sh` using the same meth
 
 ### Constraints
 
-- Before submitting any `*.rs` file, **must** pass all of the following checks:
-  - `cargo fmt -- --check` — Check code style
-  - `cargo clippy -- -D warnings` — Catch common errors and lint violations
-  - `cargo check` — Verify compilation
-  - `cargo llvm-cov` — Run code coverage analysis; in the output, the **TOTAL** line must have all three coverage metrics (Function, Line, Region) **≥80%**, unless the relevant files are difficult to improve coverage for various reasons.
+- **Before submitting/staging any `*.rs` file**, **must** pass the following three local checks: `cargo fmt` (formatting), `cargo clippy -- -D warnings` (lint), and `cargo check` (compilation); cross-platform full checks (formatting, lint, compilation, docs, tests, coverage) are handled by PR CI (`.github/workflows/ci.yml`).
+- **Before delivery/PR, evaluate coverage**: overall coverage for Function, Line, and Region must all be **≥80%** (single files suggested ≥85%, core modules ≥95%), unless the relevant files are difficult to improve coverage for various reasons. When only viewing coverage info, prefer reading the cache `coverage_with_lines.txt`; do not re-run the full coverage test when the code is unchanged.
+- For the contribution flow and PR conventions (branch naming, CHANGELOG updates, PR template), see the [contribution guide](./CONTRIBUTING.md) and `docs/issue-pr-guide.md`.
 - Please follow the [Rust Official Style Guide](https://doc.rust-lang.org/stable/style-guide/index.html) and the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## ⚖️ Legal Disclaimer

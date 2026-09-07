@@ -9,13 +9,22 @@
 - **Rust 生态**：使用 `cargo` 管理依赖、编译、测试及文档生成。
 - **Node.js 生态**（如有前端相关部分）：使用 `pnpm` 管理依赖，请勿使用 npm 或 yarn。
 
+## 开发流程
+
+核心开发流程如下，详细规则见 `docs/issue-pr-guide.md`：
+
+1. **签出新分支**：先 `git fetch` 拉取最新 `origin/main`，再从最新 `main` 签出分支，命名沿用 `<type>/<desc>` 或 `<type>/<issue>-<desc>`（如 `fix/24-...`、`ci/...`）。
+2. **提交前检查（每次提交的门槛）**：暂存要提交的文件前，运行 `cargo fmt`、`cargo clippy -- -D warnings`、`cargo check` 三项。无需重复执行 `cargo fmt -- --check`。
+3. **全量检查由 PR CI 承担**：跨平台的全量检查（格式、lint、文档、测试、覆盖率）由 PR 的 CI（`.github/workflows/ci.yml`）自动运行，本地每次提交**不必**运行全量 `./scripts/ci.*`。
+4. **创建 PR 前**：更新 CHANGELOG（规则见 `docs/issue-pr-guide.md`）；尽可能解决基础的测试与覆盖率问题（见「测试要求」）。仅查看覆盖率信息时优先读取缓存 `coverage_with_lines.txt`，代码未更改时不必重跑全量覆盖率测试。
+5. **创建 PR 后**：依据 PR CI 结果继续优化测试与覆盖率。
+6. **PR 严格按模板编写**：PR 正文**必须**按 `.github/pull_request_template.md` 模板编写，并添加匹配的 label。
+
 ## 代码风格与质量
 
 我们遵循 Rust 官方风格指南，并借助工具自动化检查：
 
-- 提交前建议运行 `cargo fmt -- --check` 检查格式，或直接使用 `cargo fmt` 自动格式化。
-- 使用 `cargo clippy -- -D warnings` 捕捉常见错误和 lint 违规。
-- 使用 `cargo check` 验证编译通过。
+- 提交任何 `*.rs` 文件前，**暂存前必跑** `cargo fmt`、`cargo clippy -- -D warnings`、`cargo check` 三项（无需重复 `cargo fmt -- --check`）。
 - 确保文档可正常生成：`cargo doc --no-deps`。
 
 ## 测试要求
@@ -44,10 +53,10 @@
 ## 提交与 Pull Request
 
 - 提交信息请遵循[约定式提交规范](https://www.conventionalcommits.org/en/v1.0.0/)（如 `feat:`, `fix:`, `docs:` 等）。详细指南见 `docs/commit-conventions.md`。
-- PR 描述应保持客观，说明变更内容与影响，无需推断代码意图。模板见 `docs/issue-pr-guide.md`。
-- 在 PR 中，请确保所有检查（格式、lint、编译、文档、测试）均已通过。
+- **PR 正文必须按 `.github/pull_request_template.md` 模板编写**，并添加匹配的 label；模板说明见 `docs/issue-pr-guide.md`。
+- 创建 PR 前更新 CHANGELOG（规则见 `docs/issue-pr-guide.md`）；纯文档等无需条目时除外。在 PR 中，请确保所有检查（格式、lint、编译、文档、测试）均已通过。
 
-> **提示**：您可以使用 `./scripts/ci.*`（根据平台选择合适脚本）一键运行所有 CI 检查（格式、lint、编译、文档、测试和覆盖率）。这是在提交 PR 前验证变更的推荐方式。
+> **提示**：跨平台的全量检查（格式、lint、编译、文档、测试、覆盖率）由 PR 的 CI（`.github/workflows/ci.yml`）自动运行。交付前可按需使用 `./scripts/ci.*`（根据平台选择合适脚本）一键运行全量检查；提交时仅需在暂存前跑 `cargo fmt` + `cargo clippy -- -D warnings` + `cargo check`。
 
 ## 注释风格
 

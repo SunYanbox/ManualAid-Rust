@@ -8,7 +8,9 @@
 
 ## 正文双语格式
 
-所有 Issue 和 PR 的正文统一使用以下格式；正文中所有标题统一使用 Markdown 加粗格式（如 `**Summary**`），不得使用 `#`/`##` 标题：
+所有 Issue 和 PR 的正文统一使用以下格式；正文中所有标题统一使用 Markdown 加粗格式（如 `**Summary**`），不得使用 `#`/`##` 标题。
+
+**创建 PR 时，正文必须严格按 `.github/pull_request_template.md` 模板文件编写**，完整保留其空行与 `<details>` 折叠结构（下为与之一致的模板，实际以该文件为准）：
 
 ```
 [英文正文]
@@ -67,5 +69,9 @@
 ## PR 检查
 
 CI（`.github/workflows/ci.yml`）在变更涉及 `crates/**`、`Cargo.toml`、`Cargo.lock`、`.github/workflows/**`、`codecov.yml` 时自动运行格式、lint、编译、文档与测试等检查；无代码变更时无需在本地手动运行 `./scripts/ci.*`。
+
+**创建 PR 后**：查看 PR CI 结果并据此继续优化——补充测试以提高覆盖率（新增/修改代码后重跑全量覆盖率并更新 `coverage_with_lines.txt`，仅查看信息时读缓存），修复 CI 报出的格式/lint/测试问题，直至检查通过。
+
+**CHANGELOG 自动提醒**：`.github/workflows/changelog-reminder.yml` 会在 PR 变更了 `crates/**`、`Cargo.toml`、`Cargo.lock` 或 `.github/**` 但未更新 `CHANGELOG*.md` 时，以 sticky 评论自动提醒补充。若变更无用户/开发者影响，可忽略该提醒。
 
 纯文档等非代码路径的 PR 不会触发上述 CI，交付前应按变更类型做针对性验证（如 markdown 链接与格式核对，或按需运行 `./scripts/ci.*`）。
