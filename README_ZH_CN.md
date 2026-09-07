@@ -74,11 +74,9 @@
 
 ### 约束
 
-- 提交任何`*.rs`文件前，**必须**通过以下所有检查：
-  - `cargo fmt -- --check` — 检查代码风格
-  - `cargo clippy -- -D warnings` — 捕获常见错误和 lint 违规
-  - `cargo check` — 验证编译
-  - `cargo llvm-cov` — 运行代码覆盖率分析，输出结果中 **TOTAL** 行的 Function、Line、Region 三项覆盖率均需**≥80%**，除非相关文件由于各种原因难以提升覆盖率。
+- **提交/暂存 `*.rs` 文件前**，**必须**通过以下三项本地检查：`cargo fmt`（格式化）、`cargo clippy -- -D warnings`（lint）与 `cargo check`（编译）；跨平台全量检查（格式、lint、编译、文档、测试、覆盖率）由 PR 的 CI（`.github/workflows/ci.yml`）承担。
+- **交付/PR 前评估覆盖率**：代码覆盖率 Function、Line、Region 三项总体均需**≥80%**（单文件建议≥85%，核心模块≥95%），除非相关文件由于各种原因难以提升覆盖率。仅查看覆盖率信息时优先读取缓存 `coverage_with_lines.txt`，代码未更改时不必重跑全量覆盖率测试。
+- 贡献流程与 PR 规范（分支命名、CHANGELOG 更新、PR 模板）请参阅[贡献指南](./CONTRIBUTING_ZH_CN.md)与 `docs/issue-pr-guide.md`。
 - 请遵循[Rust 官方风格指南](https://doc.rust-lang.org/stable/style-guide/index.html)和[约定式提交规范](https://www.conventionalcommits.org/en/v1.0.0/)。
 
 ## 法律免责声明
