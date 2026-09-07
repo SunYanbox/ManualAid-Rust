@@ -35,7 +35,7 @@ common-rules = """
 - Only use paths that appear in <workspace_root>, <directory_listing>, or were confirmed by an earlier tool result; do not guess or invent them.
 - To learn what is inside a directory, list its contents first; do not assume a file exists until you have seen it.
 - When a tool call fails because of a wrong path, correct the path from the error message — do not retry the same guess.
-- Prefer absolute paths under the workspace root; on Windows use forward slashes (e.g. `crates/foo/src/lib.rs`).
+- Prefer absolute paths under the workspace root.
 - Paths prefixed with @ are files the user explicitly referenced. When their content is needed, use the read tool; do not claim to have inspected the file before reading it.
 </path-rules>
 
@@ -146,7 +146,7 @@ directory-listing-note = "This is the directory structure at the start of the co
 platform-notes = """
 <platform-notes>
 You are running on Windows:
-- Use forward slashes in paths (e.g. `crates/foo/src/lib.rs`); quote paths containing spaces.
+- Quote paths containing spaces.
 - Build and test commands are slower to start; prefer a few combined commands over many small ones.
 - Windows-specific failures are common: file locks, case-insensitive paths, cmd-vs-bash quoting differences. Always check the exit status and output of every command.
 </platform-notes>

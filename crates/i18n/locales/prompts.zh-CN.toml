@@ -34,7 +34,7 @@ common-rules = """
 <path-rules>
 - 仅使用已确认路径（workspace_root、directory_listing 或工具返回结果）；失败时根据错误修正，不重试猜测。
 - 要了解目录内部内容，先列出其内容；在看到文件之前不要假设它存在。
-- 在确认前不假设文件/目录存在；优先使用工作区根目录下的绝对路径；Windows 下使用正斜杠（如 `crates/foo/src/lib.rs`）。
+- 在确认前不假设文件/目录存在；优先使用工作区根目录下的绝对路径。
 - 以 @ 为前缀的路径是用户明确引用的文件。当需要其内容时，请使用读取工具；不得在读取之前声称已检查过该文件。
 </path-rules>
 
@@ -142,7 +142,7 @@ directory-listing-note = "这是对话开始时的目录结构快照。注意此
 platform-notes = """
 <platform-notes>
 你当前运行在 Windows 上：
-- 路径中使用正斜杠（如 `crates/foo/src/lib.rs`）；包含空格的路径要加引号。
+- 包含空格的路径要加引号。
 - 构建和测试命令启动较慢；优先用少数组合命令，而非大量小命令。
 - Windows 常见失败场景：文件占用、路径大小写不敏感、cmd 与 bash 引号差异，必须检查每条命令的退出状态和输出。
 </platform-notes>
