@@ -299,7 +299,9 @@ async fn edit_missing_old_string_suggests_closest_match() {
     ]);
     let result = ToolKind::Edit.run(&params).await;
     assert!(!result.success);
-    assert!(result.output.contains("not found"));
+    // Base message is dropped when a close candidate exists.
+    // 存在相似候选时不再附加基础消息。
+    assert!(!result.output.contains("not found"));
     assert!(result.output.contains("Closest match"));
     assert!(result.output.contains("line one\nline two"));
     let _ = std::fs::remove_file(&path);
@@ -332,9 +334,10 @@ async fn edit_missing_old_string_crlf_only_diff() {
     ]);
     let result = ToolKind::Edit.run(&params).await;
     assert!(!result.success);
-    assert!(result.output.contains("line endings differ"));
-    assert!(result.output.contains("switch the line endings"));
-    assert!(result.output.contains("uses CRLF"));
+    // Pure line-ending difference: hint only, base message dropped.
+    // 纯行尾差异：仅提示，不附加基础消息。
+    assert!(!result.output.contains("not found"));
+    assert!(result.output.contains("consistent CRLF"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -349,9 +352,10 @@ async fn edit_missing_old_string_crlf_reverse_only_diff() {
     ]);
     let result = ToolKind::Edit.run(&params).await;
     assert!(!result.success);
-    assert!(result.output.contains("line endings differ"));
-    assert!(result.output.contains("switch the line endings"));
-    assert!(result.output.contains("uses LF"));
+    // The file region is pure LF while old uses CRLF: hint should say LF.
+    // 文件区域纯 LF 而 old 用 CRLF：应提示改为 LF。
+    assert!(!result.output.contains("not found"));
+    assert!(result.output.contains("consistent LF"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -361,14 +365,16 @@ async fn edit_missing_old_string_mixed_line_endings() {
     std::fs::write(&path, "a\r\nb\nc").unwrap();
     let params = params_for(&[
         ("file_path", path.to_str().unwrap()),
-        ("old_string", "b\r\nc"),
+        ("old_string", "a\nb\nc"),
         ("new_string", "x"),
     ]);
     let result = ToolKind::Edit.run(&params).await;
     assert!(!result.success);
-    assert!(result.output.contains("line endings differ"));
-    assert!(result.output.contains("switch the line endings"));
-    assert!(result.output.contains("uses LF"));
+    // The matched file region spans both CRLF and LF, so the mixed hint applies.
+    // 文件匹配区域同时含 CRLF 与 LF，应提示混杂并建议用 read 查看。
+    assert!(!result.output.contains("not found"));
+    assert!(result.output.contains("mixed line endings"));
+    assert!(result.output.contains("show_line_endings"));
     let _ = std::fs::remove_file(&path);
 }
 
