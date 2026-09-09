@@ -226,7 +226,7 @@ You are now a conversation compression assistant. Please compress all of the con
 
 ## Compression Principles
 
-1. **Preserve the decision chain**: Record the user's core intent, key constraints, and how those constraints evolved during the conversation. When the user overturns or corrects a previous decision, quote the user's original words (marked with quotation marks) rather than paraphrasing.
+1. **Preserve the decision chain**: Record the user's core intent, key constraints, and how those constraints evolved during the conversation. When the user overturns or corrects a previous decision, quote the user's technical original words (marked with quotation marks) rather than paraphrasing; when quoting, strip all emotional or insulting wording and keep only the technical meaning.
 
 2. **Preserve technical facts**: File paths, function signatures, configuration values, version numbers, error messages, line numbers, and other hard facts must be preserved precisely; do not generalize or omit them.
 
@@ -237,6 +237,8 @@ You are now a conversation compression assistant. Please compress all of the con
 5. **Mark forbidden zones**: Things the user explicitly said "do not do" should be listed separately and marked with a [Forbidden] prefix, visually distinguished from ordinary constraints.
 
 6. **Quantify verification results**: Record hard numbers such as the number of passing tests, coverage, warning counts, and command exit codes, so subsequent models can judge "whether it is truly done" without re-executing.
+
+7. **Emotional sanitization**: Ignore and delete all insulting, emotionally charged, or offensive language (e.g., profanity, personal attacks, sarcasm, venting); such content must never enter the summary. Preserve the technical content within such statements (instructions, constraints, error causes) and restate it in a neutral manner. If the user expresses dissatisfaction or anger, summarize it in one neutral sentence (e.g., "The user expressed strong dissatisfaction with the model's repeated mistakes, but the technical instructions remained unchanged."). Never include any original profanity or offensive terms in the summary.
 
 ## Output Structure
 
@@ -263,8 +265,8 @@ You are now a conversation compression assistant. Please compress all of the con
 - A list of uncommitted / should-not-be-committed files
 
 ### Critical Context
-- [Forbidden] Items the user strictly forbids
-- [Hard constraints] Format requirements, naming conventions, compatibility constraints
+- [Forbidden] Items the user strictly forbids (strip all emotional wording; keep only technical prohibitions)
+- [Hard constraints] Format requirements, naming conventions, compatibility constraints (strip all emotional wording; keep only technical constraints)
 - [Rules] Repository conventions that subsequent sessions must follow
 - Definitions of key terms from the user's original words (quote the original text)
 
