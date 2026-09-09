@@ -20,6 +20,7 @@ fn skill(unique_name: &str, is_global: bool, description: &str) -> Skill {
         description: description.to_string(),
         body: String::new(),
         path: PathBuf::from(format!("/tmp/{unique_name}")),
+        agent_dir: ".claude".to_string(),
         is_global,
         is_enabled: !is_global,
     }
@@ -32,6 +33,7 @@ fn skill_with_path(unique_name: &str, path: &str) -> Skill {
         description: "desc".to_string(),
         body: String::new(),
         path: PathBuf::from(path),
+        agent_dir: ".claude".to_string(),
         is_global: false,
         is_enabled: true,
     }
@@ -159,21 +161,32 @@ fn skill_scan_filter_and_format_chain() {
     reload_skills_with_home(&project, &home).expect("reload skills");
     let all = all_skills();
     let names: Vec<&str> = all.iter().map(|s| s.unique_name.as_str()).collect();
-    assert!(names.contains(&"Proj"));
-    assert!(names.contains(&"Glob"));
+    assert!(names.contains(&"project-.claude-Proj"));
+    assert!(names.contains(&"global-.codex-Glob"));
 
     let project_only = filter_skills(all.clone(), SkillScope::Project);
     assert!(project_only.iter().all(|s| !s.is_global));
-    assert!(project_only.iter().any(|s| s.unique_name == "Proj"));
+    assert!(
+        project_only
+            .iter()
+            .any(|s| s.unique_name == "project-.claude-Proj")
+    );
 
     let global_only = filter_skills(all.clone(), SkillScope::Global);
     assert!(global_only.iter().all(|s| s.is_global));
-    assert!(global_only.iter().any(|s| s.unique_name == "Glob"));
+    assert!(
+        global_only
+            .iter()
+            .any(|s| s.unique_name == "global-.codex-Glob")
+    );
 
-    let proj = all.iter().find(|s| s.unique_name == "Proj").unwrap();
+    let proj = all
+        .iter()
+        .find(|s| s.unique_name == "project-.claude-Proj")
+        .unwrap();
     i18n::set_locale("zh-CN");
     let block = format_skill(proj);
-    assert!(block.contains("  - 唯一名称：Proj"));
+    assert!(block.contains("  - 唯一名称：project-.claude-Proj"));
     assert!(block.contains("    - 名称：Proj"));
     assert!(block.contains("    - 描述：short project desc"));
     assert!(block.contains("    - 总字符数：18"));

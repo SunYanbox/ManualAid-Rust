@@ -200,7 +200,7 @@ compressed_session = "复制压缩会话提示词"
 title = "工具启用/禁用"
 
 [cli.skill_config]
-item = "[%{state}] %{name}（%{unique_name}）"
+item = "[%{state}] %{unique_name}"
 all_on = "全部启用"
 all_off = "全部禁用"
 prompt = "输入技能键以切换（a=全部启用，n=全部禁用，回车=返回）："

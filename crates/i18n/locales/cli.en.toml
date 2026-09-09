@@ -200,7 +200,7 @@ compressed_session = "Copy compressed session prompt"
 title = "Tools enable/disable"
 
 [cli.skill_config]
-item = "[%{state}] %{name} (%{unique_name})"
+item = "[%{state}] %{unique_name}"
 all_on = "All on"
 all_off = "All off"
 prompt = "Enter skill key to toggle (a=all on, n=all off, Enter=back): "

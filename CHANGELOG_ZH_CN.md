@@ -11,6 +11,13 @@
 - 会话压缩提示词（中英文）新增“情绪净化”原则：摘要剥离脏话、人身攻击等侮辱性情绪化措辞，仅保留中性技术信息并以一句中性话概括用户不满；“保留决策链”改为引用用户技术性原话；Critical Context 的 [禁区]/[硬约束] 项要求剥离情绪化用词
 - 新增 `terminal_title` 模块：交互式 loop 启动时用 `crossterm::terminal::SetTitle` 把终端窗口标题设为 `[ManualAid] <项目文件夹名>`（无可用文件夹名时回退 `[ManualAid]`，文件夹名中的控制字符被剔除以免破坏 OSC 序列）；标题写入经由 `console` 出口，stdout 非终端或处于测试捕获时不写入真实终端
 
+### 变更
+
+- 技能唯一名称系统重构：`Skill::unique_name` 恒为稳定、可追溯来源的 `<scope>-<agent_dir>-<name>`（如 `project-.agents-pdf`）；`Skill` 新增 `agent_dir` 字段，扫描器在加载时直接赋值。同名但内容不同的技能不再被改成 `.project-`/`.global-` 前缀，而是各自保留稳定名；同一扫描根内声明相同 frontmatter `name` 的残余冲突以确定性 `-N` 后缀解决，且后缀候选会避开其他技能的自然名（名为 `pdf-2` 的真实技能不会被遮蔽）
+- 新增暴露名解析：`exposed_name_map` 与 `resolve_skill` 按*已启用*技能集合计算最短唯一名称（无冲突时裸名、同名加 `<agent_dir>-` 前缀、同目录跨作用域用完整稳定名）；`<available_skills>` 提示列表与 Skill 工具参数改用暴露名，`resolve_skill` 仍可解析禁用技能的完整稳定名以便报告“已禁用”；`get_skill` 收紧为仅匹配完整稳定名
+- 技能重复检测对空白与行尾宽容：`description`/`body` 在比较前去除首尾空白并把 `\r\n` 归一化为 `\n`，存储文本不被改写
+- Skill 工具“未找到”提示与 CLI 管理界面（`debug skill`、loop CLI 技能菜单）随之更新：提示列出暴露名，管理界面始终显示完整稳定唯一名称
+
 ## [0.11.0] - 2026-09-07
 
 ### 新增

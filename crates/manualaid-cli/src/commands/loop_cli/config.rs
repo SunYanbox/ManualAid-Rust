@@ -642,13 +642,13 @@ fn build_skill_menu() -> Menu {
         menu = menu
             .add(
                 MenuItem::auto(
+                    // The full stable unique name doubles as the toggle key,
+                    // so the label shows it alone — no duplicate plain name.
+                    // 完整稳定唯一名称同时充当切换键，故条目只显示它，不再
+                    // 重复展示裸名。
                     t_fmt(
                         "cli.skill_config.item",
-                        &[
-                            ("state", &state),
-                            ("name", &skill.name),
-                            ("unique_name", &skill.unique_name),
-                        ],
+                        &[("state", &state), ("unique_name", &skill.unique_name)],
                     ),
                     MenuAction::Command(LoopCommand::ToggleSkillAt(skill.path)),
                 )
@@ -1340,6 +1340,33 @@ mod tests {
         // localized wording may vary in CI, so avoid a fragile text match.
         // 返回标签已由 `0.` 数字标记断言覆盖；CI 中本地化措辞可能变化，
         // 避免脆弱的文本匹配。
+    }
+
+    #[test]
+    fn build_skill_menu_shows_stable_unique_names() {
+        let _locale = crate::test_support::LOCALE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        i18n::set_locale("en");
+        let _lock = crate::test_support::SKILL_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = crate::test_support::temp_dir("skill-menu-stable-root");
+        let home = crate::test_support::temp_dir("skill-menu-stable-home");
+        write_skill(&home, "alpha", "alpha");
+        write_skill(&home, "beta", "beta");
+        manualaid_core::skill::reload_skills_with_home(&root, &home).unwrap();
+
+        let menu = build_skill_menu();
+        let rendered = menu.render();
+        // The management menu always shows the full stable unique name and
+        // keys each item by it.
+        // 管理菜单始终显示完整稳定唯一名称，并以它作为每项的唯一键。
+        assert!(rendered.contains("global-.ManualAid-alpha"));
+        assert!(rendered.contains("global-.ManualAid-beta"));
+        assert!(menu.resolve("skill_menu_global-.ManualAid-alpha").is_some());
+        assert!(menu.resolve("skill_menu_global-.ManualAid-beta").is_some());
+        manualaid_core::skill::reset_skills();
     }
 
     #[allow(clippy::await_holding_lock)]
