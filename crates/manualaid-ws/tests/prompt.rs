@@ -3,7 +3,7 @@
 
 use manualaid_core::parser::FormatRegistry;
 use manualaid_core::skill::Skill;
-use manualaid_core::tools::ToolResult;
+use manualaid_core::tools::{ToolResult, UserActionKind};
 use manualaid_ws::config::Config;
 use manualaid_ws::prompt::{build_system_prompt, format_results, render_tools_list};
 use std::path::{Path, PathBuf};
@@ -608,6 +608,58 @@ fn format_results_persist_failure_silently_degrades() {
         let text = format_results(&results, 2_000, &file_path);
         assert!(text.contains("Output exceeded"));
         assert!(!text.contains("have been saved to"));
+        let _ = std::fs::remove_dir_all(&root);
+    });
+}
+
+#[test]
+fn format_results_wraps_user_action_verbatim_within_limit() {
+    let result = ToolResult::success("shell", "out", false)
+        .with_user_action(UserActionKind::Exec, "cargo test");
+    let text = format_results(&[result], MAX, Path::new(""));
+    assert_eq!(
+        text,
+        "[USER_ACTION kind=\"exec\" command=\"cargo test\"]\nout\n[END USER_ACTION]"
+    );
+}
+
+#[test]
+fn format_results_mixes_user_action_and_tool_result() {
+    let exec = ToolResult::success("shell", "exec out", false)
+        .with_user_action(UserActionKind::Exec, "cargo test");
+    let regular = ToolResult::success("read", "read out", true);
+    let text = format_results(&[exec, regular], MAX, Path::new(""));
+    assert!(text.contains("[USER_ACTION kind=\"exec\" command=\"cargo test\"]"));
+    assert!(text.contains("[END USER_ACTION]"));
+    assert!(text.contains("[TOOL_RESULT read success=true]"));
+    assert!(text.contains("[END TOOL_RESULT read]"));
+}
+
+#[test]
+fn format_results_truncates_user_action_with_same_pipeline() {
+    with_locale("en", || {
+        let root = test_workspace_root("user-action-trunc");
+        let result = ToolResult::success("shell", "χ".repeat(3_000), false)
+            .with_user_action(UserActionKind::Exec, "cargo test");
+        let text = format_results(&[result], 2_000, &root);
+        assert_eq!(text.matches('χ').count(), 2_000);
+        assert!(text.contains("[USER_ACTION kind=\"exec\" command=\"cargo test\"]"));
+        assert!(text.contains("[END USER_ACTION]"));
+        assert!(text.contains("[Output truncated: 1000 of 3000 chars removed]"));
+        // The persisted list uses `kind (label)` for user actions.
+        assert!(text.contains("- exec (cargo test): line 1"));
+
+        // The persisted file must contain the complete user action wrapper.
+        let temp_dir = root.join(".ManualAid").join("temp");
+        let saved: Vec<_> = std::fs::read_dir(&temp_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
+        assert_eq!(saved.len(), 1);
+        let content = std::fs::read_to_string(saved[0].path()).unwrap();
+        assert_eq!(content.matches('χ').count(), 3_000);
+        assert!(content.contains("[USER_ACTION kind=\"exec\" command=\"cargo test\"]"));
+        assert!(content.contains("[END USER_ACTION]"));
         let _ = std::fs::remove_dir_all(&root);
     });
 }

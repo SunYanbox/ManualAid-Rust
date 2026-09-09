@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use manualaid_core::parser::FormatRegistry;
 use manualaid_core::skill::{Skill, exposed_name_map};
-use manualaid_core::tools::{ToolKind, ToolResult};
+use manualaid_core::tools::{ToolKind, ToolResult, UserAction};
 use sha2::{Digest, Sha256};
 
 use crate::config::Config;
@@ -42,6 +42,8 @@ pub fn build_system_prompt(
     out.push_str(&i18n::t_str("prompt.system.capabilities"));
     out.push('\n');
     out.push_str(&i18n::t_str("prompt.system.system-reminder-note"));
+    out.push('\n');
+    out.push_str(&i18n::t_str("prompt.system.user-action-note"));
     out.push('\n');
     out.push_str(&i18n::t_str("prompt.copy.task-planning-rule"));
     out.push('\n');
@@ -384,6 +386,7 @@ struct ResultPart {
     footer: String,
     tool_name: String,
     params_summary: String,
+    user_action: Option<UserAction>,
 }
 
 /// Render one round's execution results as XML-wrapped text for pasting
@@ -422,6 +425,7 @@ pub fn format_results(
                 footer: result_footer(result),
                 tool_name: result.tool_name.clone(),
                 params_summary: result.params_summary.clone(),
+                user_action: result.user_action.clone(),
             }
         })
         .collect();
@@ -456,7 +460,9 @@ pub fn format_results(
             .iter()
             .enumerate()
             .map(|(i, part)| {
-                let display = if part.params_summary.is_empty() {
+                let display = if let Some(action) = &part.user_action {
+                    format!("{} ({})", action.kind.as_str(), action.label)
+                } else if part.params_summary.is_empty() {
                     part.tool_name.clone()
                 } else {
                     format!("{} ({})", part.tool_name, part.params_summary)
@@ -611,8 +617,21 @@ fn persist_full_output(
 
 /// Render the opening bracket line of a tool result. The parameter summary
 /// is already a single-line truncated JSON string, so no escaping is needed.
+/// User-driven actions render a `[USER_ACTION]` header instead; see
+/// [`UserAction`].
 /// 渲染工具结果的开括号行。参数摘要已是单行截断 JSON 字符串，无需转义。
+/// 用户驱动操作改为渲染 `[USER_ACTION]` 头部；见 [`UserAction`]。
 fn result_header(result: &ToolResult) -> String {
+    if let Some(action) = &result.user_action {
+        let label = escape_user_action_label(&action.label);
+        return format!(
+            "[USER_ACTION kind=\"{}\" {}=\"{}\"]\n",
+            action.kind.as_str(),
+            action.kind.attr_name(),
+            label,
+        );
+    }
+
     let params_attr = if result.params_summary.is_empty() {
         String::new()
     } else {
@@ -626,10 +645,31 @@ fn result_header(result: &ToolResult) -> String {
     )
 }
 
-/// Render the closing bracket line of a tool result.
-/// 渲染工具结果的闭括号行。
+/// Render the closing bracket line of a tool result. User-driven actions use
+/// a fixed `[END USER_ACTION]` footer without a trailing name.
+/// 渲染工具结果的闭括号行。用户驱动操作使用固定 `[END USER_ACTION]` 尾部，
+/// 不带尾随名称。
 fn result_footer(result: &ToolResult) -> String {
+    if result.user_action.is_some() {
+        return "\n[END USER_ACTION]".to_string();
+    }
     format!("\n[END TOOL_RESULT {}]", result.tool_name)
+}
+
+/// Escape a user-action label so the `[USER_ACTION]` header always stays on
+/// one line. Backslash is escaped first so a trailing directory marker `\`
+/// renders as `\\`; when the attribute value is later unescaped it returns to
+/// a single backslash without becoming ambiguous with `\"`.
+/// 转义用户操作 label，保证 `[USER_ACTION]` 头部恒为单行。先转义反斜杠，
+/// 因此目录尾标记 `\` 渲染为 `\\`；属性值反转义后还原为单个反斜杠，不与
+/// `\"` 产生歧义。
+fn escape_user_action_label(label: &str) -> String {
+    let mut escaped = label.replace('\\', "\\\\");
+    escaped = escaped.replace('"', "\\\"");
+    escaped = escaped.replace('\n', "\\n");
+    escaped = escaped.replace('\r', "\\r");
+    escaped = escaped.replace('\t', "\\t");
+    escaped
 }
 
 /// Translate `key` and replace `%{name}` placeholders.
@@ -645,6 +685,7 @@ fn t_fmt(key: &str, args: &[(&str, &str)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use manualaid_core::tools::UserActionKind;
 
     #[test]
     fn renders_tools_list_with_templates() {
@@ -686,6 +727,16 @@ mod tests {
         let prompt = build_system_prompt(&config, Path::new("/ws"), &registry, &[], &[]);
         assert!(prompt.contains(&i18n::t_str("prompt.system.system-reminder-note")));
         assert!(prompt.contains(&i18n::t_str("prompt.copy.task-planning-rule")));
+    }
+
+    #[test]
+    fn system_prompt_contains_user_action_note() {
+        let config = Config::default();
+        let registry = FormatRegistry::new();
+        let prompt = build_system_prompt(&config, Path::new("/ws"), &registry, &[], &[]);
+        let note = i18n::t_str("prompt.system.user-action-note");
+        assert!(!note.is_empty());
+        assert!(prompt.contains(&note));
     }
 
     #[test]
@@ -790,5 +841,56 @@ mod tests {
             is_enabled: false,
         }];
         assert_eq!(skills_list_text(&skills), "");
+    }
+
+    #[test]
+    fn result_header_renders_user_action_exec() {
+        let result = ToolResult::success("shell", "out", false)
+            .with_user_action(UserActionKind::Exec, "cargo test");
+        assert_eq!(
+            result_header(&result),
+            "[USER_ACTION kind=\"exec\" command=\"cargo test\"]\n"
+        );
+    }
+
+    #[test]
+    fn result_header_renders_user_action_skill_and_path() {
+        let skill = ToolResult::success("skill", "out", true)
+            .with_user_action(UserActionKind::Skill, "plan");
+        assert_eq!(
+            result_header(&skill),
+            "[USER_ACTION kind=\"skill\" name=\"plan\"]\n"
+        );
+
+        let path = ToolResult::success("read", "out", true)
+            .with_user_action(UserActionKind::Path, "E:/ProjectRust/ManualAid-Rust/.git\\");
+        assert_eq!(
+            result_header(&path),
+            "[USER_ACTION kind=\"path\" path=\"E:/ProjectRust/ManualAid-Rust/.git\\\\\"]\n"
+        );
+    }
+
+    #[test]
+    fn user_action_footer_is_fixed_without_trailing_name() {
+        let result = ToolResult::success("shell", "out", false)
+            .with_user_action(UserActionKind::Exec, "cargo test");
+        assert_eq!(result_footer(&result), "\n[END USER_ACTION]");
+    }
+
+    #[test]
+    fn user_action_label_escapes_quote_backslash_and_newlines() {
+        let result = ToolResult::success("shell", "out", false)
+            .with_user_action(UserActionKind::Exec, "echo \"hi\"\\nline");
+        assert_eq!(
+            result_header(&result),
+            "[USER_ACTION kind=\"exec\" command=\"echo \\\"hi\\\"\\\\nline\"]\n"
+        );
+    }
+
+    #[test]
+    fn regular_result_header_is_unchanged_with_user_action_none() {
+        let result = ToolResult::success("read", "content", true);
+        assert_eq!(result_header(&result), "[TOOL_RESULT read success=true]\n");
+        assert_eq!(result_footer(&result), "\n[END TOOL_RESULT read]");
     }
 }

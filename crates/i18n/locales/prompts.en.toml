@@ -160,6 +160,11 @@ system-reminder-note = """
 Tool results and user messages may contain <system-reminder> tags. <system-reminder> tags contain useful information and reminders. These tags are added automatically by the system and are not directly related to the specific tool result or user message in which they appear.
 """
 
+user-action-note = '''
+Tool results and user messages may contain [USER_ACTION ...] ... [END USER_ACTION] blocks. This marks actions initiated directly by the user outside the normal tool-call flow (e.g., `!` shell commands, `/SKILL` loads, or `@path` references). The single-line opening tag carries a `kind` attribute (exec/skill/path) and its corresponding value (`command`/`name`/`path`).
+Treat the enclosed content as factual context about "what the user has done". These actions are chosen by the user, not by you; do not re-run them unless asked.
+'''
+
 [prompt.copy]
 enabled-tools = "Tools currently enabled from ManualAid: %{tools}"
 line-ending-rule = """
