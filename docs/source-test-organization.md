@@ -116,6 +116,7 @@ pub mod dir_tree;
 mod env;
 pub mod pager;
 pub mod style;
+pub mod terminal_title;
 ```
 
 - `cli`：CLI 参数与入口编排。
@@ -125,6 +126,7 @@ pub mod style;
 - `env`：环境路径辅助。
 - `pager`：长输出分页。
 - `style`：终端样式辅助。
+- `terminal_title`：终端窗口标题（以项目文件夹名标识会话）。
 
 `commands` 中的单文件模块遵循与 core 相同的 `_tests.rs` 模式，例如 `src/commands/dir.rs` 末尾：
 

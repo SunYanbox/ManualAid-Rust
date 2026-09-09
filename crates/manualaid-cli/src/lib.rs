@@ -12,6 +12,7 @@ pub mod dir_tree;
 mod env;
 pub mod pager;
 pub mod style;
+pub mod terminal_title;
 
 #[cfg(test)]
 pub(crate) mod test_support;

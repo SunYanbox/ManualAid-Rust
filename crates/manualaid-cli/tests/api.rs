@@ -11,6 +11,8 @@ mod format;
 mod mask;
 #[path = "api/skill.rs"]
 mod skill;
+#[path = "api/terminal_title.rs"]
+mod terminal_title;
 
 use std::sync::{Mutex, MutexGuard};
 
