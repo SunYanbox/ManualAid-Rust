@@ -1,13 +1,14 @@
-//! Skill tool execution: loads the body of an enabled skill by its unique
-//! name and returns it together with a host-action JSON header.
-//! Skill 工具执行：按唯一名称加载已启用技能的正文，连同 host-action
-//! JSON 头部一起返回。
+//! Skill tool execution: loads the body of an enabled skill by its
+//! agent-facing name (or full stable unique name) and returns it together
+//! with a host-action JSON header.
+//! Skill 工具执行：按代理可见名称（或完整稳定唯一名称）加载已启用技能的
+//! 正文，连同 host-action JSON 头部一起返回。
 
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 
 use super::{ToolResult, get_string};
-use crate::skill::{enabled_skills, get_skill};
+use crate::skill::{enabled_skills, exposed_name_map, resolve_skill};
 
 /// Execute one skill parameter set. Only enabled skills can be loaded.
 /// 执行一组 skill 参数。只有已启用的技能才能被加载。
@@ -15,7 +16,7 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
     let skill_name = get_string(params, "skill").unwrap_or_default();
     let args = get_string(params, "args").unwrap_or_default();
 
-    match get_skill(&skill_name) {
+    match resolve_skill(&skill_name) {
         Some(skill) if skill.is_enabled => {
             // `path` uses the same `/`-separated form as the config-file skill
             // keys, so agents can join skill-relative resource paths on every
@@ -42,9 +43,11 @@ pub(crate) async fn run(params: &IndexMap<String, Value>) -> ToolResult {
             format!("Skill `{skill_name}` has been disabled by the user"),
         ),
         None => {
-            let available: Vec<String> = enabled_skills()
+            let enabled = enabled_skills();
+            let exposed = exposed_name_map(&enabled);
+            let available: Vec<&str> = enabled
                 .iter()
-                .map(|skill| skill.unique_name.clone())
+                .map(|skill| exposed[skill.unique_name.as_str()].as_str())
                 .collect();
             let message = if available.is_empty() {
                 format!("Skill `{skill_name}` not found — no skills are enabled")

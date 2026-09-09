@@ -127,11 +127,12 @@ fn system_prompt_includes_enabled_skills() {
         let config = Config::default();
         let registry = FormatRegistry::new();
         let skill = Skill {
-            unique_name: "demo".to_string(),
+            unique_name: "project-.claude-demo".to_string(),
             name: "demo".to_string(),
             description: "demo skill".to_string(),
             body: "body".to_string(),
             path: PathBuf::from("/skills/demo"),
+            agent_dir: ".claude".to_string(),
             is_global: false,
             is_enabled: true,
         };
@@ -139,7 +140,10 @@ fn system_prompt_includes_enabled_skills() {
         assert!(prompt.contains("<skill-usage>"));
         assert!(prompt.contains("## skill"));
         assert!(prompt.contains("<available_skills>"));
-        assert!(prompt.contains("demo"));
+        // The list shows the short exposed name, not the stable unique name.
+        // 列表展示简短的暴露名，而非稳定唯一名称。
+        assert!(prompt.contains("- demo: demo skill"));
+        assert!(!prompt.contains("project-.claude-demo"));
     });
 }
 
@@ -149,21 +153,23 @@ fn system_prompt_skips_disabled_skills_in_list() {
         let config = Config::default();
         let registry = FormatRegistry::new();
         let enabled = Skill {
-            unique_name: "demo".to_string(),
+            unique_name: "project-.claude-demo".to_string(),
             name: "demo".to_string(),
             description: "demo skill".to_string(),
             body: "body".to_string(),
             path: PathBuf::from("/skills/demo"),
+            agent_dir: ".claude".to_string(),
             is_global: false,
             is_enabled: true,
         };
         let disabled = Skill {
-            unique_name: "hidden".to_string(),
+            unique_name: "global-.claude-hidden".to_string(),
             name: "hidden".to_string(),
             description: "hidden skill".to_string(),
             body: "body".to_string(),
             path: PathBuf::from("/skills/hidden"),
-            is_global: false,
+            agent_dir: ".claude".to_string(),
+            is_global: true,
             is_enabled: false,
         };
         let prompt = build_system_prompt(
@@ -174,8 +180,49 @@ fn system_prompt_skips_disabled_skills_in_list() {
             &[],
         );
         assert!(prompt.contains("<available_skills>"));
-        assert!(prompt.contains("demo"));
+        assert!(prompt.contains("- demo: demo skill"));
         assert!(!prompt.contains("hidden"));
+    });
+}
+
+#[test]
+fn system_prompt_lists_dir_prefixed_names_for_collisions() {
+    with_locale("en", || {
+        let config = Config::default();
+        let registry = FormatRegistry::new();
+        let from_agents = Skill {
+            unique_name: "project-.agents-word".to_string(),
+            name: "word".to_string(),
+            description: "agents copy".to_string(),
+            body: "body".to_string(),
+            path: PathBuf::from("/skills/agents-word"),
+            agent_dir: ".agents".to_string(),
+            is_global: false,
+            is_enabled: true,
+        };
+        let from_claude = Skill {
+            unique_name: "project-.claude-word".to_string(),
+            name: "word".to_string(),
+            description: "claude copy".to_string(),
+            body: "body".to_string(),
+            path: PathBuf::from("/skills/claude-word"),
+            agent_dir: ".claude".to_string(),
+            is_global: false,
+            is_enabled: true,
+        };
+        let prompt = build_system_prompt(
+            &config,
+            Path::new("C:/ws"),
+            &registry,
+            &[from_agents, from_claude],
+            &[],
+        );
+        // The shared plain name is ambiguous, so the list shows the
+        // dir-prefixed exposed names (issue example 3).
+        // 共享裸名有歧义时列表展示目录前缀暴露名（issue 示例 3）。
+        assert!(prompt.contains("- .agents-word: agents copy"));
+        assert!(prompt.contains("- .claude-word: claude copy"));
+        assert!(!prompt.contains("- word:"));
     });
 }
 

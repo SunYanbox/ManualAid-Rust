@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use indexmap::IndexMap;
-use manualaid_core::skill::{reload_skills, reset_skills, set_enabled};
+use manualaid_core::skill::{reload_skills, reload_skills_with_home, reset_skills, set_enabled};
 use manualaid_core::tools::ToolKind;
 use serde_json::Value;
 
@@ -51,16 +51,20 @@ async fn enabled_project_skill_returns_body() {
     let skills = manualaid_core::skill::all_skills();
     let skill = skills
         .iter()
-        .find(|skill| skill.unique_name == "demo-skill")
+        .find(|skill| skill.unique_name == "project-.claude-demo-skill")
         .expect("skill loaded");
     let expected_path = skill.path.to_string_lossy().replace('\\', "/");
 
-    let result = ToolKind::Skill.run(&skill_params("demo-skill")).await;
-    assert!(result.success, "{}", result.output);
-    assert!(result.output.contains("body text"));
-    assert!(result.output.contains("invoke_skill"));
-    assert!(result.output.contains("\"path\""));
-    assert!(result.output.contains(&expected_path));
+    // Both the exposed plain name and the full stable unique name work.
+    // 暴露裸名与完整稳定唯一名称都可调用。
+    for name in ["demo-skill", "project-.claude-demo-skill"] {
+        let result = ToolKind::Skill.run(&skill_params(name)).await;
+        assert!(result.success, "{}", result.output);
+        assert!(result.output.contains("body text"));
+        assert!(result.output.contains("invoke_skill"));
+        assert!(result.output.contains("\"path\""));
+        assert!(result.output.contains(&expected_path));
+    }
     reset_skills();
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -73,13 +77,19 @@ async fn disabled_skill_is_rejected() {
     let skills = manualaid_core::skill::all_skills();
     let skill = skills
         .iter()
-        .find(|skill| skill.unique_name == "off-skill")
+        .find(|skill| skill.unique_name == "project-.claude-off-skill")
         .expect("skill loaded");
     set_enabled(&skill.path, false).unwrap();
 
-    let result = ToolKind::Skill.run(&skill_params("off-skill")).await;
-    assert!(!result.success);
-    assert!(result.output.contains("disabled"));
+    // A disabled skill is reported as such whether it is addressed by its
+    // stable unique name or its (now unresolvable) plain name.
+    // 无论以稳定唯一名称还是（现已无法解析的）裸名寻址，禁用技能都报
+    // “disabled”。
+    for name in ["project-.claude-off-skill", "off-skill"] {
+        let result = ToolKind::Skill.run(&skill_params(name)).await;
+        assert!(!result.success);
+        assert!(result.output.contains("disabled"));
+    }
     reset_skills();
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -95,4 +105,44 @@ async fn unknown_skill_lists_enabled_alternatives() {
     assert!(result.output.contains("known-skill"));
     reset_skills();
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test]
+async fn unknown_skill_lists_exposed_names_for_collisions() {
+    let _guard = SKILL_LOCK.lock().await;
+    let root = temp_root("unknown-collision");
+    let home = temp_root("unknown-collision-home");
+    let project_dir = root.join(".claude").join("skills").join("pdf");
+    std::fs::create_dir_all(&project_dir).unwrap();
+    std::fs::write(
+        project_dir.join("SKILL.md"),
+        "---\nname: pdf\ndescription: project pdf\n---\nbody",
+    )
+    .unwrap();
+    let global_dir = home.join(".codex").join("skills").join("pdf");
+    std::fs::create_dir_all(&global_dir).unwrap();
+    std::fs::write(
+        global_dir.join("SKILL.md"),
+        "---\nname: pdf\ndescription: global pdf\n---\nbody",
+    )
+    .unwrap();
+    reload_skills_with_home(&root, &home).unwrap();
+    let global = manualaid_core::skill::all_skills()
+        .into_iter()
+        .find(|skill| skill.unique_name == "global-.codex-pdf")
+        .expect("global skill loaded");
+    set_enabled(&global.path, true).unwrap();
+
+    // Both copies are enabled, so the alternatives list uses the
+    // dir-prefixed exposed names instead of the ambiguous plain name.
+    // 两个副本都已启用，备选列表使用目录前缀暴露名而非有歧义的裸名。
+    let result = ToolKind::Skill.run(&skill_params("pdf")).await;
+    assert!(!result.success);
+    assert!(result.output.contains("not found"));
+    assert!(result.output.contains(".claude-pdf"));
+    assert!(result.output.contains(".codex-pdf"));
+    assert!(!result.output.contains(" pdf"));
+    reset_skills();
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&home);
 }

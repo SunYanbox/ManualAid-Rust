@@ -8,7 +8,7 @@ use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
 use manualaid_core::parser::FormatRegistry;
-use manualaid_core::skill::Skill;
+use manualaid_core::skill::{Skill, exposed_name_map};
 use manualaid_core::tools::{ToolKind, ToolResult};
 use sha2::{Digest, Sha256};
 
@@ -345,18 +345,23 @@ fn directory_listing_text(workspace_root: &Path) -> String {
 }
 
 /// The `<dynamic-context>` skills section from the enabled skills.
+///
+/// Each entry shows the exposed name — the shortest name that identifies the
+/// skill among the enabled set — plus its description, so the agent can pass
+/// the shown token verbatim to the Skill tool. The plain `name` and the full
+/// stable unique name are redundant in the system prompt.
 /// 由已启用技能生成的 `<dynamic-context>` 技能部分。
+///
+/// 每条目展示暴露名——在已启用集合中唯一识别该技能的最短名称——及描述，
+/// 代理可将所示记号原样传给 Skill 工具。裸 `name` 与完整稳定唯一名在
+/// 系统提示中冗余。
 fn skills_list_text(skills: &[Skill]) -> String {
+    let enabled: Vec<Skill> = skills.iter().filter(|s| s.is_enabled).cloned().collect();
+    let exposed = exposed_name_map(&enabled);
     let mut out = String::new();
-    for skill in skills {
-        if !skill.is_enabled {
-            continue;
-        }
-        let _ = writeln!(
-            out,
-            "- {} ({}): {}",
-            skill.name, skill.unique_name, skill.description
-        );
+    for skill in &enabled {
+        let name = &exposed[skill.unique_name.as_str()];
+        let _ = writeln!(out, "- {name}: {}", skill.description);
     }
     if out.is_empty() {
         String::new()
@@ -780,6 +785,7 @@ mod tests {
             description: "says hi".into(),
             body: "## Usage\nhi".into(),
             path: std::path::PathBuf::from("/skills/greeter"),
+            agent_dir: ".claude".into(),
             is_global: true,
             is_enabled: false,
         }];

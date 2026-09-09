@@ -159,8 +159,8 @@ fn skill_flags_default_shows_both_scopes() {
 
     let output = run_in(&project, &home, &["debug", "skill"]);
     assert!(output.status.success());
-    assert!(stdout(&output).contains("projskill"));
-    assert!(stdout(&output).contains("globskill"));
+    assert!(stdout(&output).contains("project-.claude-projskill"));
+    assert!(stdout(&output).contains("global-.codex-globskill"));
 }
 
 #[test]
@@ -172,7 +172,7 @@ fn skill_flags_global_scope_filters_project_out() {
 
     let output = run_in(&project, &home, &["debug", "skill", "--global"]);
     assert!(output.status.success());
-    assert!(stdout(&output).contains("globskill"));
+    assert!(stdout(&output).contains("global-.codex-globskill"));
     assert!(!stdout(&output).contains("projskill"));
 }
 
@@ -185,7 +185,7 @@ fn skill_flags_project_scope_filters_global_out() {
 
     let output = run_in(&project, &home, &["debug", "skill", "--project"]);
     assert!(output.status.success());
-    assert!(stdout(&output).contains("projskill"));
+    assert!(stdout(&output).contains("project-.claude-projskill"));
     assert!(!stdout(&output).contains("globskill"));
 }
 
@@ -202,8 +202,8 @@ fn skill_flags_both_scopes_shows_everything() {
         &["debug", "skill", "--global", "--project"],
     );
     assert!(output.status.success());
-    assert!(stdout(&output).contains("projskill"));
-    assert!(stdout(&output).contains("globskill"));
+    assert!(stdout(&output).contains("project-.claude-projskill"));
+    assert!(stdout(&output).contains("global-.codex-globskill"));
 }
 
 #[test]
