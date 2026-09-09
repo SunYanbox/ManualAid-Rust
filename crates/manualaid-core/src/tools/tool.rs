@@ -324,6 +324,54 @@ impl ToolKind {
     }
 }
 
+/// Kind of a user-driven action wrapped in a `[USER_ACTION]` block.
+/// `[USER_ACTION]` 块所包裹的用户驱动操作类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UserActionKind {
+    /// A shell command typed with a `!` prefix.
+    /// 以 `!` 前缀输入的 shell 命令。
+    Exec,
+    /// A skill loaded via `/SKILL`.
+    /// 通过 `/SKILL` 加载的技能。
+    Skill,
+    /// A file or folder referenced with `@path`.
+    /// 以 `@path` 引用的文件或文件夹。
+    Path,
+}
+
+impl UserActionKind {
+    /// Wire-level name used as the `kind` attribute value.
+    /// 线上名称，用作 `kind` 属性值。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Exec => "exec",
+            Self::Skill => "skill",
+            Self::Path => "path",
+        }
+    }
+
+    /// Attribute name holding this kind's label in a `[USER_ACTION]` header.
+    /// 该类型 label 在 `[USER_ACTION]` 头部中的属性名。
+    pub fn attr_name(&self) -> &'static str {
+        match self {
+            Self::Exec => "command",
+            Self::Skill => "name",
+            Self::Path => "path",
+        }
+    }
+}
+
+/// Label attached to a user-driven action; the meaning of `label` depends on
+/// [`UserActionKind`] (full command, exposed skill name, or absolute path).
+/// 附加到用户驱动操作的标注；`label` 含义取决于 [`UserActionKind`]
+/// （完整命令、技能暴露名或绝对路径）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserAction {
+    pub kind: UserActionKind,
+    pub label: String,
+}
+
 /// The unified result of executing one tool call through the pipeline.
 /// 工具调用通过完整管线执行后的统一结果。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -365,6 +413,11 @@ pub struct ToolResult {
     /// 统计。无法估算时为 0。
     #[serde(default)]
     pub estimated_tokens: u64,
+    /// User-driven action metadata for `[USER_ACTION]` wrapping; `None` for
+    /// ordinary tool results.
+    /// `[USER_ACTION]` 包裹的用户驱动操作元数据；普通工具结果为 `None`。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_action: Option<UserAction>,
 }
 
 impl ToolResult {
@@ -385,6 +438,7 @@ impl ToolResult {
             params_summary: String::new(),
             execution_duration_ms: 0,
             estimated_tokens: 0,
+            user_action: None,
         }
     }
 
@@ -401,6 +455,7 @@ impl ToolResult {
             params_summary: String::new(),
             execution_duration_ms: 0,
             estimated_tokens: 0,
+            user_action: None,
         }
     }
 
@@ -408,6 +463,16 @@ impl ToolResult {
     /// 附加参数摘要，用于区分同一轮中的工具调用。
     pub fn with_params_summary(mut self, summary: String) -> Self {
         self.params_summary = summary;
+        self
+    }
+
+    /// Mark this result as a user-driven action wrapped in `[USER_ACTION]`.
+    /// 将此结果标记为 `[USER_ACTION]` 包裹的用户驱动操作。
+    pub fn with_user_action(mut self, kind: UserActionKind, label: impl Into<String>) -> Self {
+        self.user_action = Some(UserAction {
+            kind,
+            label: label.into(),
+        });
         self
     }
 }

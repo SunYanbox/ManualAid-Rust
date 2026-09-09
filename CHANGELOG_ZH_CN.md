@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### 新增
+
+- `!` shell 命令、`/SKILL` 技能加载与 `@path` 文件/文件夹引用等用户驱动操作的执行结果统一以 `[USER_ACTION kind="exec|skill|path" …] … [END USER_ACTION]` 包裹回贴给外部 LLM：头部属性按 kind 取 `command`/`name`/`path`，label 分别为完整用户命令、技能暴露名与绝对路径（目录末尾补 `\` 标记）；常规 `[TOOL_RESULT]` 渲染逐字节不变，截断与完整输出暂存管线对两类包裹统一复用
+- `ToolResult` 新增可选 `user_action` 字段（`serde(default, skip_serializing_if)`）与链式 `with_user_action(kind, label)` 构造器；`UserActionKind::as_str/attr_name` 集中 kind 线上名与 label 属性名映射，供后续 `/SKILL`、`@path` 接入复用；旧 session JSON 缺省加载为 `None`，无值序列化省略字段
+- 系统提示词（中英文）在 system-reminder 说明之后新增 `user-action-note`，向外部 LLM 解释 USER_ACTION 块含义及不要重复执行用户操作
+
 ## [0.12.0] - 2026-09-09
 
 ### 新增

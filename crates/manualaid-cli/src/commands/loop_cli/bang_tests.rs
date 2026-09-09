@@ -45,7 +45,11 @@ async fn bang_runs_shell_command_and_records_round() {
     assert!(record.results[0].success);
     assert!(record.results[0].output.contains("hello"));
     assert!(record.results[0].audit_decisions.is_empty());
-    assert!(provider.read().unwrap().contains("hello"));
+    let copied = provider.read().unwrap();
+    assert!(copied.contains("[USER_ACTION kind=\"exec\" command=\"echo hello\"]"));
+    assert!(copied.contains("[END USER_ACTION]"));
+    assert!(!copied.contains("[TOOL_RESULT shell"));
+    assert!(copied.contains("hello"));
 
     let _ = std::fs::remove_dir_all(&root);
 }

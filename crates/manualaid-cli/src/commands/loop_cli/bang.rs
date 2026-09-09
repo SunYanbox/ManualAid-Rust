@@ -8,7 +8,7 @@ use std::path::Path;
 use manualaid_core::clipboard::ClipboardProvider;
 use manualaid_core::executor::Executor;
 use manualaid_core::parser::ParsedToolCall;
-use manualaid_core::tools::ToolCallFormat;
+use manualaid_core::tools::{ToolCallFormat, UserActionKind};
 use manualaid_ws::config::Config;
 use manualaid_ws::session::{RoundStats, SessionLog};
 
@@ -56,6 +56,12 @@ pub(super) async fn run_bang_command<P: ClipboardProvider>(
     // 审计硬拒绝在到达这里之前已让结果失败，清空决策只会移除展示用的
     // “需要批准”条目。
     result.audit_decisions.clear();
+    // `!` commands are user-driven actions: wrap the result with a
+    // `[USER_ACTION kind="exec"]` header when it is rendered back to the
+    // external LLM. The label keeps the full command the user typed.
+    // `!` 命令属于用户驱动操作：在结果回贴给外部 LLM 时使用
+    // `[USER_ACTION kind="exec"]` 头部包裹，label 保留用户输入的完整命令。
+    let result = result.with_user_action(UserActionKind::Exec, command.to_string());
 
     let max_result_chars = config.max_result_chars;
     let stats = RoundStats {

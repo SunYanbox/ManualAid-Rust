@@ -156,6 +156,12 @@ system-reminder-note = """
 工具结果和用户消息可能包含 <system-reminder> 标签。<system-reminder> 标签包含有用的信息和提醒。这些标签由系统自动添加，与它们所在的具体工具结果或用户消息本身没有直接关系。
 """
 
+user-action-note = '''
+工具结果和用户消息中可能包含 [USER_ACTION ...] ... [END USER_ACTION] 块。此块标记由用户直接发起、在正常工具调用流程之外执行的操作（例如 `!` 前缀的 shell 命令、`/SKILL` 加载的技能、或 `@path` 引用的文件）。
+开头标签带有 `kind` 属性（exec/skill/path）及相应属性（`command`/`name`/`path`），遵守单行及基本转义规则。
+此块内容应视为"用户已做了什么"的事实性上下文。这些操作由用户选择而非由你选择，除非用户要求，不要重复执行。
+'''
+
 [prompt.copy]
 enabled-tools = "当前已启用的由 ManualAid 提供的工具：%{tools}"
 line-ending-rule = """
