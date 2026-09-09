@@ -341,6 +341,15 @@ mod tests {
     }
 
     #[test]
+    fn up_and_down_are_noops_without_candidates() {
+        let mut state = CompletionState::new();
+        state.handle_key(Key::Up);
+        state.handle_key(Key::Down);
+        assert_eq!(state.selected(), 0);
+        assert!(state.candidates().is_empty());
+    }
+
+    #[test]
     fn up_and_down_wrap_around() {
         let mut state = CompletionState::new();
         state.set_candidates(vec![candidate("/help"), candidate("/history")]);
@@ -384,6 +393,29 @@ mod tests {
         state.set_candidates(vec![candidate("src")]);
         state.handle_key(Key::Tab);
         assert_eq!(state.buffer(), "@src");
+    }
+
+    #[test]
+    fn tab_appends_separator_to_path_directory_candidate() {
+        let mut state = CompletionState::new();
+        state.handle_key(Key::Char('@'));
+        state.handle_key(Key::Char('s'));
+        let mut directory = candidate("src");
+        directory.is_dir = true;
+        state.set_candidates(vec![directory]);
+        state.handle_key(Key::Tab);
+        let expected = format!("@src{}", std::path::MAIN_SEPARATOR);
+        assert_eq!(state.buffer(), expected);
+    }
+
+    #[test]
+    fn path_trigger_after_a_space_stops_at_the_next_space() {
+        let mut state = CompletionState::new();
+        for ch in "note @sr ".chars() {
+            state.handle_key(Key::Char(ch));
+        }
+        assert_eq!(state.active_trigger(), None);
+        assert_eq!(state.active_query(), None);
     }
 
     #[test]

@@ -64,6 +64,37 @@ async fn file_and_folder_references_run_as_path_user_actions() {
 
 #[allow(clippy::await_holding_lock)]
 #[tokio::test]
+async fn lone_at_token_is_ignored() {
+    let _capture = crate::console::capture();
+    let _locale = crate::test_support::acquire_locale_lock();
+    i18n::set_locale("en");
+    let root = crate::test_support::temp_dir("path-action-lone-at");
+    let provider = MockClipboard::new();
+    let executor = build_test_executor(&root);
+    let mut config = manualaid_ws::config::Config::default();
+    let mut session = SessionLog::new();
+    let mut options = LoopOptions::default();
+
+    let handled = run_path_actions(
+        &provider,
+        &executor,
+        &root,
+        &mut config,
+        &mut session,
+        &mut options,
+        "@",
+    )
+    .await;
+
+    assert!(!handled);
+    assert!(session.is_empty());
+    assert!(provider.read().unwrap().is_empty());
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[allow(clippy::await_holding_lock)]
+#[tokio::test]
 async fn missing_path_prints_hint_without_recording_a_round() {
     let _capture = crate::console::capture();
     let _locale = crate::test_support::acquire_locale_lock();

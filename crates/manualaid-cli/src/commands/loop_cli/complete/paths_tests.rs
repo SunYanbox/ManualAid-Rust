@@ -6,7 +6,17 @@ use crate::test_support::temp_dir;
 /// stored representation on every OS.
 /// 用平台分隔符拼接路径段，让断言在各操作系统上都与存储形式一致。
 fn rel(parts: &[&str]) -> String {
-    parts.join(&std::path::MAIN_SEPARATOR.to_string())
+    parts.join(std::path::MAIN_SEPARATOR_STR)
+}
+
+#[test]
+fn separator_only_query_lists_root_children() {
+    let root = temp_dir("complete-paths-separator-only");
+    std::fs::create_dir_all(root.join("sub")).unwrap();
+    let mut candidates = scanned(&root);
+    let entries = candidates.filter("/");
+    assert_eq!(labels(&entries), vec!["sub"]);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 fn scanned(root: &std::path::Path) -> PathCandidates {

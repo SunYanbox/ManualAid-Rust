@@ -121,6 +121,37 @@ async fn disabled_skill_prints_hint_and_does_not_record() {
 
 #[allow(clippy::await_holding_lock)]
 #[tokio::test]
+async fn bare_slash_returns_false_for_inline_fallback() {
+    let _capture = crate::console::capture();
+    let _locale = crate::test_support::acquire_locale_lock();
+    i18n::set_locale("en");
+    let root = crate::test_support::temp_dir("skill-action-bare-slash");
+    let provider = MockClipboard::new();
+    let executor = build_test_executor(&root);
+    let mut config = manualaid_ws::config::Config::default();
+    let mut session = SessionLog::new();
+    let mut options = LoopOptions::default();
+
+    let handled = run_skill_action(
+        &provider,
+        &executor,
+        &root,
+        &mut config,
+        &mut session,
+        &mut options,
+        "/",
+    )
+    .await;
+
+    assert!(!handled);
+    assert!(session.is_empty());
+    assert!(provider.read().unwrap().is_empty());
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[allow(clippy::await_holding_lock)]
+#[tokio::test]
 async fn unknown_skill_returns_false_for_inline_fallback() {
     let _capture = crate::console::capture();
     let _locale = crate::test_support::acquire_locale_lock();

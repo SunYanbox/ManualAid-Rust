@@ -429,6 +429,35 @@ mod tests {
     }
 
     #[test]
+    fn convert_key_maps_special_keys() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)),
+            Some(EditorEvent::Key(Key::Backspace))
+        ));
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)),
+            Some(EditorEvent::Key(Key::Up))
+        ));
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
+            Some(EditorEvent::Key(Key::Down))
+        ));
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+            Some(EditorEvent::Key(Key::Tab))
+        ));
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            Some(EditorEvent::Key(Key::Esc))
+        ));
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(EditorEvent::Key(Key::Enter))
+        ));
+    }
+
+    #[test]
     fn convert_key_ignores_release_events() {
         use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
         let key = KeyEvent {
@@ -463,6 +492,20 @@ mod tests {
         assert_eq!(
             run_with_events(&mut out, "> ", |_| Vec::new(), &events),
             None
+        );
+    }
+
+    #[test]
+    fn ctrl_d_on_a_non_empty_buffer_keeps_editing() {
+        let mut out = Vec::new();
+        let events = [
+            EditorEvent::Key(Key::Char('a')),
+            EditorEvent::CtrlD,
+            EditorEvent::Key(Key::Enter),
+        ];
+        assert_eq!(
+            run_with_events(&mut out, "> ", |_| Vec::new(), &events),
+            Some("a".to_owned())
         );
     }
 
@@ -506,6 +549,58 @@ mod tests {
         let text = String::from_utf8(out).unwrap();
         assert!(text.contains("/help"));
         assert!(text.contains("/history"));
+    }
+
+    #[test]
+    fn display_width_counts_cjk_as_two_columns() {
+        assert_eq!(display_width("ab"), 2);
+        assert_eq!(display_width("中文"), 4);
+        assert_eq!(display_width("a中"), 3);
+    }
+
+    #[test]
+    fn render_slides_window_when_selection_reaches_bottom() {
+        let mut out = Vec::new();
+        let many: Vec<Candidate> = (0..10)
+            .map(|index| Candidate {
+                label: format!("/item{index}"),
+                description: String::new(),
+                is_dir: false,
+                dimmed: false,
+            })
+            .collect();
+        let mut state = CompletionState::new();
+        state.set_candidates(many);
+        // Move the selection to the last candidate so the window must slide.
+        for _ in 0..9 {
+            let _ = state.handle_key(Key::Down);
+        }
+        let lines = render(&mut out, "> ", &state, 0).unwrap();
+        assert!(lines > 0);
+        let text = String::from_utf8(out).unwrap();
+        // The last candidate must be among the rendered rows.
+        assert!(text.contains("/item9"));
+    }
+
+    #[test]
+    fn render_marks_dimmed_path_candidate_as_muted() {
+        let mut out = Vec::new();
+        let mut state = CompletionState::new();
+        for ch in "@sub".chars() {
+            let _ = state.handle_key(Key::Char(ch));
+        }
+        let candidates = vec![Candidate {
+            label: "sub".to_owned(),
+            description: String::new(),
+            is_dir: true,
+            dimmed: true,
+        }];
+        state.set_candidates(candidates);
+        let lines = render(&mut out, "> ", &state, 0).unwrap();
+        assert_eq!(lines, 1);
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("@sub"));
+        assert!(text.contains("\x1b["));
     }
 
     #[test]

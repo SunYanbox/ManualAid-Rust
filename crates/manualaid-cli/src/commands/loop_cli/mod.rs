@@ -477,6 +477,7 @@ fn completion_candidates(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use complete::state::Key;
 
     use indexmap::IndexMap;
     use manualaid_core::audit::{AuditDecision, AuditQueueItem};
@@ -670,6 +671,74 @@ mod tests {
         assert_eq!(config.lang, "zh-CN");
         apply_cli_lang(None, &mut config);
         assert_eq!(config.lang, "zh-CN");
+    }
+
+    #[test]
+    fn completion_candidates_command_merges_builtin_commands_and_skills() {
+        let _locale = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skills = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("completion-candidates-command");
+        let home = crate::test_support::temp_dir("completion-candidates-command-home");
+        let skill_dir = root.join(".claude").join("skills").join("demo");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: demo\ndescription: Demo skill\n---\nbody\n",
+        )
+        .unwrap();
+        manualaid_core::skill::reload_skills_with_home(&root, &home).unwrap();
+
+        let mut state = CompletionState::new();
+        for ch in "/demo".chars() {
+            state.handle_key(Key::Char(ch));
+        }
+        let cache = Arc::new(std::sync::Mutex::new(PathCandidates::default()));
+        let candidates = completion_candidates(&state, &root, &cache);
+
+        // The typed `/demo` matches no built-in command prefix, so the only
+        // hit is the enabled skill matched by substring on its unique name.
+        // 键入的 `/demo` 不匹配任何内置命令前缀，唯一命中是按唯一名子串
+        // 匹配到的已启用技能。
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].label, "project-.claude-demo");
+
+        // Leave the shared skill store empty for the other tests.
+        // 为其他测试把共享技能存储清空。
+        let empty = crate::test_support::temp_dir("completion-candidates-empty");
+        manualaid_core::skill::reload_skills_with_home(&empty, &empty).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&home);
+        let _ = std::fs::remove_dir_all(&empty);
+    }
+
+    #[test]
+    fn completion_candidates_path_reads_the_session_cache() {
+        let root = crate::test_support::temp_dir("completion-candidates-path");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src").join("main.rs"), "x").unwrap();
+        let mut cache = PathCandidates::default();
+        cache.scan(&root);
+        let cache = Arc::new(std::sync::Mutex::new(cache));
+
+        let mut state = CompletionState::new();
+        for ch in "@src".chars() {
+            state.handle_key(Key::Char(ch));
+        }
+        let candidates = completion_candidates(&state, &root, &cache);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].label, "src");
+        assert!(candidates[0].is_dir);
+        assert!(!candidates[0].dimmed);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn completion_candidates_without_an_active_query_is_empty() {
+        let cache = Arc::new(std::sync::Mutex::new(PathCandidates::default()));
+        let candidates = completion_candidates(&CompletionState::new(), Path::new("."), &cache);
+        assert!(candidates.is_empty());
     }
 
     #[test]
