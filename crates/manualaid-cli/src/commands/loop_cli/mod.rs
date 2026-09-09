@@ -142,6 +142,10 @@ async fn loop_main_at(
     lang: Option<String>,
     mode: Option<SessionMode>,
 ) -> Result<(), String> {
+    // Title the window first so parallel sessions on different projects are
+    // distinguishable before any output scrolls past.
+    // 先设置窗口标题，让不同项目的并行会话在任何输出滚过之前就可区分。
+    crate::terminal_title::set_project_title(current_dir);
     // Create the standard project `.ManualAid` files (config + gitignore)
     // at startup so a fresh workspace never lacks its ignore rules;
     // existing files are never overwritten.
@@ -608,6 +612,31 @@ mod tests {
         let output = _capture.text();
         // Single toggle covers both branches: Manual -> AcceptEdit
         assert!(output.contains("accept edit"));
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn loop_titles_the_window_with_the_project_folder() {
+        let capture = crate::console::capture();
+        let _lang = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skills = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("loop-title-ws");
+        let home = crate::test_support::temp_dir("loop-title-home");
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        super::utils::push_test_input(&["0"]);
+        loop_main_at(&root, &home, None, None).await.unwrap();
+        // The title must be the very first thing the loop writes, so it lands
+        // before any output scrolls past.
+        // 标题必须是 loop 写出的第一样东西，才能在任何输出滚过之前生效。
+        let folder = root.file_name().unwrap().to_string_lossy();
+        assert!(
+            capture
+                .text()
+                .starts_with(&format!("\x1B]0;[ManualAid] {folder}\x07"))
+        );
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_dir_all(&home);
     }
