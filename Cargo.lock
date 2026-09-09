@@ -1027,6 +1027,7 @@ dependencies = [
  "clap",
  "crossterm",
  "i18n",
+ "ignore",
  "indexmap",
  "manualaid-core",
  "manualaid-ws",

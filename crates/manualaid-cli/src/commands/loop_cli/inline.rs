@@ -17,6 +17,64 @@ use super::handlers::{
 };
 use super::utils::{parse_round_index, t_fmt};
 
+/// A built-in inline command with the i18n key of its usage description.
+/// 内置内联命令及其用途描述的 i18n 键。
+pub(crate) struct BuiltinCommand {
+    /// Primary spelling including the leading `/` (e.g. `/help`).
+    /// 含起始 `/` 的主要写法（如 `/help`）。
+    pub name: &'static str,
+    /// Key of the localized description under `cli.cmd.*`.
+    /// `cli.cmd.*` 下的本地化描述键。
+    pub desc_key: &'static str,
+}
+
+/// Every built-in inline command, shared by `/help` and the completion
+/// candidates; aliases remain only in `handle_inline_command`.
+/// 全部内置内联命令，供 `/help` 与补全候选共用；别名仅保留在
+/// `handle_inline_command` 中。
+pub(crate) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
+    BuiltinCommand {
+        name: "/help",
+        desc_key: "cli.cmd.help",
+    },
+    BuiltinCommand {
+        name: "/history",
+        desc_key: "cli.cmd.history",
+    },
+    BuiltinCommand {
+        name: "/summary",
+        desc_key: "cli.cmd.summary",
+    },
+    BuiltinCommand {
+        name: "/clear",
+        desc_key: "cli.cmd.clear",
+    },
+    BuiltinCommand {
+        name: "/mode",
+        desc_key: "cli.cmd.mode",
+    },
+    BuiltinCommand {
+        name: "/ws",
+        desc_key: "cli.cmd.ws",
+    },
+    BuiltinCommand {
+        name: "/tools",
+        desc_key: "cli.cmd.tools",
+    },
+    BuiltinCommand {
+        name: "/c",
+        desc_key: "cli.cmd.copy",
+    },
+    BuiltinCommand {
+        name: "/lang",
+        desc_key: "cli.cmd.lang",
+    },
+    BuiltinCommand {
+        name: "/format",
+        desc_key: "cli.cmd.format",
+    },
+];
+
 /// Handle an inline `/command` typed at the menu prompt.
 /// 处理在菜单提示符输入的内置 `/命令`。
 pub(super) fn handle_inline_command(
