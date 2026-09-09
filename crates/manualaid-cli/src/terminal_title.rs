@@ -19,10 +19,10 @@ const TITLE_PREFIX: &str = "[ManualAid] ";
 /// 项目根没有可用文件夹名时使用的标题。
 const FALLBACK_TITLE: &str = "[ManualAid]";
 
-/// The window title for `project_root`: `[ManualAid] <folder>`, or
-/// [`FALLBACK_TITLE`] when the last path segment is missing or unusable.
+/// The window title for `project_root`: `[ManualAid] <folder>`, or a bare
+/// `[ManualAid]` when the last path segment is missing or unusable.
 /// 项目 `project_root` 的窗口标题：`[ManualAid] <文件夹名>`；最后一段缺失或
-/// 不可用时返回 [`FALLBACK_TITLE`]。
+/// 不可用时返回单独的 `[ManualAid]`。
 ///
 /// # Description
 /// Control characters are stripped because the title is embedded in an ANSI
