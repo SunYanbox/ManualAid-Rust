@@ -5,7 +5,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use indexmap::IndexMap;
-use manualaid_core::tools::{ToolCallFormat, ToolKind, ToolResult, all_tools, params_summary_of};
+use manualaid_core::tools::{
+    ToolCallFormat, ToolKind, ToolResult, UserAction, UserActionKind, all_tools, params_summary_of,
+};
 use serde_json::Value;
 
 /// A unique temporary file path (not pre-created).
@@ -560,6 +562,67 @@ fn tool_result_constructors_set_flags() {
     assert!(ok.success && ok.read_only && !ok.is_fallback);
     let err = ToolResult::failure("edit", "msg");
     assert!(!err.success && err.is_fallback);
+}
+
+#[test]
+fn user_action_kind_serializes_to_wire_names() {
+    assert_eq!(UserActionKind::Exec.as_str(), "exec");
+    assert_eq!(UserActionKind::Skill.as_str(), "skill");
+    assert_eq!(UserActionKind::Path.as_str(), "path");
+}
+
+#[test]
+fn user_action_kind_maps_label_attribute_names() {
+    assert_eq!(UserActionKind::Exec.attr_name(), "command");
+    assert_eq!(UserActionKind::Skill.attr_name(), "name");
+    assert_eq!(UserActionKind::Path.attr_name(), "path");
+}
+
+#[test]
+fn user_action_serde_round_trip() {
+    let result = ToolResult::success("shell", "out", false)
+        .with_user_action(UserActionKind::Exec, "cargo test");
+    let json = serde_json::to_string(&result).expect("serialize");
+    assert!(json.contains(r#""user_action":"#));
+    assert!(json.contains(r#""kind":"exec""#));
+    assert!(json.contains(r#""label":"cargo test""#));
+    let decoded: ToolResult = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(
+        decoded.user_action,
+        Some(UserAction {
+            kind: UserActionKind::Exec,
+            label: "cargo test".to_string(),
+        })
+    );
+}
+
+#[test]
+fn user_action_missing_in_legacy_json_becomes_none() {
+    let legacy = r#"{"tool_name":"read","success":true,"output":"out","read_only":true,"is_fallback":false,"audit_decisions":[],"params_summary":"","execution_duration_ms":0,"estimated_tokens":0}"#;
+    let decoded: ToolResult = serde_json::from_str(legacy).expect("deserialize legacy");
+    assert_eq!(decoded.user_action, None);
+}
+
+#[test]
+fn tool_result_without_user_action_omits_field() {
+    let result = ToolResult::success("read", "out", true);
+    let json = serde_json::to_string(&result).expect("serialize");
+    assert!(!json.contains("user_action"));
+}
+
+#[test]
+fn with_user_action_chains_after_existing_fields() {
+    let result = ToolResult::success("shell", "out", false)
+        .with_params_summary("command=cargo test".to_string())
+        .with_user_action(UserActionKind::Skill, "plan");
+    assert_eq!(result.params_summary, "command=cargo test");
+    assert_eq!(
+        result.user_action,
+        Some(UserAction {
+            kind: UserActionKind::Skill,
+            label: "plan".to_string(),
+        })
+    );
 }
 
 /// Build an ordered parameter map from string pairs.

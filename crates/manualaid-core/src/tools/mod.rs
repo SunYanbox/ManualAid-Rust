@@ -11,7 +11,10 @@ pub mod skill;
 pub mod tool;
 pub mod write;
 
-pub use tool::{ParamSemantic, ToolCallFormat, ToolKind, ToolParam, ToolResult, params_summary_of};
+pub use tool::{
+    ParamSemantic, ToolCallFormat, ToolKind, ToolParam, ToolResult, UserAction, UserActionKind,
+    params_summary_of,
+};
 
 /// The static list of every built-in tool, in a stable order used by the
 /// prompt builder and the executor's routing.
