@@ -17,6 +17,10 @@
 - 补全编辑器光标升级为字符边界字节索引：`Char` 在光标处插入、`Backspace` 删除光标前一字符、Left/Right 单字符移动、Ctrl+Left/Right 按词移动；crossterm 键位转换映射普通方向键、Ctrl 修饰方向键与 Emacs 别名 C-b/C-f；光标移动触发候选刷新，因为活动补全 token 改为止于光标处
 - 补全渲染把光标放在提示符宽度加光标前文本显示宽度的位置，CJK 字符下光标保持对齐；Tab 填入候选后光标停在插入内容之后而非跳到缓冲末尾
 
+### 变更
+
+- 技能工具描述中“Do not invoke a skill that is already running”措辞存在歧义，易被误解为并发执行状态；英文改为 “Do not invoke a skill that is already loaded”，中文由“不要调用已在运行的技能”改为“不要调用已经加载过的技能”，明确指代当前对话中已加载/激活的技能
+
 ## [0.12.0] - 2026-09-09
 
 ### 新增
