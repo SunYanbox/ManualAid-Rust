@@ -192,7 +192,8 @@ global_config_changed = "Default config changed via %{path}: %{key} = %{value} (
 title = "Copy prompt"
 intent_rule = "Copy intent rule"
 tool_format = "Copy current tool call format"
-enabled_tools = "Copy currently enabled tools list"
+enabled_tools = "Copy the full list of currently enabled tools"
+skills_list = "Copy enabled skills list"
 context = "Copy context"
 line_ending = "Copy line-ending handling prompt"
 plan_mode = "Copy plan mode prompt"
@@ -225,6 +226,10 @@ tools = "List available tools"
 copy = "Copy round result"
 lang = "Switch language"
 format = "Switch tool call format"
+skills = "Copy enabled skills list"
+compress = "Copy conversation compression prompt"
+plan = "Copy plan mode prompt"
+build = "Copy switch execution mode prompt"
 
 [cli.help]
 text = """
@@ -237,7 +242,11 @@ Available inline commands:
   /summary    - Show session summary
   /help, /h, /?       - Show this help
   /ws              - Copy workspace system prompt
-  /tools           - List available tools
+  /tools           - Copy the enabled tools list
+  /skills          - Copy the enabled skills list
+  /compress        - Copy conversation compression prompt
+  /plan, /p        - Copy plan mode prompt
+  /build, /b       - Copy switch execution mode prompt
   /c [index]      - Copy round result
   /c t <tool>     - Copy tool template
   /SKILL [args]    - Load an enabled skill by name

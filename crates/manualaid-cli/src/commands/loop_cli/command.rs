@@ -79,6 +79,7 @@ pub(super) enum LoopCommand {
     CopyPromptMenu,
     CopyToolFormat,
     CopyEnabledTools,
+    CopySkillsList,
     CopyContext,
     CopyLineEndingRule,
     CopyPlanModeRule,
@@ -205,7 +206,13 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             CommandOutcome::Continue
         }
         LoopCommand::CopyEnabledTools => {
-            report_copy_error(copy_enabled_tools_with_provider(provider, config));
+            report_copy_error(copy_enabled_tools_with_provider(provider, config, registry));
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopySkillsList => {
+            // Only reached through the copy-prompt submenu; kept here so the
+            // exhaustive match stays complete.
+            // 仅通过复制提示词二级菜单进入；保留该分支以保证穷尽匹配。
             CommandOutcome::Continue
         }
         LoopCommand::CopyContext => {
@@ -636,6 +643,7 @@ mod tests {
             LoopCommand::CopyPromptMenu,
             LoopCommand::CopyToolFormat,
             LoopCommand::CopyEnabledTools,
+            LoopCommand::CopySkillsList,
             LoopCommand::CopyContext,
             LoopCommand::CopyLineEndingRule,
             LoopCommand::CopyPlanModeRule,

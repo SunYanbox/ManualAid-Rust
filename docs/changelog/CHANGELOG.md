@@ -4,6 +4,8 @@
 
 ### Added
 
+- New `/compress`, `/plan` (`/p`), `/build` (`/b`) and `/skills` shortcuts: copy the conversation compression prompt, the plan mode prompt, the switch execution mode prompt and the enabled skills list straight from the prompt; `/tools` now copies the full enabled tools list template.
+- The copy-prompt menu adds a "copy enabled skills list" entry and upgrades "copy currently enabled tools list" to the full tools list template (parameters and call templates included); copied tools and skills lists are uniformly wrapped in a `<system-reminder>` block.
 - `!` command results are now posted as `[USER_ACTION kind="exec" command="…"] … [END USER_ACTION]`, clearly marking that this is an operation directly initiated by the user rather than an automatic tool call.
 - The system prompt adds a USER_ACTION explanation, so the external model recognizes the meaning of user-driven operation blocks and avoids re-executing commands the user has already initiated.
 - The main menu input now supports interactive completion: typing `/` suggests built-in commands and available skills, and typing `@` suggests project files and folders; `/SKILL` and `@path` take effect as the user actively loading a skill and referencing a path respectively, producing corresponding USER_ACTION result blocks.

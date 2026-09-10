@@ -65,6 +65,7 @@
 - `i18n` 仅译文（locales）更改视为 patch 升级。
 - `manualaid-cli` 每次发布时必须升级版本，升级幅度视其对外行为变化而定：新增对外能力升级 minor，修复对外行为升级 patch。
 - 升级后同步更新根 `Cargo.toml` 的 `[workspace.dependencies]` 中对应 crate 版本。
+- **版本号仅在发布（Release）时更新**：日常开发提交（功能、修复、重构等）不修改任何 crate 的版本号；只有准备发布新版本时才按上述语义化规则统一升级版本并同步 `[workspace.dependencies]`。
 
 ## 注释风格
 

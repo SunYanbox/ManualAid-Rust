@@ -192,7 +192,8 @@ global_config_changed = "已通过配置文件 %{path} 更改默认配置：%{ke
 title = "复制提示词"
 intent_rule = "复制意图规则"
 tool_format = "复制当前工具调用格式"
-enabled_tools = "复制当前已启用的工具列表"
+enabled_tools = "复制当前已启用工具的完整列表"
+skills_list = "复制已启用 SKILL 列表"
 context = "复制上下文"
 line_ending = "复制行尾处理提示词"
 plan_mode = "复制计划模式提示词"
@@ -225,6 +226,10 @@ tools = "列出可用工具"
 copy = "复制轮次结果"
 lang = "切换语言"
 format = "切换工具调用格式"
+skills = "复制已启用 SKILL 列表"
+compress = "复制压缩会话提示词"
+plan = "复制计划模式提示词"
+build = "复制切换执行模式提示词"
 
 [cli.help]
 text = """
@@ -237,7 +242,11 @@ text = """
   /summary    - 显示会话摘要
   /help, /h, /?       - 显示此帮助
   /ws              - 复制工作区系统提示
-  /tools           - 列出可用工具
+  /tools           - 复制已启用工具列表
+  /skills          - 复制已启用 SKILL 列表
+  /compress        - 复制压缩会话提示词
+  /plan, /p        - 复制计划模式提示词
+  /build, /b       - 复制切换执行模式提示词
   /c [index]      - 复制轮次结果
   /c t <tool>     - 复制工具模板
   /SKILL [参数]    - 按名称加载已启用的技能

@@ -173,6 +173,38 @@ pub fn render_tools_list(config: &Config, registry: &FormatRegistry) -> String {
     out
 }
 
+/// Render the enabled-tools list wrapped in a single `<system-reminder>`
+/// block for copying to the clipboard. The system prompt keeps using
+/// [`render_tools_list`] inside its own `<available-tools>` section, so the
+/// two surfaces can evolve independently.
+/// 将已启用工具列表包裹在单个 `<system-reminder>` 块中，供复制到剪贴板。
+/// 系统提示词仍在自身的 `<available-tools>` 区块内使用
+/// [`render_tools_list`]，使两种用途可独立演进。
+pub fn render_tools_list_reminder(config: &Config, registry: &FormatRegistry) -> String {
+    let inner = render_tools_list(config, registry);
+    format!(
+        "<system-reminder>\n{}\n</system-reminder>",
+        inner.trim_end()
+    )
+}
+
+/// Render the enabled-skills list wrapped in a single `<system-reminder>`
+/// block for copying to the clipboard. When no skill is enabled the block
+/// still exists but carries the localized empty placeholder so the copied
+/// text never looks like a silent failure.
+/// 将已启用技能列表包裹在单个 `<system-reminder>` 块中，供复制到剪贴板。
+/// 无已启用技能时该块仍存在，但内部为本地化占位文案，使复制结果不会
+/// 看起来像静默失败。
+pub fn render_skills_list(skills: &[Skill]) -> String {
+    let inner = skills_list_text(skills);
+    let body = if inner.is_empty() {
+        i18n::t_str("prompt.copy.skills-empty")
+    } else {
+        inner.trim_end().to_string()
+    };
+    format!("<system-reminder>\n{body}\n</system-reminder>")
+}
+
 /// Whether `tool` is enabled by `config`.
 /// `tool` 是否被 `config` 启用。
 fn is_enabled(config: &Config, tool: &ToolKind) -> bool {
@@ -707,6 +739,43 @@ mod tests {
         let registry = FormatRegistry::new();
         let list = render_tools_list(&config, &registry);
         assert!(!list.contains("## shell"));
+    }
+
+    #[test]
+    fn tools_list_reminder_wraps_full_list() {
+        let config = Config::default();
+        let registry = FormatRegistry::new();
+        let wrapped = render_tools_list_reminder(&config, &registry);
+        assert!(wrapped.starts_with("<system-reminder>\n"));
+        assert!(wrapped.ends_with("</system-reminder>"));
+        assert!(wrapped.contains("## read"));
+        assert!(wrapped.contains("Call template"));
+    }
+
+    #[test]
+    fn skills_list_reminder_wraps_enabled_skills_and_placeholder() {
+        let disabled = vec![Skill {
+            unique_name: "greeter".into(),
+            name: "greeter".into(),
+            description: "says hi".into(),
+            body: "## Usage\nhi".into(),
+            path: std::path::PathBuf::from("/skills/greeter"),
+            agent_dir: ".claude".into(),
+            is_global: true,
+            is_enabled: false,
+        }];
+        let empty = render_skills_list(&disabled);
+        assert!(empty.starts_with("<system-reminder>\n"));
+        assert!(empty.contains(&i18n::t_str("prompt.copy.skills-empty")));
+
+        let enabled = vec![Skill {
+            is_enabled: true,
+            ..disabled[0].clone()
+        }];
+        let list = render_skills_list(&enabled);
+        assert!(list.starts_with("<system-reminder>\n"));
+        assert!(list.contains("<available_skills>"));
+        assert!(list.ends_with("</system-reminder>"));
     }
 
     #[test]

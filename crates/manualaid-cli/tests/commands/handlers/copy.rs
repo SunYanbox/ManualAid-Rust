@@ -146,20 +146,23 @@ fn copy_tool_format_writes_current_format_to_clipboard() {
 
 #[test]
 #[allow(clippy::await_holding_lock)]
-fn copy_enabled_tools_writes_names_only_to_clipboard() {
+fn copy_enabled_tools_writes_full_list_with_reminder() {
     let _capture = manualaid_cli::console::capture();
     let _lock = LOCALE_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     i18n::set_locale("en");
     let mock = MockClipboard::new();
-    copy_enabled_tools_with_provider(&mock, &Config::default()).unwrap();
+    let registry = FormatRegistry::new();
+    copy_enabled_tools_with_provider(&mock, &Config::default(), &registry).unwrap();
     let clipboard = mock.read().unwrap();
-    assert!(clipboard.contains("read"));
-    assert!(clipboard.contains("edit"));
-    assert!(clipboard.contains("write"));
-    assert!(clipboard.contains("shell"));
-    assert!(!clipboard.contains("**Parameters:**"));
+    assert!(clipboard.starts_with("<system-reminder>\n"));
+    assert!(clipboard.ends_with("</system-reminder>"));
+    assert!(clipboard.contains("## read"));
+    assert!(clipboard.contains("## edit"));
+    assert!(clipboard.contains("## write"));
+    assert!(clipboard.contains("## shell"));
+    assert!(clipboard.contains("**Parameters:**"));
 }
 
 #[test]
@@ -175,10 +178,11 @@ fn copy_enabled_tools_respects_disabled_switch() {
         shell: false,
         ..Config::default()
     };
-    copy_enabled_tools_with_provider(&mock, &config).unwrap();
+    let registry = FormatRegistry::new();
+    copy_enabled_tools_with_provider(&mock, &config, &registry).unwrap();
     let clipboard = mock.read().unwrap();
-    assert!(!clipboard.contains("shell"));
-    assert!(clipboard.contains("read"));
+    assert!(!clipboard.contains("## shell"));
+    assert!(clipboard.contains("## read"));
 }
 
 #[test]
