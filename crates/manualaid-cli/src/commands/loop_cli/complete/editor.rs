@@ -7,9 +7,10 @@
 //! TTY 即可单元测试。
 
 use std::io::{self, IsTerminal, Write};
+use std::sync::Arc;
 
 use super::candidates::Candidate;
-use super::state::{CompletionState, Key, Outcome, Trigger};
+use super::state::{CompletionState, InputHistory, Key, Outcome, Trigger};
 
 /// Maximum number of suggestion rows rendered at once.
 /// 单次渲染的建议行数上限。
@@ -45,17 +46,25 @@ pub(crate) enum EditorEvent {
 /// test-input mechanism untouched.
 /// 读取一行并补全；进程非交互时回退到普通的脚本化 `read_line`，保持
 /// 现有测试输入机制不变。
-pub(crate) fn read_line_with_completion<F>(prompt: &str, candidates_fn: F) -> Option<String>
+pub(crate) fn read_line_with_completion<F>(
+    prompt: &str,
+    history: Option<Arc<InputHistory>>,
+    candidates_fn: F,
+) -> Option<String>
 where
     F: FnMut(&CompletionState) -> Vec<Candidate>,
 {
     if !is_interactive() {
         crate::console::out_print!("{prompt}");
         crate::console::flush();
-        return crate::commands::loop_cli::utils::read_line();
+        let line = crate::commands::loop_cli::utils::read_line()?;
+        if let Some(history) = &history {
+            history.push(line.trim());
+        }
+        return Some(line);
     }
     let _raw = crate::pager::RawModeGuard::enable().ok()?;
-    run_completion_loop(io::stdout(), prompt, candidates_fn, read_key_event)
+    run_completion_loop(io::stdout(), prompt, history, candidates_fn, read_key_event)
 }
 
 /// Whether completion editing is allowed in this process: test builds never
@@ -103,6 +112,30 @@ fn convert_crossterm_key(key: crossterm::event::KeyEvent) -> Option<EditorEvent>
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             Some(EditorEvent::CtrlC)
         }
+        // Ctrl+Left/Right move by whole words; terminals report either the
+        // arrow with CONTROL or the Emacs bindings C-b/C-f, so accept both.
+        // Ctrl+Left/Right 按词移动；终端可能上报带 CONTROL 的方向键或
+        // Emacs 绑定 C-b/C-f，两者都接受。
+        KeyCode::Left => Some(EditorEvent::Key(
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                Key::CtrlLeft
+            } else {
+                Key::Left
+            },
+        )),
+        KeyCode::Right => Some(EditorEvent::Key(
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                Key::CtrlRight
+            } else {
+                Key::Right
+            },
+        )),
+        KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            Some(EditorEvent::Key(Key::CtrlLeft))
+        }
+        KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            Some(EditorEvent::Key(Key::CtrlRight))
+        }
         KeyCode::Char(ch) if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT => {
             Some(EditorEvent::Key(Key::Char(ch)))
         }
@@ -123,6 +156,7 @@ fn convert_crossterm_key(key: crossterm::event::KeyEvent) -> Option<EditorEvent>
 fn run_completion_loop<W, F, K>(
     mut writer: W,
     prompt: &str,
+    history: Option<Arc<InputHistory>>,
     mut candidates_fn: F,
     mut read_key: K,
 ) -> Option<String>
@@ -132,7 +166,10 @@ where
     K: FnMut() -> io::Result<EditorEvent>,
 {
     let prompt_width = display_width(prompt);
-    let mut state = CompletionState::new();
+    let mut state = match &history {
+        Some(history) => CompletionState::with_history(history.clone()),
+        None => CompletionState::new(),
+    };
     refresh_candidates(&mut state, &mut candidates_fn);
     let mut prev_suggestion_lines =
         render(&mut writer, prompt, &state, 0).expect("initial render must succeed");
@@ -141,11 +178,21 @@ where
         let event = read_key().ok()?;
         match event {
             EditorEvent::Key(key) => {
-                // Only buffer edits can change the active completion token;
-                // selection moves and Esc keep the current candidate set.
-                // 仅缓冲编辑会改变活动补全 token；选择移动与 Esc 保持当前
-                // 候选集不变。
-                let refresh = matches!(key, Key::Char(_) | Key::Backspace | Key::Tab);
+                // Any buffer or cursor edit can change the active completion
+                // token; selection moves, history recalls and Esc keep the
+                // current candidate set.
+                // 一切缓冲或光标编辑都可能改变活动补全 token；选择移动、
+                // 历史切换与 Esc 保持当前候选集不变。
+                let refresh = matches!(
+                    key,
+                    Key::Char(_)
+                        | Key::Backspace
+                        | Key::Tab
+                        | Key::Left
+                        | Key::Right
+                        | Key::CtrlLeft
+                        | Key::CtrlRight
+                );
                 match state.handle_key(key) {
                     Outcome::Handled => {
                         if refresh {
@@ -157,10 +204,13 @@ where
                     Outcome::Submit(line) => {
                         clear_suggestions_and_submit(
                             &mut writer,
-                            prompt_width + state.cursor(),
+                            prompt_width + display_width(&line),
                             prev_suggestion_lines,
                         )
                         .ok()?;
+                        if let Some(history) = &history {
+                            history.push(line.trim());
+                        }
                         return Some(line);
                     }
                 }
@@ -181,7 +231,10 @@ where
                 if state.buffer().is_empty() {
                     return None;
                 }
-                state = CompletionState::new();
+                state = match &history {
+                    Some(history) => CompletionState::with_history(history.clone()),
+                    None => CompletionState::new(),
+                };
                 refresh_candidates(&mut state, &mut candidates_fn);
                 prev_suggestion_lines =
                     render(&mut writer, prompt, &state, prev_suggestion_lines).ok()?;
@@ -277,15 +330,16 @@ fn render<W: Write>(
         crossterm::execute!(writer, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
     }
 
-    // Move the cursor back to the end of the input line.
-    // 将光标移回输入行末尾。
+    // Move the cursor back onto the input line at its logical position;
+    // the visible column is the prompt width plus the display width of the
+    // text before the cursor, so CJK characters keep the caret aligned.
+    // 将光标移回输入行的逻辑位置；可见列等于提示符宽度加光标前文本的显示
+    // 宽度，使 CJK 字符下光标依然对齐。
     if total_lines > 0 {
         crossterm::execute!(writer, MoveUp(total_lines as u16))?;
     }
-    crossterm::execute!(
-        writer,
-        MoveToColumn((display_width(prompt) + state.cursor()) as u16)
-    )?;
+    let caret_column = display_width(prompt) + display_width(&state.buffer()[..state.cursor()]);
+    crossterm::execute!(writer, MoveToColumn(caret_column as u16))?;
     writer.flush()?;
     Ok(total_lines)
 }
@@ -408,7 +462,7 @@ mod tests {
         events: &[EditorEvent],
     ) -> Option<String> {
         let mut iter = events.iter();
-        run_completion_loop(writer, prompt, candidates_fn, || {
+        run_completion_loop(writer, prompt, None, candidates_fn, || {
             iter.next()
                 .cloned()
                 .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "no more events"))
@@ -484,10 +538,37 @@ mod tests {
             convert_crossterm_key(KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE)),
             None
         );
-        assert_eq!(
+    }
+
+    #[test]
+    fn convert_key_maps_cursor_movement_keys() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        assert!(matches!(
             convert_crossterm_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
-            None
-        );
+            Some(EditorEvent::Key(Key::Left))
+        ));
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+            Some(EditorEvent::Key(Key::Right))
+        ));
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL)),
+            Some(EditorEvent::Key(Key::CtrlLeft))
+        ));
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL)),
+            Some(EditorEvent::Key(Key::CtrlRight))
+        ));
+        // Emacs-style word movement bindings are accepted as aliases.
+        // Emacs 风格的按词移动绑定作为别名接受。
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL)),
+            Some(EditorEvent::Key(Key::CtrlLeft))
+        ));
+        assert!(matches!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL)),
+            Some(EditorEvent::Key(Key::CtrlRight))
+        ));
     }
 
     #[test]
@@ -653,9 +734,24 @@ mod tests {
         let capture = crate::console::capture();
         push_test_input(&["hello"]);
         assert_eq!(
-            read_line_with_completion("> ", |_| Vec::new()).as_deref(),
+            read_line_with_completion("> ", None, |_| Vec::new()).as_deref(),
             Some("hello")
         );
         assert_eq!(capture.text(), "> ");
+    }
+
+    #[test]
+    fn submitted_lines_are_recorded_into_the_shared_history() {
+        let history = Arc::new(InputHistory::new());
+        push_test_input(&["hello"]);
+        assert_eq!(
+            read_line_with_completion("> ", Some(history.clone()), |_| Vec::new()).as_deref(),
+            Some("hello")
+        );
+        // The recalled entry proves the submission reached the history.
+        // 能调出该条目证明提交已写入历史。
+        let mut state = CompletionState::with_history(history);
+        state.handle_key(Key::Up);
+        assert_eq!(state.buffer(), "hello");
     }
 }

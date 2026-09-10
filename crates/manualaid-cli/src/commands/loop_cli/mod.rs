@@ -59,7 +59,7 @@ use command::{CommandOutcome, run_command};
 use complete::candidates::{Candidate, filter as filter_candidates};
 use complete::editor::read_line_with_completion;
 use complete::paths::PathCandidates;
-use complete::state::{CompletionState, Trigger};
+use complete::state::{CompletionState, InputHistory, Trigger};
 use inline::handle_inline_command;
 use menu::{MenuAction, build_main_menu};
 use utils::{clear_screen, mode_hint, sync_global_config};
@@ -220,6 +220,7 @@ async fn loop_main_at(
     let main_menu = build_main_menu();
     let path_cache = Arc::new(std::sync::Mutex::new(PathCandidates::default()));
     path_cache.lock().unwrap().scan(current_dir);
+    let input_history = Arc::new(InputHistory::new());
     let mut should_exit = false;
     let mut show_help_hint = true;
     while !should_exit {
@@ -246,7 +247,7 @@ async fn loop_main_at(
         #[cfg(test)]
         let line = {
             let root = current_dir;
-            match read_line_with_completion(&prompt, |state| {
+            match read_line_with_completion(&prompt, Some(input_history.clone()), |state| {
                 completion_candidates(state, root, &path_cache)
             }) {
                 Some(line) => line,
@@ -256,8 +257,9 @@ async fn loop_main_at(
         #[cfg(not(test))]
         let line = {
             let root = current_dir.to_path_buf();
+            let input_history = input_history.clone();
             match tokio::task::spawn_blocking(move || {
-                read_line_with_completion(&prompt, |state| {
+                read_line_with_completion(&prompt, Some(input_history), |state| {
                     completion_candidates(state, &root, &path_cache)
                 })
             })
