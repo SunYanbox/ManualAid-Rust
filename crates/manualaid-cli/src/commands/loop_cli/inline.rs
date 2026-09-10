@@ -700,4 +700,31 @@ mod tests {
         );
         assert!(mock.read().unwrap().is_empty());
     }
+
+    #[test]
+    fn inline_copy_commands_report_write_error_and_leave_clipboard_empty() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        // Every clipboard-copying inline command shares the same write-error
+        // branch: the localized error goes to stderr and the clipboard stays
+        // empty because the write was rejected.
+        // 所有复制到剪贴板的内联命令共用同一写失败分支：本地化错误打印到
+        // stderr，由于写入被拒绝，剪贴板保持为空。
+        for command in ["/compress", "/plan", "/build", "/tools", "/skills"] {
+            let (mut config, registry, root, mut session, mut options) = setup();
+            let mock = MockClipboard::new();
+            mock.set_write_error("mock write failure");
+            handle_inline_command_with_provider(
+                &mock,
+                &mut config,
+                &registry,
+                &root,
+                &mut session,
+                &mut options,
+                command,
+            );
+            assert!(mock.read().unwrap().is_empty(), "{command}");
+        }
+    }
 }
