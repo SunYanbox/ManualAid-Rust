@@ -57,6 +57,28 @@ async fn approved_round_executes_tools() {
 }
 
 #[tokio::test]
+async fn execution_phase_draws_no_progress_line_under_capture() {
+    // The progress line is disabled while a console capture is active, so a
+    // scripted round never contains the `(Ns)` prefix or cursor escapes.
+    // 控制台捕获期间进度行被禁用，因此脚本轮次的输出绝不含 `(Ns)` 前缀
+    // 或光标转义序列。
+    let capture = manualaid_cli::console::capture();
+    let registry = FormatRegistry::new();
+    let (_calls, results, _stats) = execute_round_with_approval(
+        &executor(&std::env::temp_dir()),
+        &registry,
+        "<read><file_path>C:/windows/win.ini</file_path></read>",
+        |_| Approval::Approve,
+    )
+    .await
+    .unwrap();
+    assert_eq!(results.len(), 1);
+    let text = capture.text();
+    assert!(!text.contains("(0s)"), "unexpected progress line: {text:?}");
+    assert!(!text.contains("\x1b["), "unexpected escape: {text:?}");
+}
+
+#[tokio::test]
 async fn denied_round_returns_default_failure_without_reason() {
     let _capture = manualaid_cli::console::capture();
     let root = std::env::temp_dir().join("manualaid-loop-ws");
