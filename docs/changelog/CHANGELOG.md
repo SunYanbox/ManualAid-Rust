@@ -162,3 +162,42 @@
 
 - The Edit success result now shows line-count changes and a diff.
 - The XML parser optimizes CDATA whitespace handling and empty-string parameters.
+
+## [0.3.0] - 2026-08-14
+
+### Added
+
+- Support for filtering parsing by enabled tools, with parsing soft warnings shown.
+- Copy intent rule shortcut command.
+- Token estimation display when generating the system prompt and executing a round.
+
+### Fixed
+
+- Clipboard read/write changed to an injectable Provider abstraction, so tests no longer pollute the system clipboard.
+
+## [0.2.0] - 2026-08-12
+
+### Added
+
+- Tool history list, showing each round's tools, elapsed time and Token statistics.
+- Detailed preview when copying round results.
+- The config menu adds "view in-memory session usage".
+- The Windows platform prompt adds platform notes.
+
+### Fixed
+
+- Fixed the cmd Shell command quote parsing conflict on Windows.
+- Fixed directory reads not being intercepted before approval.
+
+## [0.1.0] - 2026-08-09
+
+### Added
+
+- Initial release of the ManualAid Rust rewrite.
+- Support for starting the interactive Agent Loop with no arguments.
+- Built-in Read, Edit, Write, Shell, Skill tools.
+- Support for skill discovery and loading.
+- Support for session round logs and result copying.
+- Command-line subcommands such as init, dir, mask, restore, skill.
+- Chinese and English UI switching.
+- Permission approval, privacy masking and Shell whitelist.

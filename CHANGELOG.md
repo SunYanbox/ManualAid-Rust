@@ -207,3 +207,94 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - The Edit `old_string` is attached when it is not found.
+
+## [0.3.0] - 2026-08-14
+
+### Added
+
+- Added `EnabledToolSet`, snapshotting the currently enabled tools and their parameter names, so the parser recognizes only tools and parameters in the set.
+- `FormatRegistry` adds a `set_enabled_tools` cache, reusing `Arc<EnabledToolSet>` when the set is unchanged.
+- Added the `ClipboardProvider` trait, providing `read`/`write` abstractions.
+- Added `RealClipboard` and `MockClipboard`, supporting injected read/write errors.
+- Added the intent rule copy command and the `prompt.system.intent-output-rule` template.
+- Added Token estimation display for generating the system prompt and executing a round.
+
+### Changed
+
+- `ToolCallFormatParser::try_parse` now takes `&EnabledToolSet`.
+- `FormatRegistry::parse` returns `ParseOutcome`, containing the call list and soft warnings.
+- Rewrote the XML scanner, adding tool filtering and unclosed-tag soft warnings.
+- The JSON codeblock parser also supports tool filtering.
+- `read_clipboard`/`write_clipboard` now delegate to `RealClipboard`, remaining backward compatible.
+- Tests now isolate the real system clipboard via `MockClipboard`.
+- Split some tests of `handlers.rs` into `tests/commands/handlers.rs`.
+- Added related keys to the i18n texts.
+
+## [0.2.0] - 2026-08-12
+
+### Added
+
+- Added `RoundStats`, recording each round's parsing, approval and execution time and estimated total Tokens.
+- `SessionLog::push` now takes `RoundStats` and adds a `MAX_ROUNDS` limit, dropping the oldest record beyond 200 rounds.
+- Added `MemoryUsage` and `SessionLog::memory_usage()`, estimating the bytes of calls, results and metadata of in-memory session records.
+- Added `SessionLog::rounds()` returning all rounds.
+- `ToolResult` adds `execution_duration_ms` and `estimated_tokens` fields.
+- Added the tool history list `/history`, newest first, showing each round's tools, status, elapsed time, Tokens and session totals.
+- Added a detailed preview when copying round results: showing the round header, tool details, elapsed time and Tokens, with at most 10 lines of content previewed.
+- The config menu adds "view in-memory session usage", showing total usage and the bytes of parsing calls, results and metadata.
+- Added `<platform-notes>` platform notes when building prompts on Windows.
+- The git information block gains a localized snapshot note at the beginning.
+- Added CI path filtering to reduce unnecessary runs.
+- Added Codecov configuration, fixing the coverage threshold at 80%.
+- Added an automated release workflow, building and attaching binaries for each platform.
+- Added Windows and Linux install/uninstall scripts `scripts/setup-cli.*`, `scripts/uninstall-cli.*`.
+- Added `docs/zh-cn/提示词设计.md`.
+
+### Changed
+
+- `Executor::execute` measures tool execution time and writes it into the result.
+- `execute_round_with_approval` returns `RoundStats`, and `estimate_round_tokens` is added to estimate a whole round's Token consumption.
+- Added a trailing newline to the format description code block.
+- Updated the i18n prompts and tool selection rule texts.
+- Updated the README badges and installation instructions.
+
+### Fixed
+
+- On Windows with cmd, commands are passed verbatim via `raw_arg`, avoiding the conflict between standard argument escaping and cmd `/C` quote parsing.
+- Commands with quoted paths and quoted arguments are additionally wrapped in quotes; other platforms keep standard argument escaping.
+- `Executor::pre_check` adds a Read tool path pre-check, so directories and unreadable files directly return a failure result before entering the approval queue.
+
+## [0.1.0] - 2026-08-09
+
+### Added
+
+- Initialized the Rust workspace, containing the four crates `i18n`, `manualaid-core`, `manualaid-ws` and `manualaid-cli`.
+- Added `.github/workflows/ci.yml`, `deny.toml`, `.gitignore`.
+- Added Chinese and English `CONTRIBUTING`, `README` and third-party specification licenses.
+- Added a translation wrapper library based on `rust_i18n`, providing `t_str`.
+- Added five kinds of Chinese and English locale files: `audit`, `cli`, `common`, `prompts`, `tools`.
+- Added the unified error type `error.rs`.
+- Added user standard directory lookup `user_dir.rs`.
+- Added the clipboard abstraction `clipboard.rs`.
+- Added Shell execution, timeout abort and encoding detection `shell.rs`.
+- Added file-lock I/O and standard directory initialization `file_io.rs`, `manualaid_dir.rs`.
+- Added skill discovery, deduplication and enable management `skill.rs`.
+- Added reversible privacy masking `privacy/`, containing configuration, filters and registry.
+- Added timing primitives `timer.rs`.
+- Added the tool layer `tools/`: Read, Edit, Write, Shell, Skill and the unified `ToolResult`.
+- Added the parsing layer `parser/`: XML, JSON codeblock, registry and format parsers.
+- Added the audit layer `audit/`: path boundary checks, Shell whitelist/blacklist and content checks.
+- Added the execution pipeline `executor.rs`: routing, validation, mask restoration, audit, execution, post-processing.
+- Added workspace path normalization and boundary checks `workspace.rs`.
+- Added async file read/write `async_fs.rs`.
+- Added workspace config loading and persistence `config.rs`.
+- Added context file selection `context.rs`.
+- Added system prompt construction `prompt.rs`.
+- Added session log recording `session.rs`.
+- Added command-line argument parsing and entry `cli.rs`, `main.rs`, `lib.rs`.
+- Added console capture output `console.rs`, terminal styling `style.rs`, pager `pager.rs`.
+- Added directory tree rendering `dir_tree.rs`, environment path helpers `env.rs`.
+- Added subcommands: `init`, `dir`, `mask`, `restore`, `skill`.
+- Added the interactive Agent Copy-Paste Loop: main loop, numeric menu, config menu, approval queue, system prompt generation, paste submission, result copy, session history, inline shortcut commands, approval preview and diff display.
+- Added `docs/zh-cn/` Chinese design documents.
+- Added a large number of module and integration tests.
