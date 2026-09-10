@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-09-10
+
+### Fixed
+
+- The input suggestion panel no longer leaves stale lines behind or redraws the prompt repeatedly when candidates are long or numerous
+
 ## [0.13.0] - 2026-09-10
 
 ### Added

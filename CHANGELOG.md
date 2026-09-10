@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-09-10
+
+### Fixed
+
+- Fixed corrupted completion suggestion rendering: `render` sized the panel by candidate count while a single row could wrap onto a second terminal row when its label or description was long, so more rows were drawn than accounted for, `MoveUp` fell short, the caret landed inside the suggestion area and the next render overwrote stale content. Each row is now truncated to the terminal width (CJK counted as two columns, via the new `render_suggestion_row`/`truncate_to_width`/`char_width`), and the new `PanelLayout` carries that width limit; the panel height keeps its existing `MAX_SUGGESTIONS` cap and does not depend on the caret row, because terminal scrolling moves the drawn rows and the caret up together, leaving the relative move back to the input line correct
+
 ## [0.13.0] - 2026-09-10
 
 ### Added
