@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-10
+
 ### Added
 
 - The inline commands add `/compress` (copies the conversation compression prompt), `/plan` with alias `/p` (copies the plan mode prompt), `/build` with alias `/b` (copies the switch execution mode prompt) and `/skills` (copies the enabled skills list); `/tools` changes from a paged print to copying the full enabled tools list; `/help` and Tab completion list the new commands.
