@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-09-10
+
+### Changed
+
+- Release builds no longer embed the Linux symbol table in the shipped binary: the workflow splits it into a companion `.debug` file with `objcopy --only-keep-debug`, strips the binary with `strip --strip-all` and re-links the two with `--add-gnu-debuglink`, so both platforms publish a lean executable plus a separate symbol file (`.debug` on ELF, the sibling `.pdb` on PE, now uploaded instead of being left behind); the Linux asset drops to roughly the Windows size, and `manualaid-cli` is bumped to 0.13.2 to verify the new pipeline end to end
+
 ## [0.13.1] - 2026-09-10
 
 ### Fixed

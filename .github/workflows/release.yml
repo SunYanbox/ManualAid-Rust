@@ -37,9 +37,31 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
+      # ELF keeps its symbol table inside the binary, inflating the download;
+      # PE already writes symbols to a sibling .pdb. Move the Linux symbols
+      # into a companion file and strip the shipped binary, so both platforms
+      # publish a lean executable plus a separate symbol file.
+      # ELF 把符号表留在二进制内，抬高下载体积；PE 已将符号写入同名 .pdb。
+      # 此处把 Linux 符号拆到伴随文件并剥离二进制，使两个平台都发布精简
+      # 可执行文件加独立符号文件。
+      - name: Split debug symbols (Linux)
+        if: runner.os == 'Linux'
+        working-directory: target/${{ matrix.target }}/release
+        run: |
+          objcopy --only-keep-debug ${{ matrix.bin_name }} ${{ matrix.bin_name }}.debug
+          strip --strip-all ${{ matrix.bin_name }}
+          objcopy --add-gnu-debuglink=${{ matrix.bin_name }}.debug ${{ matrix.bin_name }}
+
+      # The symbol file differs per platform (.debug on ELF, .pdb on PE), so an
+      # unmatched glob on the other runner is expected rather than an error.
+      # 符号文件随平台而异（ELF 为 .debug、PE 为 .pdb），另一平台上未匹配的
+      # 通配符属正常情况，不应视为错误。
       - name: Upload asset to Release
         uses: softprops/action-gh-release@v2
         with:
           upload_url: ${{ github.event.release.upload_url }}
+          fail_on_unmatched_files: false
           files: |
             target/${{ matrix.target }}/release/${{ matrix.bin_name }}
+            target/${{ matrix.target }}/release/${{ matrix.bin_name }}.debug
+            target/${{ matrix.target }}/release/*.pdb
