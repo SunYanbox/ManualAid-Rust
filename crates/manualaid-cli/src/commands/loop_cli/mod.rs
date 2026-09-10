@@ -29,6 +29,7 @@ mod inline;
 mod menu;
 mod path_action;
 mod preview;
+mod progress;
 mod skill_action;
 pub(crate) mod utils;
 

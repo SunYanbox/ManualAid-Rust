@@ -11,12 +11,17 @@ use manualaid_ws::session::RoundStats;
 
 use super::Approval;
 use super::preview::{approval_preview, edit_diff_preview, write_preview};
+use super::progress::ProgressLine;
 use super::utils::{read_line, t_fmt};
 
 /// Delay between the preview output and the approval prompt, so paged
 /// output never streams into the answer that the caller consumes.
 /// 预览输出与审批提问之间的停顿，避免分页输出流入调用方读取的答复。
 const APPROVAL_PAUSE: Duration = Duration::from_millis(500);
+
+/// How often the execution-phase progress line refreshes while a tool runs.
+/// 工具运行期间执行阶段进度行的刷新间隔。
+pub(super) const PROGRESS_TICK: Duration = Duration::from_millis(200);
 
 /// Parse and execute one round of tool calls with user approval.
 ///
@@ -121,13 +126,32 @@ pub async fn execute_round_with_approval(
 
     let audit_duration = audit_start.elapsed();
 
+    // The execution-phase progress line covers only the actual tool runs, so
+    // parsing, auditing and the approval prompts never show a timer.
+    // 执行阶段的进度行只覆盖真正的工具运行，因此解析、审计与审批提问
+    // 期间都不会显示计时。
+    let mut progress = ProgressLine::new(
+        audited
+            .iter()
+            .map(|item| item.call.tool_name.clone())
+            .collect(),
+    );
+    let mut ticker = tokio::time::interval(PROGRESS_TICK);
+    // The first tick of an interval fires immediately; consume it so the
+    // elapsed seconds start from the first real tool.
+    // interval 的首次 tick 会立即触发；先消费掉它，让秒数从第一个真正的
+    // 工具开始计时。
+    ticker.tick().await;
+
     let mut results = Vec::with_capacity(audited.len());
     for (index, item) in audited.into_iter().enumerate() {
         if let Some(pre_failed) = item.pre_failed {
+            progress.fail(index);
             results.push(pre_failed);
             continue;
         }
         if !approved[index] {
+            progress.fail(index);
             results.push(denied_result(&item.call, denied_texts[index].clone()));
             continue;
         }
@@ -145,12 +169,32 @@ pub async fn execute_round_with_approval(
         } else {
             None
         };
-        let mut result = executor.execute(item.call).await;
+        progress.running(index);
+        // Race the tool against the ticker so the elapsed seconds keep
+        // advancing while a long tool runs.
+        // 让工具执行与 ticker 竞争，使长时间运行的工具期间秒数持续前进。
+        let mut execution = std::pin::pin!(executor.execute(item.call));
+        let mut result = loop {
+            tokio::select! {
+                _ = ticker.tick() => progress.tick(),
+                result = &mut execution => break result,
+            }
+        };
         if result.success
             && let Some(diff) = executed_diff
             && !diff.trim().is_empty()
         {
+            // Erase the progress line first so the paged diff starts on a
+            // clean line, then repaint it afterwards.
+            // 先擦除进度行，让分页 diff 从干净的一行开始；之后再重绘。
+            progress.suspend();
             let _ = crate::pager::print_paged_diff(&diff);
+            progress.tick();
+        }
+        if result.success {
+            progress.succeed(index);
+        } else {
+            progress.fail(index);
         }
         if !item.pending.is_empty() {
             // An approved call no longer needs the "approval needed"
@@ -160,6 +204,10 @@ pub async fn execute_round_with_approval(
         }
         results.push(result);
     }
+    // Freeze the progress line and terminate it before the legacy round
+    // output is printed by the caller.
+    // 在调用方打印旧版轮次输出之前，定格进度行并换行。
+    progress.finish();
 
     let total_tokens = estimate_round_tokens(input, &mut results);
     let stats = RoundStats {

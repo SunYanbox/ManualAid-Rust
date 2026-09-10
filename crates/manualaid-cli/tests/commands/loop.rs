@@ -57,6 +57,54 @@ async fn approved_round_executes_tools() {
 }
 
 #[tokio::test]
+async fn execution_phase_draws_no_progress_line_under_capture() {
+    // The progress line is disabled while a console capture is active, so a
+    // scripted round never contains the `(Ns)` prefix or cursor escapes.
+    // 控制台捕获期间进度行被禁用，因此脚本轮次的输出绝不含 `(Ns)` 前缀
+    // 或光标转义序列。
+    let capture = manualaid_cli::console::capture();
+    let registry = FormatRegistry::new();
+    let (_calls, results, _stats) = execute_round_with_approval(
+        &executor(&std::env::temp_dir()),
+        &registry,
+        "<read><file_path>C:/windows/win.ini</file_path></read>",
+        |_| Approval::Approve,
+    )
+    .await
+    .unwrap();
+    assert_eq!(results.len(), 1);
+    let text = capture.text();
+    assert!(!text.contains("(0s)"), "unexpected progress line: {text:?}");
+    assert!(!text.contains("\x1b["), "unexpected escape: {text:?}");
+}
+
+#[tokio::test]
+async fn failed_execution_marks_the_tool_failed() {
+    // A write whose target path is an existing directory passes the
+    // pre-check but fails while executing, so the round still produces a
+    // failure result and the progress line records the failed state.
+    // 目标路径是已存在目录的 write 会通过预检、在执行时失败，因此该轮仍
+    // 产出失败结果，进度行也会记录失败状态。
+    let _capture = manualaid_cli::console::capture();
+    let root = std::env::temp_dir().join(format!("manualaid-loop-fail-{}", std::process::id()));
+    let dir = root.join("target-dir");
+    std::fs::create_dir_all(&dir).unwrap();
+    let input = format!(
+        "<write><file_path>{}</file_path><content>x</content></write>",
+        dir.display()
+    );
+    let (_calls, results, _stats) =
+        execute_round_with_approval(&executor(&root), &FormatRegistry::new(), &input, |_| {
+            Approval::Approve
+        })
+        .await
+        .unwrap();
+    assert_eq!(results.len(), 1);
+    assert!(!results[0].success, "expected a failed write result");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test]
 async fn denied_round_returns_default_failure_without_reason() {
     let _capture = manualaid_cli::console::capture();
     let root = std::env::temp_dir().join("manualaid-loop-ws");
