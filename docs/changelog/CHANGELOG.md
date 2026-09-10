@@ -53,3 +53,61 @@
 ### Fixed
 
 - Simplified the default denial prompt to a plain denial statement, removing redundant descriptions such as the command content, whitelist state and approval requirement.
+
+## [0.10.1] - 2026-08-30
+
+### Changed
+
+- The intent output prompt is replaced with a system-level rule and adopts the new intent block format.
+
+## [0.10.0] - 2026-08-27
+
+### Added
+
+- Added the `manualaid-cli copy` command, copying 10 kinds of prompts directly without entering the interactive menu; when copying the system prompt or context files, `--context-files` can be used to choose the load scope.
+
+## [0.9.0] - 2026-08-26
+
+### Added
+
+- The system prompt `path-rules` adds an @-prefixed file reading rule.
+- The copy-prompt menu adds "copy context", supporting selection of multiple workspace context files.
+- The copy-prompt menu adds "copy compression session prompt", which when pasted into a session lets the model compress the current session.
+- When a tool result exceeds the character limit and is truncated, the full output is staged to a file under `.ManualAid/temp/`, and the truncation notice informs of the file location and the line number of each tool's output.
+
+### Changed
+
+- The `<directory_listing>` block gains a snapshot note at the beginning, indicating that the directory structure is a startup snapshot and will not be updated later.
+- The line-ending escaping description of the JSON code-block (json-codeblock) tool-call template is refined: distinguishing the escaping of LF and CRLF.
+- Workspace context files are now shown in a standalone prompt block at the end of the system prompt, with localized file tags.
+- The system prompt `path-rules` removes the path-source reference to `<context_files>`.
+
+### Fixed
+
+- Added the directory-listing and Windows forward-slash rules missing from the Chinese system prompt `path-rules`, aligning it with the English version.
+
+## [0.8.0] - 2026-08-25
+
+### Added
+
+- The main menu supports running Shell commands directly with a `!` prefix.
+- The settings menu adds a built-in changelog viewer.
+
+### Changed
+
+- Tool output pagination is changed to three lines per page.
+- Approval preview and Diff output pagination is changed to 20 lines for the first page and 10 lines afterwards.
+
+## [0.7.0] - 2026-08-21
+
+### Added
+
+- Tool results show a summary of important parameters.
+- Read output appends a range/line-count marker at the end.
+- Unclosed tool calls are kept as failed results.
+- The config menu adds a copy-prompt submenu, supporting copying the intent rule, tool format, enabled tool list, line-ending handling rule, plan mode rule, execution-mode switching rule and task planning rule.
+
+### Changed
+
+- The default parser order is changed to json-codeblock, invoke, xml.
+- Unified menu and inline command handling.

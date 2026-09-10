@@ -68,3 +68,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Simplified the default denial prompts in both Chinese and English to a plain denial statement (`操作已被用户拒绝` / `Operation denied by user`), removing redundant descriptions such as the command content, whitelist state and approval requirement (command information is already provided via the result parameter summary).
+
+## [0.10.1] - 2026-08-30
+
+### Changed
+
+- The intent output rule is moved out of `<rules>` and rendered as a standalone `<system-reminder>` before the rules block; the rule content is replaced with the new `# Intent`/`# ToolCall`/`# Clarify`/`# Answer` format, and the duplicated intent explanation in `capabilities` is removed.
+
+## [0.10.0] - 2026-08-27
+
+### Added
+
+- `manualaid-cli` gains a `copy` subcommand to copy 10 kinds of prompt snippets without entering the TUI; `system-prompt` and `context` support the `--context-files` override switch (values `all`/`none`/`First`, default `First`), `--lang` takes effect for the subcommand, and a clipboard write failure returns a non-zero exit code.
+
+## [0.9.0] - 2026-08-26
+
+### Added
+
+- The system prompt `path-rules` adds an @-prefixed file reading rule.
+- The copy-prompt second-level menu adds "copy context", reusing the multi-context file selection prompt.
+- `manualaid-ws::prompt` adds a public `render_context_reminder` function shared by system prompt construction and the copy-context menu.
+- The copy-prompt second-level menu adds "copy compression session prompt", copying the fixed compression session prompt template to the clipboard.
+- When a tool result exceeds `max_result_chars` and triggers truncation, the full untruncated output is written to `<workspace_root>/.ManualAid/temp/<sha256>.md`, and a localized notice is appended to the truncated text informing of the staging path and the starting line number of each tool's output.
+
+### Changed
+
+- The `<directory_listing>` block gains a localized snapshot note at the beginning, reminding the LLM that the directory structure is a startup snapshot and will not be updated later; a missing newline before the closing tag is fixed.
+- The line-ending escaping description of the JSON code-block tool-call template is refined: distinguishing the escaping of LF and CRLF.
+- The workspace context files are moved out of `<dynamic-context>` and output as a standalone `<system-reminder>` block after `</system_prompt>`; the `render_context_files` output becomes a per-file `Instructions from` section with localized file tags.
+- The system prompt `path-rules` removes the path-source reference to `<context_files>`.
+
+### Fixed
+
+- Added the directory-listing and Windows forward-slash rules missing from the Chinese system prompt `path-rules`, aligning it with the English version.
+
+## [0.8.0] - 2026-08-25
+
+### Added
+
+- The main menu input supports running Shell commands directly with a `!` prefix, reusing round result display and history.
+- The settings menu adds a built-in changelog viewer, supporting viewing by version and viewing all at once.
+- `i18n` adds public `changelog_all`, `changelog_versions` and `changelog_version` interfaces, and wraps `set_locale`.
+- Menu items gain stable unique keys (slug) for callers and tests to select menu items.
+
+### Changed
+
+- Tool output pagination is changed to three lines per page.
+- Approval preview and Diff output pagination is changed to 20 lines for the first page and 10 lines afterwards.
+
+## [0.7.0] - 2026-08-21
+
+### Added
+
+- Added `menu.rs` and `command.rs`, unifying numeric menu and inline command handling.
+- Tool results wrap the tool name in square brackets and show a summary of important parameters.
+- Read output appends a range/line-count marker at the end.
+- Unclosed tool calls are kept as failed results instead of being silently dropped.
+- The default parser order is changed to json-codeblock, invoke, xml.
+- The Windows platform notes add a CoreUtils hint.
+- The config menu adds a copy-prompt submenu, supporting copying the intent rule, tool format, enabled tool list, line-ending handling rule, plan mode rule, execution-mode switching rule and task planning rule.
+
+### Changed
+
+- Tool toggles are split into a third-level submenu.
+- The `skill` module is split into `config_io`, `frontmatter`, `scan` and other submodules.
+- A large amount of implementation and tests are split by module directory to improve maintainability.
+- Updated prompts and tool descriptions.
