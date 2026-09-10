@@ -134,3 +134,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The `skill` module is split into `config_io`, `frontmatter`, `scan` and other submodules.
 - A large amount of implementation and tests are split by module directory to improve maintainability.
 - Updated prompts and tool descriptions.
+
+## [0.6.0] - 2026-08-18
+
+### Added
+
+- Added an invoke wire-format parser supporting `<invoke name="tool"><parameter name="param">value</parameter></invoke>`.
+- `ToolCallFormat` gains an `Invoke` variant, and the `/format` cycle order and configuration support `invoke`.
+
+### Fixed
+
+- Fixed the XML parser swallowing subsequent closing tags when a bare `<` in a parameter value is followed by whitespace or an invalid name-start character.
+
+## [0.5.0] - 2026-08-18
+
+### Added
+
+- Added the `debug whitelist` command to view the audited command whitelist's defaults, project/global configuration, merged effective list and blacklist conflicts in layers.
+- Added inline shortcut commands: `/help`, `/history`, `/summary`, `/clear`, `/mode`, with aliases such as `/h`, `/H`, `/s`, `/cls`, `/m`.
+- After the main loop first renders the menu it shows a help hint, and shows the current approval mode before the prompt.
+- The startup message includes the version number.
+- The JSON parser accepts the `func_calls` fence used by the system prompt.
+
+### Changed
+
+- Greatly expanded the built-in default Shell whitelist, adding ls, cat, grep, the git series, the gh series, the cargo series and platform commands.
+- Aligned the Agent prompt with the tool descriptions and updated the Chinese and English locale texts.
+- The main loop adds `/mode`, `/m` to quickly switch the approval mode.
+- The config menu's approval mode label logic is moved to utils.
+
+## [0.4.1] - 2026-08-16
+
+### Added
+
+- The Read tool adds `show_line_numbers` and `show_line_endings` diagnostic parameters.
+- Added the `AGENTS.md` development guide.
+- Added the `docs/comment-style.md`, `docs/commit-conventions.md` and `docs/issue-pr-guide.md` documents.
+- Added the `scripts/ci.cmd`, `scripts/ci.ps1` and `scripts/ci.sh` CI check scripts.
+
+### Changed
+
+- When the Edit `old_string` is not found, a newline difference hint or candidate strings with a similarity of at least 90% are attached.
+- Updated the Chinese and English descriptions of the Read/Edit tools, removing the default 2000-line note and adding diagnostic parameter descriptions.
+
+## [0.4.0] - 2026-08-15
+
+### Added
+
+- Added the `debug` subcommand group, migrating the former `mask`, `restore` and `skill` subcommands into its subcommands.
+- Added `debug plan_edit`: pre-checks whether the Edit `old_string` matches via the real validation path, reporting the occurrence count and search text without modifying files.
+- Added `debug shell`: previews, confirms and executes a Shell command, showing stdout, stderr, exit code and elapsed time.
+- `debug plan_edit` and `debug shell` support the `@file path` syntax to read content arguments from a file.
+- Added the `docs/zh-cn/工具系统/关于XML解析器的逻辑.md` document.
+
+### Changed
+
+- `plan_edit` and `EditPlan` are made public so debug commands can reuse the real execution validation path.
+- The `plan_edit` `new_string` defaults to an empty string when missing.
+- The XML parser enforces a strict CDATA closing rule: `]]>` and the closing tag must be adjacent with no whitespace allowed; unclosed parameter tags emit a soft warning.
+- Non-adjacent CDATA is treated as literal text.
+
+## [0.3.1] - 2026-08-15
+
+### Added
+
+- The Edit success result adds line-count changes and diff output; with `replace_all` a file-level diff is generated, otherwise a parameter-level diff.
+
+### Changed
+
+- The XML parser trims leading whitespace before CDATA wrapping, and non-CDATA parameters only trim leading/trailing newlines and allow empty strings.
+
+### Fixed
+
+- The Edit `old_string` is attached when it is not found.

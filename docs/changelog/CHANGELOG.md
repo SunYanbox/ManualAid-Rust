@@ -111,3 +111,54 @@
 
 - The default parser order is changed to json-codeblock, invoke, xml.
 - Unified menu and inline command handling.
+
+## [0.6.0] - 2026-08-18
+
+### Added
+
+- Support for the invoke tool-call format.
+
+### Fixed
+
+- Fixed a bare `<` in an XML parameter value swallowing subsequent tags.
+
+## [0.5.0] - 2026-08-18
+
+### Added
+
+- Added the `debug whitelist` command to view the Shell whitelist.
+- Added inline shortcut commands: `/help`, `/history`, `/summary`, `/clear`, `/mode`, with aliases such as `/h`, `/H`, `/s`, `/cls`, `/m`.
+
+### Changed
+
+- Expanded the default Shell whitelist.
+- Updated prompts and tool descriptions.
+
+## [0.4.1] - 2026-08-16
+
+### Added
+
+- The Read tool supports showing line numbers and line-ending markers.
+
+### Changed
+
+- When the Edit `old_string` is not found, clearer newline difference or similar text hints are given.
+
+## [0.4.0] - 2026-08-15
+
+### Added
+
+- Added `debug plan_edit`: pre-checks the Edit match.
+- Added `debug shell`: previews, confirms and executes a Shell command.
+- The former `mask`, `restore` and `skill` commands are migrated into `debug` subcommands.
+
+### Changed
+
+- The XML parser is stricter about CDATA closing, and unclosed parameters emit a soft warning.
+
+## [0.3.1] - 2026-08-15
+
+### Changed
+
+- The Edit success result now shows line-count changes and a diff.
+- The XML parser optimizes CDATA whitespace handling and empty-string parameters.
