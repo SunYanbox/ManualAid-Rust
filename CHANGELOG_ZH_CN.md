@@ -11,6 +11,11 @@
 - `!` shell 命令、`/SKILL` 技能加载与 `@path` 文件/文件夹引用等用户驱动操作的执行结果统一以 `[USER_ACTION kind="exec|skill|path" …] … [END USER_ACTION]` 包裹回贴给外部 LLM：头部属性按 kind 取 `command`/`name`/`path`，label 分别为完整用户命令、技能暴露名与绝对路径（目录末尾补 `\` 标记）；常规 `[TOOL_RESULT]` 渲染逐字节不变，截断与完整输出暂存管线对两类包裹统一复用
 - `ToolResult` 新增可选 `user_action` 字段（`serde(default, skip_serializing_if)`）与链式 `with_user_action(kind, label)` 构造器；`UserActionKind::as_str/attr_name` 集中 kind 线上名与 label 属性名映射，供后续 `/SKILL`、`@path` 接入复用；旧 session JSON 缺省加载为 `None`，无值序列化省略字段
 - 系统提示词（中英文）在 system-reminder 说明之后新增 `user-action-note`，向外部 LLM 解释 USER_ACTION 块含义及不要重复执行用户操作
+- 主菜单输入新增交互式补全：行首 `/` 显示内置命令与已启用 SKILL（完整唯一名），行首或空格后 `@` 显示项目路径；↑/↓ 选择、Tab 填入、Enter 确认、Esc 关闭建议；`/SKILL` 直接加载技能、`@path` 读取文件或列出文件夹（目录使用树形渲染），并各自产生 `[USER_ACTION kind="skill"|"path"]` 结果；非交互与测试构建自动回退到脚本输入，既有测试机制零侵入
+
+### 变更
+
+- 交互式补全替换主菜单原有简单行编辑后，暂未保留空输入时上下方向键切换历史输入记录、左右方向键移动光标的能力，作为当前已知缺陷
 
 ## [0.12.0] - 2026-09-09
 

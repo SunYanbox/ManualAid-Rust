@@ -162,6 +162,10 @@ timing_round = "轮次执行：%{elapsed}"
 token_estimate_prompt = "预计 Token 消耗：%{tokens}"
 token_estimate_round = "本轮预计 Token 消耗：%{tokens}"
 
+[cli.complete]
+skill_disabled = "技能 `%{skill}` 已被用户禁用"
+path_not_found = "路径 `%{path}` 不存在"
+
 [cli.message]
 approval_needed = "需要批准"
 ask_copy = "是否将本轮工具调用结果复制到剪贴板？（y/N）："
@@ -210,6 +214,18 @@ title = "SKILL 配置"
 invalid_config_value = "警告：配置文件 %{path} 中 `%{key}` 的值 '%{value}' 无效。可用值：%{available}。将使用默认值。"
 dangerous_allow_command = "警告：配置 %{path} 中的白名单命令 `%{command}` 命中黑名单命令，配置过于危险，已被忽略。"
 
+[cli.cmd]
+help = "显示此帮助"
+history = "显示工具历史记录"
+summary = "显示会话摘要"
+clear = "清屏"
+mode = "切换审批模式"
+ws = "复制工作区系统提示"
+tools = "列出可用工具"
+copy = "复制轮次结果"
+lang = "切换语言"
+format = "切换工具调用格式"
+
 [cli.help]
 text = """
 可用内联命令：
@@ -224,5 +240,7 @@ text = """
   /tools           - 列出可用工具
   /c [index]      - 复制轮次结果
   /c t <tool>     - 复制工具模板
+  /SKILL [参数]    - 按名称加载已启用的技能
+  @path            - 读取文件或列出文件夹内容
   !<命令>      - 直接运行终端命令
 """

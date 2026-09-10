@@ -315,14 +315,16 @@ fn page_size_for(height: usize) -> usize {
     height.saturating_sub(1).max(1)
 }
 
-/// Restores the terminal raw mode on drop.
-/// Drop 时恢复终端的 raw mode。
-struct RawModeGuard;
+/// Restores the terminal raw mode on drop; shared with the loop input
+/// completion editor so raw-mode handling stays in one place.
+/// Drop 时恢复终端的 raw mode；与 loop 输入补全编辑器共享，
+/// 让 raw-mode 处理保持单点。
+pub(crate) struct RawModeGuard;
 
 impl RawModeGuard {
     /// Enable raw mode, returning a guard that restores it on drop.
     /// 启用 raw mode，返回在 Drop 时恢复它的守卫。
-    fn enable() -> io::Result<Self> {
+    pub(crate) fn enable() -> io::Result<Self> {
         enable_raw_mode()?;
         Ok(Self)
     }

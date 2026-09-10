@@ -20,13 +20,16 @@ use manualaid_ws::session::SessionLog;
 mod approval;
 mod bang;
 mod command;
+mod complete;
 mod config;
 mod context;
 mod diff;
 mod handlers;
 mod inline;
 mod menu;
+mod path_action;
 mod preview;
+mod skill_action;
 pub(crate) mod utils;
 
 pub use approval::execute_round_with_approval;
@@ -53,9 +56,13 @@ pub use handlers::{
 };
 
 use command::{CommandOutcome, run_command};
+use complete::candidates::{Candidate, filter as filter_candidates};
+use complete::editor::read_line_with_completion;
+use complete::paths::PathCandidates;
+use complete::state::{CompletionState, Trigger};
 use inline::handle_inline_command;
 use menu::{MenuAction, build_main_menu};
-use utils::{clear_screen, mode_hint, read_line, sync_global_config};
+use utils::{clear_screen, mode_hint, sync_global_config};
 // Re-exported for the sibling `copy` subcommand, which reuses the same
 // initialization steps as the interactive loop.
 // 为同级的 `copy` 子命令重新导出，使其复用交互式 loop 的初始化步骤。
@@ -211,6 +218,8 @@ async fn loop_main_at(
     }
 
     let main_menu = build_main_menu();
+    let path_cache = Arc::new(std::sync::Mutex::new(PathCandidates::default()));
+    path_cache.lock().unwrap().scan(current_dir);
     let mut should_exit = false;
     let mut show_help_hint = true;
     while !should_exit {
@@ -228,27 +237,56 @@ async fn loop_main_at(
             );
             show_help_hint = false;
         }
-        crate::console::out_print!(
+        let prompt = format!(
             "{} {}",
             mode_hint(options.mode),
             i18n::t_str("cli.loop.menu_prompt")
         );
-        crate::console::flush();
-
+        let path_cache = path_cache.clone();
         #[cfg(test)]
-        let line = match read_line() {
-            Some(line) => line,
-            _ => break,
+        let line = {
+            let root = current_dir;
+            match read_line_with_completion(&prompt, |state| {
+                completion_candidates(state, root, &path_cache)
+            }) {
+                Some(line) => line,
+                None => break,
+            }
         };
         #[cfg(not(test))]
-        let line = match tokio::task::spawn_blocking(read_line).await {
-            Ok(Some(line)) => line,
-            _ => break,
+        let line = {
+            let root = current_dir.to_path_buf();
+            match tokio::task::spawn_blocking(move || {
+                read_line_with_completion(&prompt, |state| {
+                    completion_candidates(state, &root, &path_cache)
+                })
+            })
+            .await
+            {
+                Ok(Some(line)) => line,
+                _ => break,
+            }
         };
         let trimmed = line.trim();
 
         if trimmed.starts_with('/') {
             let mode_before = options.mode;
+            let skill_handled = skill_action::run_skill_action(
+                &manualaid_core::clipboard::RealClipboard,
+                &executor,
+                current_dir,
+                &mut config,
+                &mut session,
+                &mut options,
+                trimmed,
+            )
+            .await;
+            if options.mode != mode_before {
+                executor = build_executor(current_dir, &config, options.mode);
+            }
+            if skill_handled {
+                continue;
+            }
             handle_inline_command(
                 &mut config,
                 &registry,
@@ -261,6 +299,26 @@ async fn loop_main_at(
                 executor = build_executor(current_dir, &config, options.mode);
             }
             continue;
+        }
+
+        if trimmed.contains('@') {
+            let mode_before = options.mode;
+            let path_handled = path_action::run_path_actions(
+                &manualaid_core::clipboard::RealClipboard,
+                &executor,
+                current_dir,
+                &mut config,
+                &mut session,
+                &mut options,
+                trimmed,
+            )
+            .await;
+            if options.mode != mode_before {
+                executor = build_executor(current_dir, &config, options.mode);
+            }
+            if path_handled {
+                continue;
+            }
         }
 
         if trimmed.starts_with('!') {
@@ -361,9 +419,65 @@ fn build_executor(root: &Path, config: &Config, mode: SessionMode) -> Executor {
     )
 }
 
+/// Build the completion candidates for the current active token. Command
+/// tokens merge built-in commands with enabled skills; path tokens read from
+/// the session-cached path scanner.
+/// 为当前活动 token 构建补全候选。命令 token 合并内置命令与已启用技能；
+/// 路径 token 从会话缓存的路径扫描器读取。
+fn completion_candidates(
+    state: &CompletionState,
+    _root: &Path,
+    path_cache: &Arc<std::sync::Mutex<PathCandidates>>,
+) -> Vec<Candidate> {
+    let Some(query) = state.active_query() else {
+        return Vec::new();
+    };
+    match state.active_trigger() {
+        Some(Trigger::Command) => {
+            // Command labels already carry the leading `/`; skill labels are
+            // stable unique names such as `project-.agents-demo`, so the
+            // skill query must drop the `/` typed at the prompt. Matching the
+            // two groups separately keeps skills visible after the command
+            // candidates when the user scrolls.
+            // 命令候选自带起始 `/`；技能候选是 `project-.agents-demo` 这类
+            // 稳定唯一名，所以技能查询需去掉提示符处输入的 `/`。分组匹配
+            // 可让技能候选在用户滚动时出现在命令候选之后。
+            let skill_query = query.strip_prefix('/').unwrap_or(query).to_lowercase();
+            let mut matches = filter_candidates(complete::candidates::builtin_commands(), query);
+            // Skill labels are stable unique names such as
+            // `project-.agents-commit-objectively`; search them by substring so
+            // typing `commit` matches even though the label does not start with
+            // that word.
+            // 技能候选是 `project-.agents-commit-objectively` 这类稳定唯一名；
+            // 按子串匹配，输入 `commit` 时虽不以该词开头也应命中。
+            matches.extend(
+                complete::candidates::skills()
+                    .into_iter()
+                    .filter(|candidate| candidate.label.to_lowercase().contains(&skill_query)),
+            );
+            matches
+        }
+        Some(Trigger::Path) => {
+            let mut cache = path_cache.lock().unwrap();
+            cache
+                .filter(query)
+                .into_iter()
+                .map(|entry| Candidate {
+                    label: entry.label,
+                    description: String::new(),
+                    is_dir: entry.is_dir,
+                    dimmed: entry.dimmed,
+                })
+                .collect()
+        }
+        None => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use complete::state::Key;
 
     use indexmap::IndexMap;
     use manualaid_core::audit::{AuditDecision, AuditQueueItem};
@@ -560,6 +674,74 @@ mod tests {
     }
 
     #[test]
+    fn completion_candidates_command_merges_builtin_commands_and_skills() {
+        let _locale = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skills = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("completion-candidates-command");
+        let home = crate::test_support::temp_dir("completion-candidates-command-home");
+        let skill_dir = root.join(".claude").join("skills").join("demo");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: demo\ndescription: Demo skill\n---\nbody\n",
+        )
+        .unwrap();
+        manualaid_core::skill::reload_skills_with_home(&root, &home).unwrap();
+
+        let mut state = CompletionState::new();
+        for ch in "/demo".chars() {
+            state.handle_key(Key::Char(ch));
+        }
+        let cache = Arc::new(std::sync::Mutex::new(PathCandidates::default()));
+        let candidates = completion_candidates(&state, &root, &cache);
+
+        // The typed `/demo` matches no built-in command prefix, so the only
+        // hit is the enabled skill matched by substring on its unique name.
+        // 键入的 `/demo` 不匹配任何内置命令前缀，唯一命中是按唯一名子串
+        // 匹配到的已启用技能。
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].label, "project-.claude-demo");
+
+        // Leave the shared skill store empty for the other tests.
+        // 为其他测试把共享技能存储清空。
+        let empty = crate::test_support::temp_dir("completion-candidates-empty");
+        manualaid_core::skill::reload_skills_with_home(&empty, &empty).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&home);
+        let _ = std::fs::remove_dir_all(&empty);
+    }
+
+    #[test]
+    fn completion_candidates_path_reads_the_session_cache() {
+        let root = crate::test_support::temp_dir("completion-candidates-path");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src").join("main.rs"), "x").unwrap();
+        let mut cache = PathCandidates::default();
+        cache.scan(&root);
+        let cache = Arc::new(std::sync::Mutex::new(cache));
+
+        let mut state = CompletionState::new();
+        for ch in "@src".chars() {
+            state.handle_key(Key::Char(ch));
+        }
+        let candidates = completion_candidates(&state, &root, &cache);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].label, "src");
+        assert!(candidates[0].is_dir);
+        assert!(!candidates[0].dimmed);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn completion_candidates_without_an_active_query_is_empty() {
+        let cache = Arc::new(std::sync::Mutex::new(PathCandidates::default()));
+        let candidates = completion_candidates(&CompletionState::new(), Path::new("."), &cache);
+        assert!(candidates.is_empty());
+    }
+
+    #[test]
     fn approval_preview_raw_value_for_other_tools() {
         let item = AuditQueueItem {
             tool_name: "read".into(),
@@ -593,6 +775,26 @@ mod tests {
         assert!(output.contains("rm *"));
         assert!(output.contains("ignored"));
         assert!(!output.contains("git log *"));
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn loop_path_token_branch_continues_the_loop() {
+        // A line containing `@` is routed through the path-action branch;
+        // a missing target prints the localized hint and the loop resumes.
+        // 含 `@` 的行会进入路径操作分支；目标不存在时打印本地化提示，
+        // loop 继续运行。
+        let _capture = crate::console::capture();
+        let _lang = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skills = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("loop-path-token-ws");
+        let home = crate::test_support::temp_dir("loop-path-token-home");
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        super::utils::push_test_input(&["@nonexistent_zzz", "0"]);
+        loop_main_at(&root, &home, None, None).await.unwrap();
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_dir_all(&home);
     }

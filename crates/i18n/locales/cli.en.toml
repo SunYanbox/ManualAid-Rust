@@ -162,6 +162,10 @@ timing_round = "Round execution: %{elapsed}"
 token_estimate_prompt = "Estimated token consumption: %{tokens}"
 token_estimate_round = "Round estimated token consumption: %{tokens}"
 
+[cli.complete]
+skill_disabled = "Skill `%{skill}` has been disabled by the user"
+path_not_found = "Path `%{path}` does not exist"
+
 [cli.message]
 approval_needed = "approval needed"
 ask_copy = "Copy this round's tool call results to clipboard? (y/N): "
@@ -210,6 +214,18 @@ title = "SKILL configuration"
 invalid_config_value = "Warning: invalid value '%{value}' for `%{key}` in %{path}. Expected one of: %{available}. Using default instead."
 dangerous_allow_command = "Warning: `allow_commands` entry `%{command}` in %{path} matches a blacklisted command and was ignored."
 
+[cli.cmd]
+help = "Show this help"
+history = "Show tool history"
+summary = "Show session summary"
+clear = "Clear screen"
+mode = "Toggle approval mode"
+ws = "Copy workspace system prompt"
+tools = "List available tools"
+copy = "Copy round result"
+lang = "Switch language"
+format = "Switch tool call format"
+
 [cli.help]
 text = """
 Available inline commands:
@@ -224,5 +240,7 @@ Available inline commands:
   /tools           - List available tools
   /c [index]      - Copy round result
   /c t <tool>     - Copy tool template
+  /SKILL [args]    - Load an enabled skill by name
+  @path            - Read a file or list a folder
   !<command>      - Run a terminal command directly
 """
