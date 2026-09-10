@@ -13,6 +13,7 @@
 ### Changed
 
 - The skill tool description changed from "Do not invoke a skill that is already running" to "Do not invoke a skill that is already loaded", to avoid mistaking "loaded" for "executing" and reduce repeated invocation of the same skill.
+- The changelog viewer now follows the UI language: the English interface shows English content, while Chinese and other languages show Chinese content.
 
 ## [0.12.0] - 2026-09-09
 

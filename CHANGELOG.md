@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The wording "Do not invoke a skill that is already running" in the skill tool description is ambiguous and easily mistaken for a concurrent execution state; the English was changed to "Do not invoke a skill that is already loaded" and the Chinese from "不要调用已在运行的技能" to "不要调用已经加载过的技能", clarifying that it refers to skills already loaded/activated in the current conversation.
 - The install scripts `scripts/setup-cli.ps1` and `scripts/setup-cli.sh` remove the y/N confirmation before upgrading: when an existing installation is detected it is upgraded in place at the original path, and only a fresh install asks for the install level; switching between system-level and user-level requires uninstalling first, and reinstalling triggers the path question again.
+- The built-in ChangeLog viewer now selects text by the current locale: English locales show the English `docs/changelog/CHANGELOG.md`, while every other locale (including Chinese and unknown ones) falls back to the Chinese `docs/changelog/CHANGELOG_ZH_CN.md`.
 
 ## [0.12.0] - 2026-09-09
 

@@ -22,6 +22,7 @@
 
 - 技能工具描述中“Do not invoke a skill that is already running”措辞存在歧义，易被误解为并发执行状态；英文改为 “Do not invoke a skill that is already loaded”，中文由“不要调用已在运行的技能”改为“不要调用已经加载过的技能”，明确指代当前对话中已加载/激活的技能
 - 安装脚本 `scripts/setup-cli.ps1` 与 `scripts/setup-cli.sh` 移除升级前的 y/N 确认：检测到已有安装时就地在原路径升级，仅新安装时才询问安装级别；在系统级与用户级之间切换需先卸载，重新安装时会再次触发路径询问
+- 内置 ChangeLog 查看器改为按当前 locale 选择文本：英文 locale 展示英文版 `docs/changelog/CHANGELOG.md`，其余 locale（含中文与未知 locale）回退到中文版 `docs/changelog/CHANGELOG_ZH_CN.md`
 
 ## [0.12.0] - 2026-09-09
 
