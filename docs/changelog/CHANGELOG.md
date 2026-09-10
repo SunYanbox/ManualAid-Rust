@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-10
+
 ### Added
 
 - New `/compress`, `/plan` (`/p`), `/build` (`/b`) and `/skills` shortcuts: copy the conversation compression prompt, the plan mode prompt, the switch execution mode prompt and the enabled skills list straight from the prompt; `/tools` now copies the full enabled tools list template.
