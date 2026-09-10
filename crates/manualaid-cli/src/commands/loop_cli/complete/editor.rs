@@ -889,6 +889,23 @@ mod tests {
     }
 
     #[test]
+    fn suggestion_row_drops_the_description_when_the_label_fills_the_budget() {
+        let candidate = Candidate {
+            label: "project-.agents-demo".to_owned(),
+            description: "Demo skill".to_owned(),
+            is_dir: false,
+            dimmed: false,
+        };
+        // The marker and the label alone exceed the budget, so the
+        // description is dropped and the label itself is truncated.
+        // 标记与标签本身已超出预算，因此丢弃描述并截断标签本身。
+        let row = render_suggestion_row(&candidate, '>', false, Some(10));
+        assert!(display_width(&row) <= 10, "row was {row:?}");
+        assert!(!row.contains("Demo skill"));
+        assert!(row.ends_with('…'));
+    }
+
+    #[test]
     fn render_shows_every_candidate_up_to_the_panel_limit() {
         let mut out = Vec::new();
         let many: Vec<Candidate> = (0..3)
