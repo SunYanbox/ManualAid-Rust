@@ -12,8 +12,10 @@ use manualaid_ws::session::SessionLog;
 use super::LoopOptions;
 use super::command;
 use super::handlers::{
-    copy_round_index_with_provider, copy_round_result_with_provider,
-    copy_system_prompt_with_provider,
+    copy_compressed_session_prompt_with_provider, copy_enabled_tools_with_provider,
+    copy_plan_mode_rule_with_provider, copy_round_index_with_provider,
+    copy_round_result_with_provider, copy_skills_list_with_provider,
+    copy_switch_mode_rule_with_provider, copy_system_prompt_with_provider,
 };
 use super::utils::{parse_round_index, t_fmt};
 
@@ -60,6 +62,22 @@ pub(crate) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
     BuiltinCommand {
         name: "/tools",
         desc_key: "cli.cmd.tools",
+    },
+    BuiltinCommand {
+        name: "/skills",
+        desc_key: "cli.cmd.skills",
+    },
+    BuiltinCommand {
+        name: "/compress",
+        desc_key: "cli.cmd.compress",
+    },
+    BuiltinCommand {
+        name: "/plan",
+        desc_key: "cli.cmd.plan",
+    },
+    BuiltinCommand {
+        name: "/build",
+        desc_key: "cli.cmd.build",
     },
     BuiltinCommand {
         name: "/c",
@@ -134,6 +152,24 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
             command::toggle_mode(options);
             return;
         }
+        "/compress" => {
+            if let Err(e) = copy_compressed_session_prompt_with_provider(provider) {
+                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+            }
+            return;
+        }
+        "/plan" | "/p" => {
+            if let Err(e) = copy_plan_mode_rule_with_provider(provider) {
+                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+            }
+            return;
+        }
+        "/build" | "/b" => {
+            if let Err(e) = copy_switch_mode_rule_with_provider(provider) {
+                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+            }
+            return;
+        }
         _ => {}
     }
 
@@ -146,8 +182,14 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
             }
         }
         ["/tools"] => {
-            let list = manualaid_ws::prompt::render_tools_list(config, registry);
-            let _ = crate::pager::print_paged(&list);
+            if let Err(e) = copy_enabled_tools_with_provider(provider, config, registry) {
+                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+            }
+        }
+        ["/skills"] => {
+            if let Err(e) = copy_skills_list_with_provider(provider) {
+                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+            }
         }
         ["/c"] => copy_round_result_with_provider(provider, root, session, config.max_result_chars),
         ["/c", index] => {
@@ -327,10 +369,14 @@ mod tests {
     }
 
     #[test]
-    fn inline_tools_renders_tool_list() {
+    fn inline_tools_copies_wrapped_full_list() {
         let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        let mock = MockClipboard::new();
+        handle_inline_command_with_provider(
+            &mock,
             &mut config,
             &registry,
             &root,
@@ -338,6 +384,57 @@ mod tests {
             &mut options,
             "/tools",
         );
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.starts_with("<system-reminder>\n"));
+        assert!(clipboard.ends_with("</system-reminder>"));
+        assert!(clipboard.contains("## read"));
+        assert!(clipboard.contains("**Parameters:**"));
+    }
+
+    #[test]
+    fn inline_skills_copies_wrapped_list() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        let mock = MockClipboard::new();
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/skills",
+        );
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.starts_with("<system-reminder>\n"));
+        assert!(clipboard.ends_with("</system-reminder>"));
+    }
+
+    #[test]
+    fn inline_prompt_shortcuts_copy_wrapped_rules() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        for command in ["/compress", "/plan", "/p", "/build", "/b"] {
+            let (mut config, registry, root, mut session, mut options) = setup();
+            let mock = MockClipboard::new();
+            handle_inline_command_with_provider(
+                &mock,
+                &mut config,
+                &registry,
+                &root,
+                &mut session,
+                &mut options,
+                command,
+            );
+            let clipboard = mock.read().unwrap();
+            assert!(
+                clipboard.contains("<system-reminder>"),
+                "{command} should copy a wrapped prompt"
+            );
+        }
     }
 
     #[test]

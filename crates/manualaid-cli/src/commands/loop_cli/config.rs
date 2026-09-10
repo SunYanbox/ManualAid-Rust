@@ -63,8 +63,11 @@ pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
             }
             super::command::LoopCommand::CopyEnabledTools => {
                 report_copy_error(super::handlers::copy_enabled_tools_with_provider(
-                    provider, config,
+                    provider, config, registry,
                 ));
+            }
+            super::command::LoopCommand::CopySkillsList => {
+                report_copy_error(super::handlers::copy_skills_list_with_provider(provider));
             }
             super::command::LoopCommand::CopyContext => {
                 report_copy_error(super::handlers::copy_context_with_provider(provider, root));
@@ -125,6 +128,14 @@ fn build_copy_prompt_menu() -> Menu {
                 MenuAction::Command(LoopCommand::CopyEnabledTools),
             )
             .unique("copy_prompt_menu_enabled_tools"),
+        )
+        .expect("unique menu key")
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.skills_list"),
+                MenuAction::Command(LoopCommand::CopySkillsList),
+            )
+            .unique("copy_prompt_menu_skills_list"),
         )
         .expect("unique menu key")
         .add(
@@ -749,6 +760,7 @@ mod tests {
             "cli.copy_prompt.intent_rule",
             "cli.copy_prompt.tool_format",
             "cli.copy_prompt.enabled_tools",
+            "cli.copy_prompt.skills_list",
             "cli.copy_prompt.context",
             "cli.copy_prompt.line_ending",
             "cli.copy_prompt.plan_mode",
@@ -835,6 +847,26 @@ mod tests {
             mock.read().unwrap(),
             i18n::t_str("prompt.copy.task-planning-rule")
         );
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_copies_skills_list_block() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["copy_prompt_menu_skills_list", "0"]);
+        copy_prompt_menu(
+            &mock,
+            &Config::default(),
+            &FormatRegistry::new(),
+            Path::new("."),
+        )
+        .await;
+        let copied = mock.read().unwrap();
+        assert!(copied.starts_with("<system-reminder>\n"));
+        assert!(copied.ends_with("</system-reminder>"));
     }
 
     #[allow(clippy::await_holding_lock)]

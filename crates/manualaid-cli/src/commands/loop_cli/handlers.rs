@@ -105,14 +105,28 @@ pub fn copy_tool_format_with_provider<P: ClipboardProvider>(
     write_copied(provider, &text)
 }
 
-/// Copy the names of the currently enabled tools to the clipboard.
-/// 将当前已启用工具的名称复制到剪贴板。
+/// Copy the full list of currently enabled tools (descriptions, parameters
+/// and call templates) to the clipboard as a `<system-reminder>` block.
+/// Shared by the inline `/tools` command, the copy-prompt submenu and the
+/// non-interactive `copy` subcommand so every surface copies the same text.
+/// 将当前已启用工具的完整列表（描述、参数与调用模板）以
+/// `<system-reminder>` 块复制到剪贴板。内联 `/tools`、复制提示词二级菜单
+/// 与非交互 `copy` 子命令共用，确保各处复制内容一致。
 pub fn copy_enabled_tools_with_provider<P: ClipboardProvider>(
     provider: &P,
     config: &Config,
+    registry: &FormatRegistry,
 ) -> Result<(), String> {
-    let tools = config.enabled_tool_names().join(", ");
-    let text = t_fmt("prompt.copy.enabled-tools", &[("tools", &tools)]);
+    let text = manualaid_ws::prompt::render_tools_list_reminder(config, registry);
+    write_copied(provider, &text)
+}
+
+/// Copy the list of currently enabled skills (exposed name plus description)
+/// to the clipboard as a `<system-reminder>` block.
+/// 将当前已启用技能列表（暴露名与描述）以 `<system-reminder>` 块复制到
+/// 剪贴板。
+pub fn copy_skills_list_with_provider<P: ClipboardProvider>(provider: &P) -> Result<(), String> {
+    let text = manualaid_ws::prompt::render_skills_list(&all_skills());
     write_copied(provider, &text)
 }
 
