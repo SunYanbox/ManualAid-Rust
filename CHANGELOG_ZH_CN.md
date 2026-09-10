@@ -12,10 +12,10 @@
 - `ToolResult` 新增可选 `user_action` 字段（`serde(default, skip_serializing_if)`）与链式 `with_user_action(kind, label)` 构造器；`UserActionKind::as_str/attr_name` 集中 kind 线上名与 label 属性名映射，供后续 `/SKILL`、`@path` 接入复用；旧 session JSON 缺省加载为 `None`，无值序列化省略字段
 - 系统提示词（中英文）在 system-reminder 说明之后新增 `user-action-note`，向外部 LLM 解释 USER_ACTION 块含义及不要重复执行用户操作
 - 主菜单输入新增交互式补全：行首 `/` 显示内置命令与已启用 SKILL（完整唯一名），行首或空格后 `@` 显示项目路径；↑/↓ 选择、Tab 填入、Enter 确认、Esc 关闭建议；`/SKILL` 直接加载技能、`@path` 读取文件或列出文件夹（目录使用树形渲染），并各自产生 `[USER_ACTION kind="skill"|"path"]` 结果；非交互与测试构建自动回退到脚本输入，既有测试机制零侵入
-
-### 变更
-
-- 交互式补全替换主菜单原有简单行编辑后，暂未保留空输入时上下方向键切换历史输入记录、左右方向键移动光标的能力，作为当前已知缺陷
+- 补全编辑器新增共享会话输入历史 `InputHistory`：`Mutex` 保护的条目列表跨编辑轮次共享，`push` 去除更早的相同条目使相同输入只保留最新一条，空白行被忽略；`mod.rs` 每会话创建一个实例并通过 `Arc` 传入 `read_line_with_completion`，交互提交与非交互 `read_line` 回退路径都会记录输入
+- 补全编辑器新增方向键历史回溯：无建议面板时 ↑ 调出更早的历史条目、↓ 调出更新的条目，首次调出把当前缓冲保存为草稿，越过最新条目时恢复草稿；无历史时上下键为无操作
+- 补全编辑器光标升级为字符边界字节索引：`Char` 在光标处插入、`Backspace` 删除光标前一字符、Left/Right 单字符移动、Ctrl+Left/Right 按词移动；crossterm 键位转换映射普通方向键、Ctrl 修饰方向键与 Emacs 别名 C-b/C-f；光标移动触发候选刷新，因为活动补全 token 改为止于光标处
+- 补全渲染把光标放在提示符宽度加光标前文本显示宽度的位置，CJK 字符下光标保持对齐；Tab 填入候选后光标停在插入内容之后而非跳到缓冲末尾
 
 ## [0.12.0] - 2026-09-09
 
