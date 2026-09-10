@@ -19,10 +19,11 @@ use crate::init::_rust_i18n_try_translate;
 pub use rust_i18n::t;
 
 /// Set the process-wide locale and refresh the ChangeLog language
-/// selection. The current ChangeLog only provides Chinese, so every
-/// locale falls back to the Chinese text.
-/// 设置进程级 locale 并刷新 ChangeLog 语言选择。当前 ChangeLog 仅提供
-/// 中文，因此任何 locale 都回退到中文文本。
+/// selection. The embedded ChangeLog ships in Chinese and English; English
+/// locales get the English text and every other locale falls back to the
+/// Chinese text.
+/// 设置进程级 locale 并刷新 ChangeLog 语言选择。内置 ChangeLog 提供中文与
+/// 英文两种文本；英文 locale 返回英文文本，其余 locale 回退到中文文本。
 pub fn set_locale(locale: &str) {
     rust_i18n::set_locale(locale);
 }
@@ -68,10 +69,31 @@ pub fn t_str(key: &str) -> String {
         .into_owned()
 }
 
-/// Embedded Chinese ChangeLog. Other locales fall back to this text until
-/// a matching file is added.
-/// 嵌入的中文 ChangeLog。在新增对应语言文件前，其他 locale 回退到该文本。
+/// Embedded Chinese ChangeLog (user-facing edition).
+/// 嵌入的中文 ChangeLog（面向用户版）。
 const CHANGELOG_ZH_CN: &str = include_str!("../../../docs/changelog/CHANGELOG_ZH_CN.md");
+
+/// Embedded English ChangeLog (user-facing edition).
+/// 嵌入的英文 ChangeLog（面向用户版）。
+const CHANGELOG_EN: &str = include_str!("../../../docs/changelog/CHANGELOG.md");
+
+/// Return the embedded ChangeLog text matching the current locale.
+/// 返回与当前 locale 匹配的内置 ChangeLog 文本。
+///
+/// # Description
+/// English locales (`en`, `en-US`, ...) get the English text; every other
+/// locale, including Chinese and unknown ones, falls back to the Chinese
+/// text.
+/// # 描述
+/// 英文 locale（`en`、`en-US` 等）返回英文文本；其余 locale（含中文与未知
+/// locale）回退到中文文本。
+fn changelog_text() -> &'static str {
+    if rust_i18n::locale().starts_with("en") {
+        CHANGELOG_EN
+    } else {
+        CHANGELOG_ZH_CN
+    }
+}
 
 /// One parsed ChangeLog version block.
 /// 一个解析出的 ChangeLog 版本块。
@@ -91,23 +113,21 @@ pub struct ChangelogVersion {
 /// Return the full embedded ChangeLog text for the current locale.
 /// 返回当前 locale 对应的完整嵌入 ChangeLog 文本。
 pub fn changelog_all() -> &'static str {
-    // Only Chinese exists today; every locale uses the same embedded text.
-    // 当前只有中文；所有 locale 使用同一嵌入文本。
-    CHANGELOG_ZH_CN
+    changelog_text()
 }
 
 /// Parse and return every version block in the embedded ChangeLog, in file
 /// order.
 /// 按文件顺序解析并返回嵌入 ChangeLog 中的每个版本块。
 pub fn changelog_versions() -> Vec<ChangelogVersion> {
-    parse_changelog(CHANGELOG_ZH_CN)
+    parse_changelog(changelog_text())
 }
 
 /// Return the body of the requested version, or `None` when the version is
 /// not present.
 /// 返回指定版本的正文；版本不存在时返回 `None`。
 pub fn changelog_version(version: &str) -> Option<String> {
-    parse_changelog(CHANGELOG_ZH_CN)
+    parse_changelog(changelog_text())
         .into_iter()
         .find(|entry| entry.version == version)
         .map(|entry| entry.body)

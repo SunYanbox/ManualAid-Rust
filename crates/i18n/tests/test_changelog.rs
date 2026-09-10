@@ -46,6 +46,28 @@ fn changelog_all_contains_version_headings() {
 }
 
 #[test]
+fn changelog_switches_between_chinese_and_english() {
+    let _guard = locale_guard();
+
+    set_locale("zh-CN");
+    assert!(changelog_all().contains("# 更新日志"));
+    assert!(changelog_version("0.7.0").unwrap().contains("工具结果"));
+
+    set_locale("en");
+    assert!(changelog_all().contains("# Changelog"));
+    assert!(changelog_version("0.7.0").unwrap().contains("Tool results"));
+}
+
+#[test]
+fn changelog_falls_back_to_chinese_for_unknown_locales() {
+    let _guard = locale_guard();
+
+    set_locale("fr");
+    assert!(changelog_all().contains("# 更新日志"));
+    assert!(changelog_version("0.7.0").unwrap().contains("工具结果"));
+}
+
+#[test]
 fn set_locale_wrapper_switches_translations() {
     let _guard = locale_guard();
     set_locale("en");
