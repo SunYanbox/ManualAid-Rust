@@ -126,10 +126,19 @@ impl ProgressLine {
     /// 擦除当前行以便写入其他内容；下一次绘制会从第 0 列重绘。未绘制过时
     /// 为空操作。
     pub(super) fn suspend(&mut self) {
+        self.suspend_with(&mut std::io::stdout());
+    }
+
+    /// Erase the current line into an injectable writer; the enabled and
+    /// drawn state is still enforced so tests can drive the branch without a
+    /// real terminal.
+    /// 把当前行擦除到可注入的 writer；仍会检查启用与已绘制状态，使测试无需
+    /// 真实终端即可覆盖该分支。
+    fn suspend_with(&mut self, writer: &mut impl Write) {
         if !self.enabled || !self.drawn {
             return;
         }
-        let _ = erase_current_line(&mut std::io::stdout());
+        let _ = erase_current_line(writer);
         self.drawn = false;
     }
 
@@ -137,10 +146,18 @@ impl ProgressLine {
     /// starts on a fresh line. Does nothing when nothing was drawn.
     /// 定格该行并以换行结束，使后续输出从新行开始。未绘制过时不做事。
     pub(super) fn finish(&mut self) {
+        self.finish_with(&mut std::io::stdout());
+    }
+
+    /// Terminate the line into an injectable writer; the enabled check stays
+    /// here so tests can exercise the branch without a real terminal.
+    /// 把该行收尾到可注入的 writer；启用检查保留在此，使测试无需真实终端
+    /// 即可覆盖该分支。
+    fn finish_with(&mut self, writer: &mut impl Write) {
         if !self.enabled {
             return;
         }
-        let _ = self.finish_to(&mut std::io::stdout());
+        let _ = self.finish_to(writer);
     }
 
     /// Update one tool's state and repaint.
@@ -155,10 +172,19 @@ impl ProgressLine {
     /// Repaint the line on the real stdout, recording whether it succeeded.
     /// 在真实 stdout 上重绘该行，并记录是否成功。
     fn draw(&mut self) {
+        self.draw_with(&mut std::io::stdout());
+    }
+
+    /// Repaint into an injectable writer, recording whether the draw
+    /// succeeded; the enabled check stays here so tests can exercise the
+    /// branch without a real terminal.
+    /// 重绘到可注入的 writer 并记录是否成功；启用检查保留在此，使测试无需
+    /// 真实终端即可覆盖该分支。
+    fn draw_with(&mut self, writer: &mut impl Write) {
         if !self.enabled {
             return;
         }
-        if self.draw_to(&mut std::io::stdout()).is_ok() {
+        if self.draw_to(writer).is_ok() {
             self.drawn = true;
         }
     }
@@ -359,6 +385,41 @@ mod tests {
         let text = String::from_utf8(out).unwrap();
         assert!(text.contains("read"));
         assert!(text.contains("edit"));
+    }
+
+    #[test]
+    fn draw_with_records_the_drawn_state_when_enabled() {
+        let _guard = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
+        let mut line = ProgressLine::with_options(vec!["read".into()], true, None);
+        let mut out = Vec::new();
+        line.draw_with(&mut out);
+        assert!(line.drawn);
+        assert!(!out.is_empty());
+    }
+
+    #[test]
+    fn suspend_with_erases_a_drawn_line_when_enabled() {
+        let _guard = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
+        let mut line = ProgressLine::with_options(vec!["read".into()], true, None);
+        line.drawn = true;
+        let mut out = Vec::new();
+        line.suspend_with(&mut out);
+        assert!(!line.drawn);
+        assert!(!out.is_empty());
+    }
+
+    #[test]
+    fn finish_with_writes_a_terminating_line_when_enabled() {
+        let _guard = crate::test_support::STYLE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
+        let mut line = ProgressLine::with_options(vec!["read".into()], true, None);
+        line.drawn = true;
+        let mut out = Vec::new();
+        line.finish_with(&mut out);
+        assert!(!line.drawn);
+        assert!(out.ends_with(b"\n"));
     }
 
     #[test]
