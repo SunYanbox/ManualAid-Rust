@@ -781,6 +781,26 @@ mod tests {
 
     #[allow(clippy::await_holding_lock)]
     #[tokio::test]
+    async fn loop_path_token_branch_continues_the_loop() {
+        // A line containing `@` is routed through the path-action branch;
+        // a missing target prints the localized hint and the loop resumes.
+        // 含 `@` 的行会进入路径操作分支；目标不存在时打印本地化提示，
+        // loop 继续运行。
+        let _capture = crate::console::capture();
+        let _lang = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        let _skills = crate::test_support::SKILL_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let root = crate::test_support::temp_dir("loop-path-token-ws");
+        let home = crate::test_support::temp_dir("loop-path-token-home");
+        std::fs::create_dir_all(root.join(".ManualAid")).unwrap();
+        super::utils::push_test_input(&["@nonexistent_zzz", "0"]);
+        loop_main_at(&root, &home, None, None).await.unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
     async fn loop_mode_toggle_switches_session_mode() {
         let _capture = crate::console::capture();
         let _lang = crate::test_support::LOCALE_LOCK.lock().unwrap();

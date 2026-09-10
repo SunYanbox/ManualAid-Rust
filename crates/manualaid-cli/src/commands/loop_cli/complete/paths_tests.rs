@@ -19,6 +19,19 @@ fn separator_only_query_lists_root_children() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+#[test]
+fn unscanned_empty_query_stays_stable_across_calls() {
+    // A default instance has no cached root view, so the empty query
+    // exercises the cache-miss path with an empty directory key; the
+    // second call must return the same entries from the populated cache.
+    // 默认实例没有缓存的根视图，空查询因此走空目录键的缓存未命中路径；
+    // 第二次调用必须从已填充的缓存返回相同条目。
+    let mut candidates = PathCandidates::default();
+    let first = candidates.filter("");
+    let second = candidates.filter("");
+    assert_eq!(first, second);
+}
+
 fn scanned(root: &std::path::Path) -> PathCandidates {
     let mut candidates = PathCandidates::default();
     candidates.scan(root);

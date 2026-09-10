@@ -391,6 +391,14 @@ mod tests {
         .collect()
     }
 
+    #[test]
+    fn command_candidates_without_a_query_is_empty() {
+        // No active token means the provider returns nothing, keeping the
+        // suggestion panel closed.
+        // 无活动 token 时提供者返回空，建议面板保持关闭。
+        assert!(command_candidates(&CompletionState::new()).is_empty());
+    }
+
     /// Run the completion loop over a fixed event sequence.
     /// 以固定事件序列运行补全循环。
     fn run_with_events(
@@ -467,6 +475,19 @@ mod tests {
             state: crossterm::event::KeyEventState::NONE,
         };
         assert_eq!(convert_crossterm_key(key), None);
+    }
+
+    #[test]
+    fn convert_key_ignores_unsupported_keys() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        assert_eq!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE)),
+            None
+        );
+        assert_eq!(
+            convert_crossterm_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+            None
+        );
     }
 
     #[test]
