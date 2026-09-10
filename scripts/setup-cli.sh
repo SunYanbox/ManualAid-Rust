@@ -136,13 +136,9 @@ main() {
             ok "Already up to date."
             exit 0
         fi
-        echo ""
-        echo -n "Update to $latest_ver? (current: $installed_ver) [y/N] "
-        read -r ans
-        if [[ ! "$ans" =~ ^[Yy]$ ]]; then
-            info "Cancelled."
-            exit 0
-        fi
+        # Upgrade the existing installation in place without asking; the
+        # single install directory leaves no path to choose.
+        # 已有安装则直接就地升级，不再询问；安装目录唯一，无需选择路径。
     else
         info "No existing installation found."
     fi

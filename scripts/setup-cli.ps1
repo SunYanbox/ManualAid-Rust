@@ -430,17 +430,13 @@ function Main {
         return
     }
     
-    # Update existing installation or install new
+    # Upgrade an existing installation in place, or ask where to install when
+    # none is found. Switching between the global and user installs requires
+    # uninstalling first, so the fresh install triggers the path question.
+    # 已有安装则就地在原路径升级；未检测到安装时才询问安装级别。在系统级与
+    # 用户级之间切换需要先卸载，重新安装时会再次询问安装路径。
     if ($existingInstall) {
-        Write-Host "Update to latest version? ($($existingInstall.Version) -> $($latestRelease.Version))"
-        $updateChoice = Read-Host "Enter y to update, n to cancel (y/n)"
-        
-        if ($updateChoice -eq 'y' -or $updateChoice -eq 'Y') {
-            $null = Update-ExistingInstallation -CurrentInstall $existingInstall -LatestRelease $latestRelease
-        }
-        else {
-            Write-Info "Update cancelled"
-        }
+        $null = Update-ExistingInstallation -CurrentInstall $existingInstall -LatestRelease $latestRelease
     }
     else {
         $null = Install-New -LatestRelease $latestRelease
