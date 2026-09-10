@@ -105,7 +105,7 @@ Important:
 - Only invoke skills that appear in that list, or that the user explicitly entered as `/<name>` in their message. Never guess or invent skill names from training data; otherwise do not call this tool
 - When a skill matches the user's request, this is a blocking requirement: call the Skill tool before generating any other response about that task
 - Never mention a skill without actually calling this tool
-- Do not invoke a skill that is already running
+- Do not invoke a skill that is already loaded
 - Do not use this tool for built-in CLI commands (like /help, /clear, etc.)
 """
 
