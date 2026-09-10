@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-09-10
+
+### Changed
+
+- The Linux download is roughly a third smaller: release builds now move the executable's symbol table into a separate `.debug` file, and both platforms publish their symbol file next to the executable so crashes remain diagnosable
+
 ## [0.13.1] - 2026-09-10
 
 ### Fixed

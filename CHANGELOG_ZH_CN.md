@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-09-10
+
+### 变更
+
+- 发布构建不再把 Linux 符号表嵌进二进制：工作流用 `objcopy --only-keep-debug` 将其拆到伴随的 `.debug` 文件，以 `strip --strip-all` 剥离二进制，再用 `--add-gnu-debuglink` 关联两者，使两个平台都发布精简可执行文件加独立符号文件（ELF 为 `.debug`、PE 为同名 `.pdb`，后者此前未被上传）；Linux 资产体积降至与 Windows 相当，同时把 `manualaid-cli` 升到 0.13.2 以端到端验证新管线
+
 ## [0.13.1] - 2026-09-10
 
 ### 修复
