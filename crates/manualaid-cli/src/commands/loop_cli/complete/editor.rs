@@ -23,6 +23,49 @@ const MAX_SUGGESTIONS: usize = 8;
 /// 每个候选只占一行终端。
 const DESCRIPTION_MAX_CHARS: usize = 80;
 
+/// Layout limits for the suggestion panel: the terminal width used to keep
+/// one candidate on one row, and the number of rows that fit below the input
+/// line before the terminal would scroll.
+/// 建议面板的布局限制：终端宽度（让每个候选只占一行）与输入行下方可容纳
+/// 的行数（超过会导致终端滚动）。
+#[derive(Debug, Clone, Copy)]
+struct PanelLayout {
+    /// Terminal width in columns; `None` disables width-based truncation.
+    /// 终端列数；`None` 表示不按宽度截断。
+    max_width: Option<usize>,
+}
+
+impl PanelLayout {
+    /// Query the terminal for its width. The panel height stays at
+    /// [`MAX_SUGGESTIONS`] regardless of where the caret sits: when the
+    /// terminal scrolls, the drawn rows and the caret move up together, so
+    /// the relative `MoveUp` back to the input line stays correct and no
+    /// caret-based limit is needed.
+    /// 查询终端宽度。面板高度恒为 [`MAX_SUGGESTIONS`]，与光标位置无关：
+    /// 终端滚动会把已绘制行与光标一起上移，回到输入行的相对 `MoveUp`
+    /// 依然正确，因此无需按光标位置限制高度。
+    fn detect() -> Self {
+        // Outside an interactive terminal the console is shared with other
+        // processes, so no reliable width can be read.
+        // 非交互终端下控制台与其他进程共享，读不到可靠的宽度。
+        let max_width = if is_interactive() {
+            crossterm::terminal::size()
+                .ok()
+                .map(|(cols, _)| cols as usize)
+        } else {
+            None
+        };
+        Self { max_width }
+    }
+
+    /// Layout with an explicit width, for tests without a real terminal.
+    /// 以显式宽度构建布局，供无真实终端的测试使用。
+    #[cfg(test)]
+    fn with_width(max_width: Option<usize>) -> Self {
+        Self { max_width }
+    }
+}
+
 /// One editor-level input event. Ctrl+D and Ctrl+C are editor concerns and
 /// never reach the completion state machine, whose [`Key`] stays focused on
 /// buffer editing and selection.
@@ -171,8 +214,8 @@ where
         None => CompletionState::new(),
     };
     refresh_candidates(&mut state, &mut candidates_fn);
-    let mut prev_suggestion_lines =
-        render(&mut writer, prompt, &state, 0).expect("initial render must succeed");
+    let mut prev_suggestion_lines = render(&mut writer, prompt, &state, 0, PanelLayout::detect())
+        .expect("initial render must succeed");
 
     loop {
         let event = read_key().ok()?;
@@ -198,8 +241,14 @@ where
                         if refresh {
                             refresh_candidates(&mut state, &mut candidates_fn);
                         }
-                        prev_suggestion_lines =
-                            render(&mut writer, prompt, &state, prev_suggestion_lines).ok()?;
+                        prev_suggestion_lines = render(
+                            &mut writer,
+                            prompt,
+                            &state,
+                            prev_suggestion_lines,
+                            PanelLayout::detect(),
+                        )
+                        .ok()?;
                     }
                     Outcome::Submit(line) => {
                         clear_suggestions_and_submit(
@@ -236,8 +285,14 @@ where
                     None => CompletionState::new(),
                 };
                 refresh_candidates(&mut state, &mut candidates_fn);
-                prev_suggestion_lines =
-                    render(&mut writer, prompt, &state, prev_suggestion_lines).ok()?;
+                prev_suggestion_lines = render(
+                    &mut writer,
+                    prompt,
+                    &state,
+                    prev_suggestion_lines,
+                    PanelLayout::detect(),
+                )
+                .ok()?;
             }
         }
     }
@@ -268,6 +323,7 @@ fn render<W: Write>(
     prompt: &str,
     state: &CompletionState,
     prev_suggestion_lines: usize,
+    layout: PanelLayout,
 ) -> io::Result<usize> {
     use crossterm::cursor::{MoveToColumn, MoveUp};
     use crossterm::terminal::{Clear, ClearType};
@@ -307,20 +363,11 @@ fn render<W: Write>(
         write!(writer, "\r\n")?;
         crossterm::execute!(writer, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
         let marker = if index == selected_offset { '>' } else { ' ' };
-        let label = if path_trigger {
-            format!("@{}", candidate.label)
-        } else {
-            candidate.label.clone()
-        };
-        let label = if candidate.dimmed {
-            crate::style::muted(&label)
-        } else {
-            label
-        };
-        write!(writer, "{marker} {label}")?;
-        if !candidate.description.is_empty() {
-            write!(writer, "  {}", truncate_description(&candidate.description))?;
-        }
+        write!(
+            writer,
+            "{}",
+            render_suggestion_row(candidate, marker, path_trigger, layout.max_width)
+        )?;
     }
     // Clear any rows the previous render occupied but the current candidate
     // list no longer fills.
@@ -387,24 +434,97 @@ fn truncate_description(description: &str) -> String {
 /// 去除 ANSI 样式序列后的可见列宽：CJK 与全角字符占两列终端宽度，
 /// 本地化提示后光标才能落在正确位置。
 fn display_width(text: &str) -> usize {
-    crate::style::strip_ansi(text)
-        .chars()
-        .map(|ch| {
-            let code = ch as u32;
-            if (0x1100..=0x115F).contains(&code)
-                || (0x2E80..=0xA4CF).contains(&code)
-                || (0xAC00..=0xD7A3).contains(&code)
-                || (0xF900..=0xFAFF).contains(&code)
-                || (0xFE30..=0xFE4F).contains(&code)
-                || (0xFF00..=0xFF60).contains(&code)
-                || (0xFFE0..=0xFFE6).contains(&code)
-            {
-                2
-            } else {
-                1
-            }
-        })
-        .sum()
+    crate::style::strip_ansi(text).chars().map(char_width).sum()
+}
+
+/// Terminal columns occupied by one character: two for CJK and full-width
+/// forms, one otherwise.
+/// 单个字符占用的终端列数：CJK 与全角形式为两列，其余为一列。
+fn char_width(ch: char) -> usize {
+    let code = ch as u32;
+    if (0x1100..=0x115F).contains(&code)
+        || (0x2E80..=0xA4CF).contains(&code)
+        || (0xAC00..=0xD7A3).contains(&code)
+        || (0xF900..=0xFAFF).contains(&code)
+        || (0xFE30..=0xFE4F).contains(&code)
+        || (0xFF00..=0xFF60).contains(&code)
+        || (0xFFE0..=0xFFE6).contains(&code)
+    {
+        2
+    } else {
+        1
+    }
+}
+
+/// Render one suggestion row within `max_width` display columns so the row
+/// never wraps onto a second terminal row; without a known width the
+/// description is capped at [`DESCRIPTION_MAX_CHARS`] characters as before.
+/// 在 `max_width` 个显示列内渲染一条建议行，使其不会折到第二行；宽度未知
+/// 时仍按 [`DESCRIPTION_MAX_CHARS`] 个字符限制描述。
+fn render_suggestion_row(
+    candidate: &Candidate,
+    marker: char,
+    path_trigger: bool,
+    max_width: Option<usize>,
+) -> String {
+    let label = if path_trigger {
+        format!("@{}", candidate.label)
+    } else {
+        candidate.label.clone()
+    };
+    let label = if candidate.dimmed {
+        crate::style::muted(&label)
+    } else {
+        label
+    };
+    let head = format!("{marker} {label}");
+    let Some(width) = max_width else {
+        return if candidate.description.is_empty() {
+            head
+        } else {
+            format!("{head}  {}", truncate_description(&candidate.description))
+        };
+    };
+    if candidate.description.is_empty() {
+        return truncate_to_width(&head, width);
+    }
+    // Two spaces separate the label from its description.
+    // 标签与描述之间以两个空格分隔。
+    const SEPARATOR_WIDTH: usize = 2;
+    let head_width = display_width(&head);
+    if head_width + SEPARATOR_WIDTH >= width {
+        return truncate_to_width(&head, width);
+    }
+    let description =
+        truncate_to_width(&candidate.description, width - head_width - SEPARATOR_WIDTH);
+    format!("{head}  {description}")
+}
+
+/// Truncate `text` to `max_width` display columns, appending `…` when it was
+/// cut. Styling is dropped on truncation: slicing inside an ANSI sequence
+/// would corrupt the stream, mirroring the progress line's approach.
+/// 将 `text` 截断到 `max_width` 个显示列，截断时追加 `…`。截断会丢弃样式：
+/// 在 ANSI 序列中间截断会破坏输出流，与进度行的做法一致。
+fn truncate_to_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+    if display_width(text) <= max_width {
+        return text.to_owned();
+    }
+    let budget = max_width - 1;
+    let mut kept = String::new();
+    let mut used = 0;
+    for ch in crate::style::strip_ansi(text).chars() {
+        let width = char_width(ch);
+        if used + width > budget {
+            break;
+        }
+        kept.push(ch);
+        used += width;
+    }
+    kept.push('…');
+    kept
 }
 
 #[cfg(test)]
@@ -677,7 +797,7 @@ mod tests {
         for _ in 0..9 {
             let _ = state.handle_key(Key::Down);
         }
-        let lines = render(&mut out, "> ", &state, 0).unwrap();
+        let lines = render(&mut out, "> ", &state, 0, PanelLayout::with_width(None)).unwrap();
         assert!(lines > 0);
         let text = String::from_utf8(out).unwrap();
         // The last candidate must be among the rendered rows.
@@ -698,7 +818,7 @@ mod tests {
             dimmed: true,
         }];
         state.set_candidates(candidates);
-        let lines = render(&mut out, "> ", &state, 0).unwrap();
+        let lines = render(&mut out, "> ", &state, 0, PanelLayout::with_width(None)).unwrap();
         assert_eq!(lines, 1);
         let text = String::from_utf8(out).unwrap();
         assert!(text.contains("@sub"));
@@ -712,6 +832,86 @@ mod tests {
         let truncated = truncate_description(&long);
         assert_eq!(truncated.chars().count(), 81);
         assert!(truncated.ends_with('…'));
+    }
+
+    #[test]
+    fn truncate_to_width_handles_zero_exact_and_cjk_widths() {
+        assert_eq!(truncate_to_width("abc", 0), "");
+        assert_eq!(truncate_to_width("abc", 3), "abc");
+        assert_eq!(truncate_to_width("abcd", 3), "ab…");
+        // CJK characters occupy two columns, so only one fits in three.
+        // CJK 字符占两列，三列宽度下只放得下一个。
+        assert_eq!(truncate_to_width("中文", 3), "中…");
+    }
+
+    #[test]
+    fn suggestion_row_stays_within_the_terminal_width() {
+        let candidate = Candidate {
+            label: "project-.agents-job-description-analyzer".to_owned(),
+            description: "Analyze job postings, calculate match scores, identify gaps, and create application strategy".to_owned(),
+            is_dir: false,
+            dimmed: false,
+        };
+        let row = render_suggestion_row(&candidate, '>', false, Some(60));
+        // A row wider than the terminal would wrap and break the row-count
+        // bookkeeping that the redraw logic relies on.
+        // 超过终端宽度的行会折行，破坏重绘逻辑依赖的行数记账。
+        assert!(
+            display_width(&row) <= 60,
+            "row exceeded the width budget: {row:?}"
+        );
+        assert!(row.ends_with('…'));
+    }
+
+    #[test]
+    fn suggestion_row_budget_counts_cjk_descriptions_as_two_columns() {
+        let candidate = Candidate {
+            label: "/help".to_owned(),
+            description: "显示帮助与可用命令说明的中文描述文本".to_owned(),
+            is_dir: false,
+            dimmed: false,
+        };
+        let row = render_suggestion_row(&candidate, ' ', false, Some(30));
+        assert!(display_width(&row) <= 30, "row was {row:?}");
+    }
+
+    #[test]
+    fn suggestion_row_without_a_width_keeps_the_character_cap() {
+        let candidate = Candidate {
+            label: "/help".to_owned(),
+            description: "a".repeat(90),
+            is_dir: false,
+            dimmed: false,
+        };
+        let row = render_suggestion_row(&candidate, ' ', false, None);
+        assert!(row.ends_with('…'));
+        assert_eq!(row.matches('a').count(), 80);
+    }
+
+    #[test]
+    fn render_shows_every_candidate_up_to_the_panel_limit() {
+        let mut out = Vec::new();
+        let many: Vec<Candidate> = (0..3)
+            .map(|index| Candidate {
+                label: format!("/item{index}"),
+                description: String::new(),
+                is_dir: false,
+                dimmed: false,
+            })
+            .collect();
+        let mut state = CompletionState::new();
+        state.set_candidates(many);
+        // The panel height must not depend on where the caret happens to sit,
+        // so every candidate is drawn even when output has scrolled the input
+        // line to the bottom of the terminal.
+        // 面板高度不得取决于光标位置：即使输出已把输入行挤到终端底部，
+        // 每个候选也应照常绘制。
+        let lines = render(&mut out, "> ", &state, 0, PanelLayout::with_width(Some(80))).unwrap();
+        assert_eq!(lines, 3);
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("/item0"));
+        assert!(text.contains("/item1"));
+        assert!(text.contains("/item2"));
     }
 
     #[test]
