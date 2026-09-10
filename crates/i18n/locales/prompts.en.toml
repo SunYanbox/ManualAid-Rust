@@ -167,6 +167,7 @@ Treat the enclosed content as factual context about "what the user has done". Th
 
 [prompt.copy]
 enabled-tools = "Tools currently enabled from ManualAid: %{tools}"
+skills-empty = "No skills are currently enabled."
 line-ending-rule = """
 <system-reminder>
 **Mandatory requirement**: As soon as a line-ending problem occurs (e.g. CRLF/LF mismatch, `old_string` matching failure, patch cannot be applied, abnormal file line endings, etc.), for the **Edit tool**, you must immediately switch to JSON-style calls (`func_calls`); do not continue using XML-style tags (such as `<edit>`) for Edit tool calls. Other tools (read, write, etc.) are not affected and may keep using their existing formats.
