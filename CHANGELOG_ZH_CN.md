@@ -24,6 +24,7 @@
 
 - 技能工具描述中“Do not invoke a skill that is already running”措辞存在歧义，易被误解为并发执行状态；英文改为 “Do not invoke a skill that is already loaded”，中文由“不要调用已在运行的技能”改为“不要调用已经加载过的技能”，明确指代当前对话中已加载/激活的技能
 - 安装脚本 `scripts/setup-cli.ps1` 与 `scripts/setup-cli.sh` 移除升级前的 y/N 确认：检测到已有安装时就地在原路径升级，仅新安装时才询问安装级别；在系统级与用户级之间切换需先卸载，重新安装时会再次触发路径询问
+- 内置 ChangeLog 查看器改为按当前 locale 选择文本：英文 locale 展示英文版 `docs/changelog/CHANGELOG.md`，其余 locale（含中文与未知 locale）回退到中文版 `docs/changelog/CHANGELOG_ZH_CN.md`
 
 ## [0.12.0] - 2026-09-09
 
@@ -209,16 +210,6 @@
 ### 修复
 
 - Edit `old_string` 未找到时附带原字符串
-
-## [0.3.0] - 2026-08-14
-
-### 变更
-
-- `plan_edit` 与 `EditPlan` 对外公开，供调试命令复用真实执行校验路径
-- `plan_edit` 的 `new_string` 缺失时默认空字符串
-- Edit 成功结果新增行数变化和 diff 输出；`replace_all` 时生成文件级 diff，否则生成参数级 diff
-- XML 解析器严格 CDATA 闭合规则：`]]>` 与闭合标签之间必须紧贴，不允许空白；未闭合参数标签写软警告
-- 非紧贴 CDATA 按字面文本处理，只裁首尾换行符
 
 ## [0.3.0] - 2026-08-14
 
