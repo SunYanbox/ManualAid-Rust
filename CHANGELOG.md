@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-09-11
+
+### Added
+
+- Release notes are now synced from `CHANGELOG.md` / `CHANGELOG_ZH_CN.md` on every published Release: `scripts/update_release_notes.py` writes each version section into the matching Release body behind the `<!-- manualaid-release-notes -->` marker, and a new `release-notes` job runs after the binaries are uploaded; when the previous Release lacks the marker the script backfills every Release from the oldest up to the current one, otherwise it refreshes only the current Release, and the English half is separated from the Chinese one by `---`
+
 ## [0.13.2] - 2026-09-10
 
 ### Changed
