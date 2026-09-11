@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-09-11
+
+### 新增
+
+- 每次发布 Release 时自动从 `CHANGELOG.md` / `CHANGELOG_ZH_CN.md` 同步更新日志：`scripts/update_release_notes.py` 把对应版本段落写入匹配的 Release 正文，并以 `<!-- manualaid-release-notes -->` 标记包裹；新增的 `release-notes` job 在二进制上传完成后运行。上一个 Release 缺少该标记时从最早到当前逐个回填，否则只刷新当前 Release；英文与中文之间以 `---` 分隔
+
 ## [0.13.2] - 2026-09-10
 
 ### 变更
