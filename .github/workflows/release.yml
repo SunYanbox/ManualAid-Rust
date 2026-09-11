@@ -65,3 +65,25 @@ jobs:
             target/${{ matrix.target }}/release/${{ matrix.bin_name }}
             target/${{ matrix.target }}/release/${{ matrix.bin_name }}.debug
             target/${{ matrix.target }}/release/*.pdb
+
+  release-notes:
+    name: Sync release notes
+    runs-on: ubuntu-latest
+    # Run after the binaries are uploaded so both jobs never patch the same
+    # Release concurrently.
+    # 在二进制上传完成后运行，避免两个 job 并发修改同一个 Release。
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Backfills every Release the first time, then keeps the current one in
+      # sync with CHANGELOG.md / CHANGELOG_ZH_CN.md.
+      # 首次运行回填全部 Release，之后只让当前 Release 与
+      # CHANGELOG.md / CHANGELOG_ZH_CN.md 保持同步。
+      - name: Sync release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python3 scripts/update_release_notes.py
