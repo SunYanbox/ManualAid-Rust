@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-12
+
 ### 新增
 
 - 新增 `/compress-fence` 快捷命令（也可用 `copy compressed-fence`）：复制一份包裹空 `<compacted-summary>` 围栏的交接模板，可直接粘贴到新会话开头

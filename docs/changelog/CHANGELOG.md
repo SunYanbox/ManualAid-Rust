@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-12
+
 ### Added
 
 - New `/compress-fence` shortcut (also `copy compressed-fence`): copies a hand-off template wrapping an empty `<compacted-summary>` fence, ready to paste at the start of a new chat.
