@@ -2,8 +2,8 @@
 
 核心开发流程如下，提交与 PR 相关细节见本文件后续章节与 `docs/issue-pr-guide.md`。
 
-1. **签出新分支**：从最新 `main` 签出分支（先 `git fetch` 拉取最新 `origin/main`）。分支命名沿用 `<type>/<short-desc>` 或 `<type>/<issue>-<desc>` 格式（如 `fix/24-...`、`ci/...`）。
-2. **提交前检查**：暂存（stage）要提交的文件前运行三项本地检查：`cargo fmt`、`cargo clippy -- -D warnings`、`cargo check`。此即每次提交的门槛，无需重复 `fmt -- --check`，也无需在本地每次跑全量 CI。
+1. **签出新分支**：先 `git fetch` 拉取最新 `origin/main`，再从 `origin/main` 签出分支。分支命名沿用 `<type>/<short-desc>` 或 `<type>/<issue>-<desc>` 格式（如 `fix/24-...`、`ci/...`）。
+2. **提交前检查**：当本次提交包含代码或 `i18n` crate 的译文（locales）更改时，暂存（stage）要提交的文件前运行三项本地检查：`cargo fmt`、`cargo clippy -- -D warnings`、`cargo check`。纯文档变更（如 `AGENTS.md`、`CHANGELOG*.md`、`docs/`）无需运行。此即涉及代码或译文的提交门槛，无需重复 `fmt -- --check`，也无需在本地每次跑全量 CI。
 3. **全量检查由 PR CI 承担**：跨平台的全量检查（fmt/clippy/doc/test/coverage）由 PR 的 CI（`.github/workflows/ci.yml`）自动运行，本地**不必**每次提交都跑全量 `./scripts/ci.*`。
 4. **创建 PR 前**：更新 CHANGELOG（规则见「CHANGELOG 维护规则」）；尽可能解决基础的测试与覆盖率问题（详见「测试与交付检查」）。
 5. **创建 PR 后**：依据 PR CI 结果继续优化测试与覆盖率。
@@ -19,7 +19,7 @@
 
 ## 提交与 Issue/PR 规范
 
-**生成提交消息或 PR/Issue 内容前，先查看需要提交/需要推送的那些文件相对上一提交或目标分支的实际变更，依据 diff 编写，严禁根据文件列表或对话历史推断。遵循约定式提交规范，使用英文、客观描述变更。非纯格式化变更补充正文说明背景与范围。**
+**生成提交消息或 PR/Issue 内容前，先查看需要提交/需要推送的那些文件相对上一提交或目标分支的实际变更，依据 diff 编写，严禁根据文件列表或对话历史推断。遵循约定式提交规范，使用英文、客观描述变更。非纯格式化变更需在正文（提交消息正文或 PR/Issue 正文）说明背景与范围。**
 
 ### 提交规范
 
@@ -30,9 +30,9 @@
 ### PR / Issue 规范
 
 **格式要求与模板**：
-- **标题**：Bug 用 `bug: <简短描述>`，功能用 `feat(<范围>): <简短描述>`。
+- **标题**：Issue 的缺陷用 `bug: <简短描述>`、功能请求用 `feat(<范围>): <简短描述>`；PR 遵循提交规范的主题行格式（缺陷修复用 `fix: <简短描述>`）；发布 PR 用 `chore(release): bump versions for vX.Y.Z`。
 - **正文双语**：英文在前，分隔线后折叠中文。正文内所有标题使用 Markdown 加粗（如 `**Summary**`），不使用 `#`/`##`。
-- **PR 标签**：依据变更添加匹配 label（如 `bug`, `enhancement`, `documentation`, `refactor`, `prompt`）。
+- **PR 标签**：依据变更添加匹配 label（如 `bug`, `enhancement`, `documentation`, `refactor`, `prompt`）；`good first issue`、`help wanted`、`duplicate`、`invalid`、`question`、`wontfix` 面向 Issue，不作为 PR 标签。
 - **Issue语境**：Issue语境保持过去时，只描述问题发生的背景、发生时的情况等信息。
 
 创建/编辑 PR 时，正文**必须**按 `.github/pull_request_template.md` 模板文件编写，完整保留其 `**Summary**`、`---`、`<details><summary>中文</summary>` 等空行与双语结构；下为与之一致的模板摘要：
@@ -53,11 +53,11 @@
 
 详细提交规范见 `docs/commit-conventions.md`；标题与正文模板、标签列表及 PR 检查说明见 `docs/issue-pr-guide.md`。
 
-交付 PR 前，核对根目录与 `docs/changelog/` 下的 `CHANGELOG*.md` 是否需要更新；更新范围与写入规则见 `docs/issue-pr-guide.md` 的「CHANGELOG 更新」章节。
+创建 PR 前，核对根目录与 `docs/changelog/` 下的四份 `CHANGELOG*.md`（中英各两份）是否需要更新；更新范围与写入规则见 `docs/issue-pr-guide.md` 的「CHANGELOG 更新」章节。
 
 **CHANGELOG 维护规则**：
 - `[Unreleased]` 标题必须始终保留在 CHANGELOG 文件中，不可删除。
-- 日常新增内容（功能、变更、修复等）时，直接在 `[Unreleased]` 标题下添加对应的子标题（`### 新增`、`### 变更`、`### 修复` 等），无需等待发布。
+- 日常新增内容（功能、变更、修复等）时，直接在 `[Unreleased]` 标题下添加对应的子标题，无需等待发布；中英文件各用本语言子标题（中文用 `### 新增`/`### 变更`/`### 修复`，英文用 `### Added`/`### Changed`/`### Fixed`），并保持严格同构。
 - 发布新版本时，将 `[Unreleased]` 下的所有内容移至新版本标题（如 `## [x.y.z] - yyyy-mm-dd`）下，然后保留一个空白的 `[Unreleased]` 标题（不含任何子标题），供后续开发使用。
 
 **版本更新规则**：
@@ -93,15 +93,14 @@
 
 ## 测试与交付检查
 
-- **组织方式**：公共 API 测试置于 `tests/` 目录；私有或 `pub(crate)` 测试置于源码附近的 `_tests.rs` 或子模块的 `tests/` 目录，避免实现与测试混杂。使用 `metron --per-file crates` 检查占比。
+- **组织方式**：公共 API 测试置于 `tests/` 目录；私有或 `pub(crate)` 测试置于源码附近的 `_tests.rs` 或子模块的 `tests/` 目录，避免实现与测试混杂。使用 `metron --per-file crates` 检查各文件中代码实现与测试代码占总行数的比例。
 - **关键规则**：
-  - `i18n!()` 仅在 `i18n` 库 crate 内调用一次；二进制与其余 crate 统一通过 `i18n::t_str()` 取翻译。
+  - `i18n!()` 只允许在 `i18n` 库 crate 内使用，且不得在其他任何地方手动调用；二进制与其余 crate 统一通过 `i18n::t_str()` 取翻译。
   - 实现较长或测试需按主题拆分时，采用同名 `.rs` + 同名子目录：文件末尾用 `#[cfg(test)] mod tests;` 指向 `<name>/tests/`；实现仍是单文件时，用 `#[cfg(test)] #[path = "<source_name>_tests.rs"] mod tests;`，测试文件开头 `use super::*;`。默认优先少建目录，测试主题多、文件长时再拆目录。
-  - 各 crate 集成测试目录与 `src` 模块一一对应：`manualaid-core/tests/`、`manualaid-cli/tests/`（`api.rs`、`commands.rs` 以 `#[path]` 聚合对应子目录）、`manualaid-ws/tests/`（`config.rs`、`context.rs`、`prompt.rs`）、`i18n/tests/`。
+  - 各 crate 集成测试置于对应的 `tests/` 目录：`manualaid-core/tests/`、`manualaid-cli/tests/`、`manualaid-ws/tests/`、`i18n/tests/`；需要按模块或命令聚合时，可用 `#[path]` 引入子目录。
 
-- **提交前本地检查（每次提交的门槛）**：暂存要提交的文件前，运行 `cargo fmt`、`cargo clippy -- -D warnings`、`cargo check` 三项（见「开发流程」）。跨平台全量检查由 PR 的 CI（`.github/workflows/ci.yml`）承担，本地每次提交**不必**运行全量 `./scripts/ci.*`。
-- **交付/PR 前全量检查**：交付前运行`./scripts/ci.*`(根据平台选择合适的)做全量检查，其中包含：`cargo clippy -- -D warnings`、`cargo fmt -- --check`、`cargo llvm-cov -q --show-missing-lines > coverage_with_lines.txt`等。
-- 单个文件的测试代码覆盖率应尽可能**不低于85%**，其中核心模块的覆盖率应尽可能**不低于95%**；总体覆盖率（Function、Line、Region 三项）均需**不低于80%**。
+- **提交前本地检查**：当本次提交包含代码或 `i18n` crate 的译文（locales）更改时，暂存要提交的文件前运行 `cargo fmt`、`cargo clippy -- -D warnings`、`cargo check` 三项（见「开发流程」）；纯文档变更无需运行。跨平台全量检查由 PR 的 CI（`.github/workflows/ci.yml`）承担，本地每次提交**不必**运行全量 `./scripts/ci.*`。
+- 对不会污染系统环境的测试，覆盖率是**硬性约束**：能覆盖、可达、易测试的代码必须有测试；仅当代码不可达、易影响真实环境且无 Mock 可用时才可放弃。单个文件覆盖率**不低于 85%**，核心模块**不低于 95%**；总体覆盖率（Function、Line、Region 三项）均**不低于 80%**。
 - 全量覆盖率测试（`cargo llvm-cov`，同时运行测试并统计覆盖）优先于仅运行全量测试。
 - 覆盖率结果会被缓存到`coverage_with_lines.txt`；仅查看覆盖率信息（如 TOTAL 行）时优先读取缓存，代码未更改时**不要**重跑全量覆盖率测试。
 

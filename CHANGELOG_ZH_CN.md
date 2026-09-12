@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+### 变更
+
+- `AGENTS.md` 记录两项约定：发布 PR 统一命名为 `chore(release): bump versions for vX.Y.Z`；提交前的 `cargo fmt` / `cargo clippy` / `cargo check` 门槛仅在变更涉及代码或 `i18n` crate 的译文时运行，纯文档变更无需运行
+- `AGENTS.md` 消除歧义表述：分支从刚拉取的 `origin/main` 签出；Issue 标题沿用 `bug:` / `feat(<范围>):`，缺陷修复 PR 改用 `fix:`；Issue 专用标签不用于 PR；CHANGELOG 核对覆盖四份 `CHANGELOG*.md`，中英各用本语言子标题；`metron --per-file` 度量的是实现与测试代码行数占比；`i18n!()` 只允许在 `i18n` crate 内使用；覆盖率在测试不污染系统环境的前提下成为硬性约束；删除本地无差别运行 `./scripts/ci.*` 的条目
+- `docs/commit-conventions.md` 的提交前门槛与 `AGENTS.md` 对齐，引用改指 `AGENTS.md` 的开发流程章节，不再指向并不存在的章节
+- `docs/issue-pr-guide.md` 的标题、CHANGELOG 与标签规则与 `AGENTS.md` 对齐，并把本地无差别运行 `./scripts/ci.*` 的要求改为分级策略，豁免纯文档变更
+- `docs/source-test-organization.md` 删除，其中仍有效的规则已由 `AGENTS.md` 覆盖
+
 ## [0.14.0] - 2026-09-12
 
 ### 新增
