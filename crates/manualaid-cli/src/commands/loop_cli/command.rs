@@ -203,7 +203,7 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             CommandOutcome::Continue
         }
         LoopCommand::CopyToolFormat => {
-            report_copy_error(copy_tool_format_with_provider(provider, config, registry));
+            report_copy_error(copy_tool_format_with_provider(provider, registry));
             CommandOutcome::Continue
         }
         LoopCommand::CopyEnabledTools => {

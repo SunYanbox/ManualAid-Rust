@@ -138,7 +138,7 @@ fn copy_tool_format_writes_current_format_to_clipboard() {
     i18n::set_locale("en");
     let mock = MockClipboard::new();
     let registry = FormatRegistry::new();
-    copy_tool_format_with_provider(&mock, &Config::default(), &registry).unwrap();
+    copy_tool_format_with_provider(&mock, &registry).unwrap();
     let clipboard = mock.read().unwrap();
     assert!(clipboard.contains(&i18n::t_str("cli.prompt.func_calls_notes")));
     assert!(clipboard.contains("\"tool_use\": \"read\""));

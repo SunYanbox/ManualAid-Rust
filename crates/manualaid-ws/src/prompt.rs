@@ -35,7 +35,7 @@ pub fn build_system_prompt(
         ..config.clone()
     };
     let tools_list = render_tools_list(&effective, registry);
-    let format_desc = tool_calling_format_description(config, registry);
+    let format_desc = tool_calling_format_description(registry);
 
     let mut out = String::new();
     out.push_str("<system_prompt>\n");
@@ -118,13 +118,10 @@ pub fn render_context_reminder(context_files_text: &str) -> String {
 /// copy-prompt submenu.
 /// 渲染当前工具调用格式说明：本地化的格式前言、单个默认工具调用模板
 /// （`read`）与纯文本格式说明。系统提示词构建器与复制提示词二级菜单共用。
-pub fn tool_calling_format_description(config: &Config, registry: &FormatRegistry) -> String {
+pub fn tool_calling_format_description(registry: &FormatRegistry) -> String {
     format!(
         "{}\n```func_calls\n{}\n```\n{}\n",
-        t_fmt(
-            "cli.prompt.format_desc",
-            &[("format", &config.tool_call_format)]
-        ),
+        i18n::t_str("cli.prompt.format_desc"),
         registry
             .render_tool_call_template(&ToolKind::Read)
             .unwrap_or_default(),
@@ -810,9 +807,8 @@ mod tests {
 
     #[test]
     fn tool_calling_format_description_contains_read_template_and_notes() {
-        let config = Config::default();
         let registry = FormatRegistry::new();
-        let description = tool_calling_format_description(&config, &registry);
+        let description = tool_calling_format_description(&registry);
         assert!(description.contains(&i18n::t_str("cli.prompt.func_calls_notes")));
         assert!(description.contains("\"tool_use\": \"read\""));
     }

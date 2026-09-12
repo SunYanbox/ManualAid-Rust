@@ -107,7 +107,7 @@ fn run_copy_at_with_provider<P: ClipboardProvider>(
         CopyKind::CompressedSession => copy_compressed_session_prompt_with_provider(provider),
         CopyKind::CompressedFence => copy_compressed_fence_with_provider(provider),
         CopyKind::IntentRule => copy_intent_rule_with_provider(provider),
-        CopyKind::ToolFormat => copy_tool_format_with_provider(provider, &config, &registry),
+        CopyKind::ToolFormat => copy_tool_format_with_provider(provider, &registry),
         CopyKind::EnabledTools => copy_enabled_tools_with_provider(provider, &config, &registry),
         CopyKind::LineEndingRule => copy_line_ending_rule_with_provider(provider),
         CopyKind::PlanModeRule => copy_plan_mode_rule_with_provider(provider),
