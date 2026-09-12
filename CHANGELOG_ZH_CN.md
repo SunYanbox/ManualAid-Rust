@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-12
+
 ### 新增
 
 - 复制提示词二级菜单、`copy` 子命令与内联命令新增 `/compress-fence`（`copy compressed-fence`，别名 `fence` / `compressed-fence`）：复制一份包裹空 `<compacted-summary>` 围栏的交接模板，剪贴板内容为模板原文（不再包 `<system-reminder>` 块，使围栏保持最外层标记），中英文正文存放于 `prompt.copy.compressed-fence`，菜单标签与命令描述分别为 `cli.copy_prompt.compressed_fence` 与 `cli.cmd.fence`

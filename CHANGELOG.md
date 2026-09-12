@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-12
+
 ### Added
 
 - The copy-prompt submenu, the `copy` subcommand and the inline commands add `/compress-fence` (`copy compressed-fence` with aliases `fence` / `compressed-fence`): it copies a hand-off template wrapping an empty `<compacted-summary>` fence, the clipboard text is the template verbatim (not wrapped in a `<system-reminder>` block, so the fence stays the outermost marker), the English and Chinese bodies live in `prompt.copy.compressed-fence`, and the menu label / command description are `cli.copy_prompt.compressed_fence` and `cli.cmd.fence`
