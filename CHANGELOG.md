@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - The conversation compression prompt (`prompt.copy.compressed-session`) is rewritten in both languages into a single compact checkpoint spec: the eight-section structure (Core Requirements and Intent / Key Technical Background / Files and Code / Issues and Resolutions / TODO / Current Progress / Next Step / Key Context) replaces the old "Primary Request and Intent" block, and the old compression principles and tips are folded into one short trailing rules list (decision chain and motivation, verbatim technical facts, `[Done]`/`[In Progress]`/`[Rejected]`/`[Pending]` status marks, `[Forbidden]` items, quantified verification, emotional sanitization, conflict resolution, chained-compaction handling), so the prompt is markedly shorter while keeping the information density
+- `.gitignore` ignores two local-only artifacts that should never be committed: `coverage_with_lines.txt`, the cached output of the coverage script, and `skills-lock.json`, the personal SKILL lock file
 
 ## [0.13.3] - 2026-09-11
 
