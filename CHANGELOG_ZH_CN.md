@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+### 变更
+
+- `AGENTS.md` 明确发布 PR 命名为 `chore(release): bump versions for vX.Y.Z`，把提交前的 `cargo fmt` / `cargo clippy` / `cargo check` 门槛限定在涉及代码或 `i18n` crate 译文的变更，并消除多处歧义：分支从刚拉取的 `origin/main` 签出，缺陷修复 PR 用 `fix:` 而 Issue 标题沿用 `bug:` / `feat(<范围>):`，CHANGELOG 核对覆盖四份 `CHANGELOG*.md`，`i18n!()` 限定在 `i18n` crate 内，覆盖率成为对不污染系统环境的测试的硬性约束
+- `docs/commit-conventions.md` 与 `docs/issue-pr-guide.md` 同 `AGENTS.md` 对齐（提交前门槛、标题与标签规则、CHANGELOG 范围、本地检查分级策略），并删除 `docs/source-test-organization.md`，其中仍有效的规则已由 `AGENTS.md` 覆盖
+
 ## [0.14.0] - 2026-09-12
 
 ### 新增
