@@ -10,6 +10,10 @@
 
 - The conversation compression prompt is rewritten into a shorter, tighter checkpoint format: the eight-section structure stays, while the old principles and tips are folded into one compact rules list.
 
+### Fixed
+
+- The tool-call template shown in the prompt no longer omits the commas between parameters, and its trailing note is now a comment, so the example is valid JSONC
+
 ## [0.13.2] - 2026-09-10
 
 ### Changed

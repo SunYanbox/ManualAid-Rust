@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The conversation compression prompt (`prompt.copy.compressed-session`) is rewritten in both languages into a single compact checkpoint spec: the eight-section structure (Core Requirements and Intent / Key Technical Background / Files and Code / Issues and Resolutions / TODO / Current Progress / Next Step / Key Context) replaces the old "Primary Request and Intent" block, and the old compression principles and tips are folded into one short trailing rules list (decision chain and motivation, verbatim technical facts, `[Done]`/`[In Progress]`/`[Rejected]`/`[Pending]` status marks, `[Forbidden]` items, quantified verification, emotional sanitization, conflict resolution, chained-compaction handling), so the prompt is markedly shorter while keeping the information density
 - `.gitignore` ignores two local-only artifacts that should never be committed: `coverage_with_lines.txt`, the cached output of the coverage script, and `skills-lock.json`, the personal SKILL lock file
 
+### Fixed
+
+- The JSON tool-call template rendered into the prompt (`JsonCodeblockParser::tool_call_template`) is now valid JSONC: the parameter loop previously emitted each `"name": value` line back to back, so a multi-parameter tool such as `read` produced a comma-less example; parameters are now separated by commas (placed after the value and before the `// optional` comment, omitted on the last parameter to avoid a trailing comma) and the trailing `Note:` line becomes a `// Note:` comment, so stripping comments yields strict JSON
+
 ## [0.13.3] - 2026-09-11
 
 ### Added
