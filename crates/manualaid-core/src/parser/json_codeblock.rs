@@ -41,18 +41,22 @@ impl ToolCallFormatParser for JsonCodeblockParser {
         let name = tool.name();
         let params = tool.parameters();
         let mut out = format!("{{\n  \"tool_use\": \"{name}\",\n  \"params\": {{");
-        for param in &params {
+        for (index, param) in params.iter().enumerate() {
+            let comma = if index + 1 == params.len() { "" } else { "," };
             let comment = if param.required { "" } else { " // optional" };
             let value = match param.kind {
                 "integer" | "number" => "0",
                 "boolean" => "true",
                 _ => "\"<value>\"",
             };
-            out.push_str(&format!("\n    \"{}\": {}{}", param.name, value, comment));
+            out.push_str(&format!(
+                "\n    \"{}\": {}{}{}",
+                param.name, value, comma, comment
+            ));
         }
         out.push_str("\n  }\n}");
         out.push_str(
-            "\nNote: all string values must be valid JSON strings: escape `\"` as `\\\"`, `\\` as `\\\\`, LF as `\\n`, CRLF as `\\r\\n`.",
+            "\n// Note: all string values must be valid JSON strings: escape `\"` as `\\\"`, `\\` as `\\\\`, LF as `\\n`, CRLF as `\\r\\n`.",
         );
         out
     }

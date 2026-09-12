@@ -92,9 +92,26 @@ fn empty_input_yields_no_calls() {
 }
 
 #[test]
+fn template_strips_to_valid_json() {
+    let template = JsonCodeblockParser.tool_call_template(&ToolKind::Read);
+    // 模板是 JSONC：去掉 `//` 行注释后应能作为严格 JSON 解析（模板中的字符串值不含 `//`）。
+    let stripped: String = template
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let value: serde_json::Value =
+        serde_json::from_str(stripped.trim()).expect("template must be valid JSONC");
+    assert_eq!(value.get("tool_use").and_then(Value::as_str), Some("read"));
+    assert!(value.get("params").and_then(Value::as_object).is_some());
+}
+
+#[test]
 fn template_marks_optional_params() {
     let template = JsonCodeblockParser.tool_call_template(&ToolKind::Read);
     assert!(template.contains("\"tool_use\": \"read\""));
     assert!(template.contains("// optional"));
     assert!(template.contains("escape"));
+    // 参数之间必须有逗号分隔，否则模板不是合法的 JSON 形状。
+    assert!(template.contains("\"file_path\": \"<value>\","));
 }
