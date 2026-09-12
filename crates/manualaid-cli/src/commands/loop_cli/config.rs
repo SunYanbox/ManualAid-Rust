@@ -58,7 +58,7 @@ pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
             }
             super::command::LoopCommand::CopyToolFormat => {
                 report_copy_error(super::handlers::copy_tool_format_with_provider(
-                    provider, config, registry,
+                    provider, registry,
                 ));
             }
             super::command::LoopCommand::CopyEnabledTools => {

@@ -98,10 +98,9 @@ pub fn copy_intent_rule_with_provider<P: ClipboardProvider>(provider: &P) -> Res
 /// 将当前工具调用格式说明复制到剪贴板。
 pub fn copy_tool_format_with_provider<P: ClipboardProvider>(
     provider: &P,
-    config: &Config,
     registry: &FormatRegistry,
 ) -> Result<(), String> {
-    let text = manualaid_ws::prompt::tool_calling_format_description(config, registry);
+    let text = manualaid_ws::prompt::tool_calling_format_description(registry);
     write_copied(provider, &text)
 }
 
