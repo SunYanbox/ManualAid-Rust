@@ -40,6 +40,10 @@ pub enum CopyKind {
     /// 复制压缩会话提醒提示词。
     #[value(alias = "compress")]
     CompressedSession,
+    /// (`fence`) Copy the compressed-result fence template.
+    /// 复制压缩结果围栏模板。
+    #[value(alias = "fence", alias = "compressed-fence")]
+    CompressedFence,
     /// (`intent`) Copy the intent-output-rule prompt.
     /// 复制意图输出规则提示词。
     #[value(alias = "intent")]

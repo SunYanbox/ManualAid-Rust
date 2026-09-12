@@ -209,6 +209,20 @@ pub fn copy_compressed_session_prompt_with_provider<P: ClipboardProvider>(
     write_copied(provider, &text)
 }
 
+/// Copy the compressed-result fence template verbatim to the clipboard.
+/// The template is a hand-off opening the user pastes into an external
+/// chat; it is not wrapped so the `<compacted-summary>` fence stays the
+/// outermost marker.
+/// 将压缩结果围栏模板原样复制到剪贴板。该模板是用户粘贴到外部聊天的
+/// 交接开场文本，故不额外包裹，使 `<compacted-summary>` 围栏保持最外层
+/// 标记。
+pub fn copy_compressed_fence_with_provider<P: ClipboardProvider>(
+    provider: &P,
+) -> Result<(), String> {
+    let body = i18n::t_str("prompt.copy.compressed-fence");
+    write_copied(provider, body.trim())
+}
+
 /// Write prompt text to the clipboard and print the shared confirmation.
 /// 将提示词文本写入剪贴板并打印统一的确认信息。
 fn write_copied<P: ClipboardProvider>(provider: &P, text: &str) -> Result<(), String> {

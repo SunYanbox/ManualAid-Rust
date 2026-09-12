@@ -31,6 +31,8 @@ fn clap_parses_all_copy_kind_names_and_aliases() {
         ("system", CopyKind::SystemPrompt),
         ("compressed-session", CopyKind::CompressedSession),
         ("compress", CopyKind::CompressedSession),
+        ("compressed-fence", CopyKind::CompressedFence),
+        ("fence", CopyKind::CompressedFence),
         ("intent-rule", CopyKind::IntentRule),
         ("intent", CopyKind::IntentRule),
         ("tool-format", CopyKind::ToolFormat),
@@ -184,6 +186,7 @@ fn static_copy_kinds_produce_expected_reminder_content() {
 
     let cases = [
         (CopyKind::CompressedSession, "<system-reminder>"),
+        (CopyKind::CompressedFence, "<compacted-summary>"),
         (CopyKind::IntentRule, ""),
         (CopyKind::ToolFormat, ""),
         (CopyKind::EnabledTools, ""),

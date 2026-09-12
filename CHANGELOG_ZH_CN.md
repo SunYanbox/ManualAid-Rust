@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 复制提示词二级菜单、`copy` 子命令与内联命令新增 `/compress-fence`（`copy compressed-fence`，别名 `fence` / `compressed-fence`）：复制一份包裹空 `<compacted-summary>` 围栏的交接模板，剪贴板内容为模板原文（不再包 `<system-reminder>` 块，使围栏保持最外层标记），中英文正文存放于 `prompt.copy.compressed-fence`，菜单标签与命令描述分别为 `cli.copy_prompt.compressed_fence` 与 `cli.cmd.fence`
+
+### 变更
+
+- 压缩会话提示词（`prompt.copy.compressed-session`）中英双语重写为一份紧凑的检查点规范：用八节结构（核心诉求与意图 / 关键技术背景 / 涉及的文件与代码 / 问题与解决 / 待办事项 / 当前进展 / 下一步 / 关键上下文）替换原先的 "Primary Request and Intent" 块，并把旧的压缩原则与压缩技巧折叠为末尾一份精简规则列表（决策链与动机、技术事实精确保留、`[完成]`/`[进行中]`/`[已否决]`/`[待办]` 状态标注、`[禁区]` 条目、量化验证、情绪净化、矛盾处理、多次压缩接力），提示词显著缩短而信息密度不降
+
 ## [0.13.3] - 2026-09-11
 
 ### 新增

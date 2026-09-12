@@ -200,6 +200,7 @@ plan_mode = "Copy plan mode prompt"
 switch_mode = "Copy switch execution mode prompt"
 task_planning = "Copy task planning prompt"
 compressed_session = "Copy compressed session prompt"
+compressed_fence = "Copy compressed-result fence"
 
 [cli.tool_config]
 title = "Tools enable/disable"
@@ -228,6 +229,7 @@ lang = "Switch language"
 format = "Switch tool call format"
 skills = "Copy enabled skills list"
 compress = "Copy conversation compression prompt"
+fence = "Copy compressed-result fence"
 plan = "Copy plan mode prompt"
 build = "Copy switch execution mode prompt"
 
@@ -245,6 +247,7 @@ Available inline commands:
   /tools           - Copy the enabled tools list
   /skills          - Copy the enabled skills list
   /compress        - Copy conversation compression prompt
+  /compress-fence  - Copy compressed-result fence
   /plan, /p        - Copy plan mode prompt
   /build, /b       - Copy switch execution mode prompt
   /c [index]      - Copy round result

@@ -95,6 +95,11 @@ pub(super) async fn copy_prompt_menu<P: ClipboardProvider>(
                     super::handlers::copy_compressed_session_prompt_with_provider(provider),
                 );
             }
+            super::command::LoopCommand::CopyCompressedFence => {
+                report_copy_error(super::handlers::copy_compressed_fence_with_provider(
+                    provider,
+                ));
+            }
             _ => {
                 crate::console::out_println!("{}", i18n::t_str("cli.loop.menu_invalid"));
             }
@@ -184,6 +189,14 @@ fn build_copy_prompt_menu() -> Menu {
                 MenuAction::Command(LoopCommand::CopyCompressedSessionPrompt),
             )
             .unique("copy_prompt_menu_compressed_session"),
+        )
+        .expect("unique menu key")
+        .add(
+            MenuItem::auto(
+                i18n::t_str("cli.copy_prompt.compressed_fence"),
+                MenuAction::Command(LoopCommand::CopyCompressedFence),
+            )
+            .unique("copy_prompt_menu_compressed_fence"),
         )
         .expect("unique menu key")
         .add(
@@ -767,6 +780,7 @@ mod tests {
             "cli.copy_prompt.switch_mode",
             "cli.copy_prompt.task_planning",
             "cli.copy_prompt.compressed_session",
+            "cli.copy_prompt.compressed_fence",
             "cli.config.back",
         ] {
             assert!(rendered.contains(&i18n::t_str(key)));
@@ -834,6 +848,7 @@ mod tests {
             "copy_prompt_menu_enabled_tools",
             "copy_prompt_menu_switch_mode",
             "copy_prompt_menu_task_planning",
+            "copy_prompt_menu_compressed_fence",
             "0",
         ]);
         copy_prompt_menu(
@@ -843,9 +858,12 @@ mod tests {
             Path::new("."),
         )
         .await;
+        // The last copied text is the compressed-fence template because it is
+        // selected last in the input sequence.
+        // 最后复制的是压缩结果围栏模板，因为它在输入序列中最后被选中。
         assert_eq!(
             mock.read().unwrap(),
-            i18n::t_str("prompt.copy.task-planning-rule")
+            i18n::t_str("prompt.copy.compressed-fence").trim()
         );
     }
 
@@ -905,7 +923,27 @@ mod tests {
         let copied = mock.read().unwrap();
         assert!(copied.starts_with("<system-reminder>\n"));
         assert!(copied.ends_with("\n</system-reminder>"));
-        assert!(copied.contains("conversation compression assistant"));
+        assert!(copied.contains("context compressor"));
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn copy_prompt_menu_copies_compressed_fence() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let mock = manualaid_core::clipboard::MockClipboard::new();
+        push_test_input(&["copy_prompt_menu_compressed_fence", "0"]);
+        copy_prompt_menu(
+            &mock,
+            &Config::default(),
+            &FormatRegistry::new(),
+            Path::new("."),
+        )
+        .await;
+        let copied = mock.read().unwrap();
+        assert!(copied.contains("<compacted-summary>"));
+        assert!(!copied.contains("<system-reminder>"));
     }
 
     #[allow(clippy::await_holding_lock)]

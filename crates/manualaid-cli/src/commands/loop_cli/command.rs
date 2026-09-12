@@ -14,12 +14,12 @@ use manualaid_ws::session::SessionLog;
 
 use super::LoopOptions;
 use super::handlers::{
-    copy_enabled_tools_with_provider, copy_intent_rule_with_provider,
-    copy_line_ending_rule_with_provider, copy_plan_mode_rule_with_provider,
-    copy_round_result_with_provider, copy_switch_mode_rule_with_provider,
-    copy_system_prompt_with_provider, copy_task_planning_rule_with_provider,
-    copy_tool_format_with_provider, input_and_submit, paste_and_submit_with_provider,
-    print_session_summary, show_tool_history,
+    copy_compressed_fence_with_provider, copy_enabled_tools_with_provider,
+    copy_intent_rule_with_provider, copy_line_ending_rule_with_provider,
+    copy_plan_mode_rule_with_provider, copy_round_result_with_provider,
+    copy_switch_mode_rule_with_provider, copy_system_prompt_with_provider,
+    copy_task_planning_rule_with_provider, copy_tool_format_with_provider, input_and_submit,
+    paste_and_submit_with_provider, print_session_summary, show_tool_history,
 };
 use super::utils::{
     apply_format_mode, cycle_format, cycle_lang, format_changelog_text, mode_label,
@@ -86,6 +86,7 @@ pub(super) enum LoopCommand {
     CopySwitchModeRule,
     CopyTaskPlanningRule,
     CopyCompressedSessionPrompt,
+    CopyCompressedFence,
     Exit,
     ToggleMode,
     SwitchLang(Option<usize>),
@@ -241,6 +242,10 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             // Only reached through the copy-prompt submenu; kept here so the
             // exhaustive match stays complete.
             // 仅通过复制提示词二级菜单进入；保留该分支以保证穷尽匹配。
+            CommandOutcome::Continue
+        }
+        LoopCommand::CopyCompressedFence => {
+            report_copy_error(copy_compressed_fence_with_provider(provider));
             CommandOutcome::Continue
         }
         LoopCommand::Exit => CommandOutcome::ExitLoop,
@@ -650,6 +655,7 @@ mod tests {
             LoopCommand::CopySwitchModeRule,
             LoopCommand::CopyTaskPlanningRule,
             LoopCommand::CopyCompressedSessionPrompt,
+            LoopCommand::CopyCompressedFence,
         ];
         for cmd in &commands {
             let mut ctx = CommandContext {

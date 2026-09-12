@@ -200,6 +200,7 @@ plan_mode = "复制计划模式提示词"
 switch_mode = "复制切换执行模式提示词"
 task_planning = "复制任务规划提示词"
 compressed_session = "复制压缩会话提示词"
+compressed_fence = "复制压缩结果围栏"
 
 [cli.tool_config]
 title = "工具启用/禁用"
@@ -228,6 +229,7 @@ lang = "切换语言"
 format = "切换工具调用格式"
 skills = "复制已启用 SKILL 列表"
 compress = "复制压缩会话提示词"
+fence = "复制压缩结果围栏"
 plan = "复制计划模式提示词"
 build = "复制切换执行模式提示词"
 
@@ -245,6 +247,7 @@ text = """
   /tools           - 复制已启用工具列表
   /skills          - 复制已启用 SKILL 列表
   /compress        - 复制压缩会话提示词
+  /compress-fence  - 复制压缩结果围栏
   /plan, /p        - 复制计划模式提示词
   /build, /b       - 复制切换执行模式提示词
   /c [index]      - 复制轮次结果

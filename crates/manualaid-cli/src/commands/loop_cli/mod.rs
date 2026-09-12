@@ -45,7 +45,7 @@ pub use utils::{
 // handlers 重导出供 tests/commands/handlers.rs 集成测试使用；
 // 不带 provider 的薄包装保持私有。
 pub use handlers::{
-    ask_copy, copy_compressed_session_prompt_with_provider,
+    ask_copy, copy_compressed_fence_with_provider, copy_compressed_session_prompt_with_provider,
     copy_context_with_context_files_with_provider, copy_context_with_provider,
     copy_enabled_tools_with_provider, copy_intent_rule_with_provider,
     copy_line_ending_rule_with_provider, copy_plan_mode_rule_with_provider, copy_round_result,

@@ -17,12 +17,13 @@ use manualaid_ws::context::discover_context_files;
 use crate::cli::{ContextFilesSpec, CopyKind};
 
 use super::loop_cli::{
-    apply_cli_lang, apply_format_mode, copy_compressed_session_prompt_with_provider,
-    copy_context_with_context_files_with_provider, copy_enabled_tools_with_provider,
-    copy_intent_rule_with_provider, copy_line_ending_rule_with_provider,
-    copy_plan_mode_rule_with_provider, copy_switch_mode_rule_with_provider,
-    copy_system_prompt_with_context_files_with_provider, copy_task_planning_rule_with_provider,
-    copy_tool_format_with_provider, format_config_issue, t_fmt,
+    apply_cli_lang, apply_format_mode, copy_compressed_fence_with_provider,
+    copy_compressed_session_prompt_with_provider, copy_context_with_context_files_with_provider,
+    copy_enabled_tools_with_provider, copy_intent_rule_with_provider,
+    copy_line_ending_rule_with_provider, copy_plan_mode_rule_with_provider,
+    copy_switch_mode_rule_with_provider, copy_system_prompt_with_context_files_with_provider,
+    copy_task_planning_rule_with_provider, copy_tool_format_with_provider, format_config_issue,
+    t_fmt,
 };
 
 /// Run the `copy` subcommand and return a localized error on failure. The
@@ -104,6 +105,7 @@ fn run_copy_at_with_provider<P: ClipboardProvider>(
             copy_context_with_context_files_with_provider(provider, current_dir, &files)
         }
         CopyKind::CompressedSession => copy_compressed_session_prompt_with_provider(provider),
+        CopyKind::CompressedFence => copy_compressed_fence_with_provider(provider),
         CopyKind::IntentRule => copy_intent_rule_with_provider(provider),
         CopyKind::ToolFormat => copy_tool_format_with_provider(provider, &config, &registry),
         CopyKind::EnabledTools => copy_enabled_tools_with_provider(provider, &config, &registry),
