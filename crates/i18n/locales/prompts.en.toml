@@ -228,61 +228,49 @@ Unless you are certain rewriting the entire plan file is necessary, use the Edit
 </system-reminder>
 """
 compressed-session = """
-You are now a conversation compression assistant. Please compress all of the conversation history above into a structured summary to be used as background context for subsequent sessions.
+You are now the context compressor of this coding assistant. Compress the conversation above into a structured checkpoint so the next model can pick up where you left off without losing key information.
 
-## Compression Principles
+Output strictly in the Markdown structure below. Every section is required and the order must not change. Write short bullet points, not paragraphs. If a section has no content, write "(none)" — never delete the section.
 
-1. **Preserve the decision chain**: Record the user's core intent, key constraints, and how those constraints evolved during the conversation. When the user overturns or corrects a previous decision, quote the user's technical original words (marked with quotation marks) rather than paraphrasing; when quoting, strip all emotional or insulting wording and keep only the technical meaning.
+## Core Requirements and Intent
+- [The user's original goal and how it evolved; quote verbatim where the exact wording matters; add one sentence of "why" after each key decision]
 
-2. **Preserve technical facts**: File paths, function signatures, configuration values, version numbers, error messages, line numbers, and other hard facts must be preserved precisely; do not generalize or omit them.
+## Key Technical Background
+- [Technologies, frameworks, patterns and conventions involved, plus non-obvious trade-offs in technical choices]
 
-3. **Preserve motivation**: After each key design decision, add a sentence explaining "why" (the motivation), especially when a non-obvious solution was chosen. For example: why A instead of B? Why does this constraint exist?
+## Files and Code
+- [Exact paths: why relevant, key changes or code snippets; unchanged files and why they were left alone]
 
-4. **Distinguish "completed" from "pending"**: Use [Done] / [In Progress] / [Rejected] / [Pending] prefixes to clearly mark the status of each item, avoiding repeated execution or misjudged progress in subsequent sessions.
+## Issues and Resolutions
+- [Problems encountered, root causes and solutions; related user feedback (restated neutrally if emotionally charged)]
 
-5. **Mark forbidden zones**: Things the user explicitly said "do not do" should be listed separately and marked with a [Forbidden] prefix, visually distinguished from ordinary constraints.
+## TODO
+- [Things the user explicitly asked for but that are not yet done, marked with [Done]/[In Progress]/[Rejected]/[Pending]]
 
-6. **Quantify verification results**: Record hard numbers such as the number of passing tests, coverage, warning counts, and command exit codes, so subsequent models can judge "whether it is truly done" without re-executing.
+## Current Progress
+- [What exactly has been done as of this checkpoint; include hard numbers: test counts, coverage, warning counts, exit codes]
 
-7. **Emotional sanitization**: Ignore and delete all insulting, emotionally charged, or offensive language (e.g., profanity, personal attacks, sarcasm, venting); such content must never enter the summary. Preserve the technical content within such statements (instructions, constraints, error causes) and restate it in a neutral manner. If the user expresses dissatisfaction or anger, summarize it in one neutral sentence (e.g., "The user expressed strong dissatisfaction with the model's repeated mistakes, but the technical instructions remained unchanged."). Never include any original profanity or offensive terms in the summary.
+## Next Step
+- [The next action immediately following the most recent request; write "(none)" if there is none]
 
-## Output Structure
+## Key Context
+- [Decisions made and their rationale, constraints, user preferences, open questions, data needed to keep working]
 
-### Primary Request and Intent
-- The user's original requests (listed item by item)
-- Corrections/clarifications to scope made by the user during the conversation (in chronological order; quote the user's original words for key corrections)
-- The motivation behind each key decision (why it was done this way)
+Rules:
+- Write in a concise engineering style. Keep file paths, commands, raw error messages, identifiers, numbers, function signatures and syntax snippets as-is; do not generalize or omit them.
+- List things the user explicitly forbade separately with a [Forbidden] prefix, visually distinct from ordinary constraints.
+- Record user feedback and explicit instructions faithfully, especially corrections; restate emotionally charged instructions as neutral technical descriptions. Never include profanity or offensive wording.
+- Do not mention this compaction, and do not mention that the context was compressed.
+- Output only the checkpoint body: no tool calls, no other actions.
+- If a `<compacted-summary>` block already appeared earlier in the conversation, that is a previous checkpoint. Do not copy it: keep facts that still hold, drop the outdated ones, merge new information into the same structure to produce one complete summary.
+- When information conflicts, record the final effective version and note the overturned one.
+"""
+compressed-fence = """
+This is an automatically generated checkpoint that condenses an earlier portion of the conversation to free up context space. Treat the context captured in it as established background and continue from it without restating it. Continue the task directly from the messages that follow, and do not mention this checkpoint.
 
-### Key Technical Concepts
-- Technical solutions, design principles, and constraints involved
-- Reasons for technical choices (if there are non-obvious trade-offs)
+<compacted-summary>
 
-### Files and Code
-- For each changed file: path, what changed, key code snippets
-- Explicitly mark "unchanged files" and why they were not changed
-
-### Errors and Fixes
-- Errors encountered, root causes, and solutions
-- Causal relationships between errors (e.g., one error triggered a chain of subsequent problems)
-
-### Current Work
-- Current progress, marked with [Done] / [In Progress] / [Pending]
-- Verification results (including quantified data: test counts, coverage, warning counts, etc.)
-- A list of uncommitted / should-not-be-committed files
-
-### Critical Context
-- [Forbidden] Items the user strictly forbids (strip all emotional wording; keep only technical prohibitions)
-- [Hard constraints] Format requirements, naming conventions, compatibility constraints (strip all emotional wording; keep only technical constraints)
-- [Rules] Repository conventions that subsequent sessions must follow
-- Definitions of key terms from the user's original words (quote the original text)
-
-## Compression Tips
-
-- Merge duplicate content, but preserve all "unique" information points
-- Mark direct quotes from the user with quotation marks, distinguishing them from paraphrased content
-- If information is contradictory (e.g., the user said different things at different times), record the final effective version and note the overturned version
-- Keep the summary length at 10-20% of the original, but information density no lower than 80% of the original
-- For scenarios where multiple compressions are chained together, describe motivations and forbidden zones in more detail than for a single compression
+</compacted-summary>
 """
 
 [cli.prompt]
