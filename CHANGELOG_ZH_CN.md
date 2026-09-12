@@ -14,6 +14,9 @@
 
 - 压缩会话提示词（`prompt.copy.compressed-session`）中英双语重写为一份紧凑的检查点规范：用八节结构（核心诉求与意图 / 关键技术背景 / 涉及的文件与代码 / 问题与解决 / 待办事项 / 当前进展 / 下一步 / 关键上下文）替换原先的 "Primary Request and Intent" 块，并把旧的压缩原则与压缩技巧折叠为末尾一份精简规则列表（决策链与动机、技术事实精确保留、`[完成]`/`[进行中]`/`[已否决]`/`[待办]` 状态标注、`[禁区]` 条目、量化验证、情绪净化、矛盾处理、多次压缩接力），提示词显著缩短而信息密度不降
 - `.gitignore` 忽略两个不应提交的本地产物：覆盖率脚本的缓存输出 `coverage_with_lines.txt`，以及个人使用的 SKILL 锁文件 `skills-lock.json`
+- 系统提示词中英双语完成一轮歧义审查与修复：消除内部冲突（`# ToolCall` 块改称 `func_calls` 围栏，与全篇其余引用一致；`plan-mode-rule` 不再同时要求与禁止粘贴计划），删除未定义与悬空的引用（`<command-name>`、`/SKILL` 写法、运行期探测 Shell 的环境里出现的 `PowerShell` 别名表），收紧文件处理规则使终端途径不能替代 read/write/edit，并把转义要求移入 `cli.prompt.func_calls_notes`，`platform-notes` / `coreutils-notes` 改为描述 CoreUtils 实际提供的能力而非泛化的平台建议
+- `# ToolCall` 块现接受单个 `func_calls` 代码块内的调用对象 JSON 数组，提示词要求一轮发起大量调用时优先用一个数组承载；parser 本就支持该形态，因此只改了提示词文本
+- `tool_calling_format_description` 与 `copy_tool_format_with_provider` 不再接收 `Config`：`cli.prompt.format_desc` 文案中的 `%{format}` 占位符原先用于显示当前工具调用格式的简名，本轮判断该名称并无必要，故删除该占位符，文案改为指向下方示例；为占位符供值的参数随之从两个签名中移除
 
 ### 修复
 

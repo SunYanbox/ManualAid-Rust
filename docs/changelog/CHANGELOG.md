@@ -9,6 +9,7 @@
 ### Changed
 
 - The conversation compression prompt is rewritten into a shorter, tighter checkpoint format: the eight-section structure stays, while the old principles and tips are folded into one compact rules list.
+- The system prompt is clearer: contradictions and undefined references are removed, the rules about touching files through the terminal are tightened, and a reply with many tool calls can now put them in one JSON array instead of many code blocks.
 
 ### Fixed
 
