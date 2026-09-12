@@ -8,11 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- `AGENTS.md` records two conventions: a release PR is titled `chore(release): bump versions for vX.Y.Z`, and the pre-commit `cargo fmt` / `cargo clippy` / `cargo check` gate runs only when a change touches code or the `i18n` crate's locale texts, not for documentation-only changes
-- `AGENTS.md` wording is disambiguated: branches are cut from the freshly fetched `origin/main`; Issue titles keep `bug:` / `feat(<scope>):` while bug-fix PRs use `fix:`; Issue-only labels are not used on PRs; the CHANGELOG check covers all four `CHANGELOG*.md` files, each language using its own subheadings; `metron --per-file` measures the share of implementation and test lines; `i18n!()` may only be used inside the `i18n` crate; the coverage target is a hard requirement for tests that do not pollute the system environment; and the blanket local `./scripts/ci.*` step is dropped
-- `docs/commit-conventions.md` aligns its pre-commit gate with `AGENTS.md` and points at the `AGENTS.md` development-flow section instead of one that does not exist
-- `docs/issue-pr-guide.md` aligns its title, CHANGELOG and label rules with `AGENTS.md`, and replaces the blanket local `./scripts/ci.*` requirement with a graded strategy that exempts documentation-only changes
-- `docs/source-test-organization.md` is deleted; its still-valid rules are covered by `AGENTS.md`
+- `AGENTS.md` states the release-PR title `chore(release): bump versions for vX.Y.Z` and scopes the pre-commit `cargo fmt` / `cargo clippy` / `cargo check` gate to changes touching code or the `i18n` crate's locale texts, and resolves several ambiguities: branches are cut from the freshly fetched `origin/main`, bug-fix PRs use `fix:` while Issue titles keep `bug:` / `feat(<scope>):`, the CHANGELOG check covers all four `CHANGELOG*.md` files, `i18n!()` is confined to the `i18n` crate, and the coverage target is a hard requirement for tests that do not pollute the system environment
+- `docs/commit-conventions.md` and `docs/issue-pr-guide.md` are aligned with `AGENTS.md` (pre-commit gate, title and label rules, CHANGELOG scope, graded local-check strategy), and `docs/source-test-organization.md` is deleted since its still-valid rules are covered by `AGENTS.md`
 
 ## [0.14.0] - 2026-09-12
 
