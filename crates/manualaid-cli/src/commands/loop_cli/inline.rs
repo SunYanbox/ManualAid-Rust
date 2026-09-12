@@ -12,10 +12,11 @@ use manualaid_ws::session::SessionLog;
 use super::LoopOptions;
 use super::command;
 use super::handlers::{
-    copy_compressed_session_prompt_with_provider, copy_enabled_tools_with_provider,
-    copy_plan_mode_rule_with_provider, copy_round_index_with_provider,
-    copy_round_result_with_provider, copy_skills_list_with_provider,
-    copy_switch_mode_rule_with_provider, copy_system_prompt_with_provider,
+    copy_compressed_fence_with_provider, copy_compressed_session_prompt_with_provider,
+    copy_enabled_tools_with_provider, copy_plan_mode_rule_with_provider,
+    copy_round_index_with_provider, copy_round_result_with_provider,
+    copy_skills_list_with_provider, copy_switch_mode_rule_with_provider,
+    copy_system_prompt_with_provider,
 };
 use super::utils::{parse_round_index, t_fmt};
 
@@ -70,6 +71,10 @@ pub(crate) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
     BuiltinCommand {
         name: "/compress",
         desc_key: "cli.cmd.compress",
+    },
+    BuiltinCommand {
+        name: "/compress-fence",
+        desc_key: "cli.cmd.fence",
     },
     BuiltinCommand {
         name: "/plan",
@@ -154,6 +159,12 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
         }
         "/compress" => {
             if let Err(e) = copy_compressed_session_prompt_with_provider(provider) {
+                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+            }
+            return;
+        }
+        "/compress-fence" => {
+            if let Err(e) = copy_compressed_fence_with_provider(provider) {
                 eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
             }
             return;
@@ -438,6 +449,27 @@ mod tests {
     }
 
     #[test]
+    fn inline_compress_fence_copies_unwrapped_template() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        let mock = MockClipboard::new();
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/compress-fence",
+        );
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.contains("<compacted-summary>"));
+        assert!(!clipboard.contains("<system-reminder>"));
+    }
+
+    #[test]
     fn inline_lang_cycles_and_persists() {
         let _capture = crate::console::capture();
         let (mut config, registry, root, mut session, mut options) = setup();
@@ -711,7 +743,14 @@ mod tests {
         // empty because the write was rejected.
         // 所有复制到剪贴板的内联命令共用同一写失败分支：本地化错误打印到
         // stderr，由于写入被拒绝，剪贴板保持为空。
-        for command in ["/compress", "/plan", "/build", "/tools", "/skills"] {
+        for command in [
+            "/compress",
+            "/compress-fence",
+            "/plan",
+            "/build",
+            "/tools",
+            "/skills",
+        ] {
             let (mut config, registry, root, mut session, mut options) = setup();
             let mock = MockClipboard::new();
             mock.set_write_error("mock write failure");
