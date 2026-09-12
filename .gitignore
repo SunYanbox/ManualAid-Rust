@@ -2,3 +2,5 @@
 *.profraw
 __pycache__/
 *.pyc
+coverage_with_lines.txt
+skills-lock.json
