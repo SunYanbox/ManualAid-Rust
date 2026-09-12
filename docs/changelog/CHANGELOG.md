@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- New `/compress-fence` shortcut (also `copy compressed-fence`): copies a hand-off template wrapping an empty `<compacted-summary>` fence, ready to paste at the start of a new chat.
+
+### Changed
+
+- The conversation compression prompt is rewritten into a shorter, tighter checkpoint format: the eight-section structure stays, while the old principles and tips are folded into one compact rules list.
+
 ## [0.13.2] - 2026-09-10
 
 ### Changed
