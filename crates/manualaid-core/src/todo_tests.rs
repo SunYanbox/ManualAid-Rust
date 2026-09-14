@@ -364,6 +364,17 @@ async fn unique_target_appends_index_on_collision() {
         second.file_name().expect("name").to_string_lossy(),
         "stamp-subject-1.json"
     );
+
+    std::fs::write(&second, "occupied").expect("occupy second");
+
+    let third = unique_target(&dir, "stamp", "subject", "json")
+        .await
+        .expect("third target");
+
+    assert_eq!(
+        third.file_name().expect("name").to_string_lossy(),
+        "stamp-subject-2.json"
+    );
 }
 
 #[test]
@@ -436,4 +447,35 @@ async fn archive_reports_when_only_the_plan_moved() {
 
     assert!(error.contains("The linked plan was already moved"));
     assert!(!plans_dir(root.path()).join("my-plan.md").exists());
+}
+
+#[tokio::test]
+async fn archive_without_a_plan_reports_a_missing_todo() {
+    let root = TempRoot::new("archive-missing-todo");
+    let list = sample("missing", None, &[TodoStatus::Completed]);
+    // No plan and no TODO document: the move fails before anything leaves its
+    // directory, so the error must not claim a plan was moved.
+    // 既无计划也无 TODO 文档：移动在任何文件离开原目录前就失败，因此错误信息
+    // 不应声称已移动计划。
+
+    let error = archive(root.path(), &list).await.expect_err("must fail");
+
+    assert!(error.contains("cannot archive todo"));
+    assert!(!error.contains("The linked plan was already moved"));
+}
+
+#[tokio::test]
+async fn archive_reports_a_missing_plan_before_anything_moves() {
+    let root = TempRoot::new("archive-missing-plan");
+    let list = sample("alpha", Some("ghost"), &[TodoStatus::Completed]);
+    save(root.path(), &list).await.expect("save");
+    // The plan is bound but never written, so the first move fails and the
+    // TODO list must stay where callers can still find it.
+    // 计划已绑定但从未写入，因此第一次移动即失败，TODO 列表必须留在调用方仍能
+    // 发现的位置。
+
+    let error = archive(root.path(), &list).await.expect_err("must fail");
+
+    assert!(error.contains("cannot archive plan"));
+    assert!(todos_dir(root.path()).join("alpha.json").exists());
 }

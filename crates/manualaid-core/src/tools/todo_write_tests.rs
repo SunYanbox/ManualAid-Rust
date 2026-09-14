@@ -417,3 +417,21 @@ async fn a_blank_linked_plan_is_treated_as_absent() {
         .expect("exists");
     assert!(stored.linked_plan.is_none());
 }
+
+#[tokio::test]
+async fn a_malformed_document_is_reported_instead_of_overwritten() {
+    let root = TempRoot::new("malformed");
+    let dir = todo::todos_dir(root.path());
+    std::fs::create_dir_all(&dir).expect("create todos dir");
+    std::fs::write(dir.join("alpha.json"), "{ not json").expect("write malformed");
+    let mut map = params(
+        &serde_json::json!("alpha"),
+        serde_json::json!([task("a", "pending")]),
+    );
+    map.insert("create".to_string(), Value::Bool(true));
+
+    let result = run_at(root.path(), &map).await;
+
+    assert!(!result.success);
+    assert!(result.output.contains("invalid todo JSON"));
+}
