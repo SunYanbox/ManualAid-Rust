@@ -435,3 +435,45 @@ async fn a_malformed_document_is_reported_instead_of_overwritten() {
     assert!(!result.success);
     assert!(result.output.contains("invalid todo JSON"));
 }
+
+#[tokio::test]
+async fn a_failed_save_is_reported() {
+    let root = TempRoot::new("save-failed");
+    // A file where the `todos/` directory should be: loading finds nothing, and
+    // creating the directory to save into then fails.
+    // 在 `todos/` 目录的位置放一个普通文件：加载得到空结果，随后为保存而创建
+    // 目录时失败。
+    std::fs::create_dir_all(root.path().join(".ManualAid")).expect("create root dir");
+    std::fs::write(todo::todos_dir(root.path()), "occupied").expect("occupy todos path");
+    let mut map = params(
+        &serde_json::json!("alpha"),
+        serde_json::json!([task("a", "pending")]),
+    );
+    map.insert("create".to_string(), Value::Bool(true));
+
+    let result = run_at(root.path(), &map).await;
+
+    assert!(!result.success);
+}
+
+#[tokio::test]
+async fn a_failed_archive_is_reported() {
+    let root = TempRoot::new("archive-failed");
+    root.write_plan("my-plan");
+    // A file where `plans/done/` should be: the list is complete and its plan
+    // is valid, so the call reaches the archive step and fails there.
+    // 在 `plans/done/` 目录的位置放一个普通文件：列表已完成且计划有效，调用会
+    // 走到归档步骤并在那里失败。
+    std::fs::write(todo::plans_dir(root.path()).join("done"), "occupied")
+        .expect("occupy done path");
+    let mut map = params(
+        &serde_json::json!("alpha"),
+        serde_json::json!([task("a", "completed")]),
+    );
+    map.insert("linked_plan".to_string(), serde_json::json!("my-plan"));
+    map.insert("create".to_string(), Value::Bool(true));
+
+    let result = run_at(root.path(), &map).await;
+
+    assert!(!result.success);
+}

@@ -819,6 +819,29 @@ mod tests {
     }
 
     #[test]
+    fn inline_todos_reports_a_clipboard_write_error() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        seed_unfinished_todo(&root);
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/todos",
+        );
+
+        assert!(mock.read().unwrap().is_empty());
+    }
+
+    #[test]
     fn inline_todos_without_a_list_prints_notice_and_keeps_the_clipboard_empty() {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();

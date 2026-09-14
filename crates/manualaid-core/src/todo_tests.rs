@@ -479,3 +479,17 @@ async fn archive_reports_a_missing_plan_before_anything_moves() {
     assert!(error.contains("cannot archive plan"));
     assert!(todos_dir(root.path()).join("alpha.json").exists());
 }
+
+#[tokio::test]
+async fn load_reports_an_unreadable_document() {
+    let root = TempRoot::new("load-unreadable");
+    // A directory where the document should be: the read fails with something
+    // other than `NotFound`, which must surface instead of reading as "absent".
+    // 在文档位置放一个目录：读取失败的原因不是 `NotFound`，此时应上报错误，
+    // 而不能被当成“尚不存在”。
+    std::fs::create_dir_all(todo_path(root.path(), "alpha")).expect("create dir");
+
+    let error = load(root.path(), "alpha").await.expect_err("must fail");
+
+    assert!(error.to_string().contains("cannot read file"));
+}
