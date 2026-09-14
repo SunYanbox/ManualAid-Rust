@@ -119,6 +119,7 @@ dynamic-context = """
 <dynamic-context>
 %{workspace_info}
 %{skills_list}
+%{todo_context}
 </dynamic-context>
 """
 
