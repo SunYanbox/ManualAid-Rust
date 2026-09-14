@@ -24,7 +24,7 @@ fn temp_file(tag: &str) -> std::path::PathBuf {
 #[test]
 fn all_tools_are_stable_and_unique() {
     let tools = all_tools();
-    assert_eq!(tools.len(), 5);
+    assert_eq!(tools.len(), 6);
     let names: Vec<&str> = tools.iter().map(ToolKind::name).collect();
     let unique: std::collections::HashSet<_> = names.iter().copied().collect();
     assert_eq!(unique.len(), names.len());
