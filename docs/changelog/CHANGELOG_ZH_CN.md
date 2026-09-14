@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 新增 `todo_write` 工具：按主题在 `.ManualAid/todos/` 下维护一份 TODO 列表，随工作推进刷新，列表完成后连同关联计划一并归档
+- 系统提示词新增 `<unfinished_todos>` 块，列出未完成的列表，由 `[tools]` 下新增的 `todo_write` 开关控制
+- 新增 `/todos` 快捷命令：直接从提示词复制未完成的 TODO 上下文
+
+### 移除
+
+- 系统提示词不再注入旧版任务规划规则，任务规划改由 `todo_write` 工具与 `<unfinished_todos>` 上下文承担
+
 ## [0.14.0] - 2026-09-12
 
 ### 新增

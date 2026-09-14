@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- New `todo_write` tool: keeps one TODO list per subject under `.ManualAid/todos/`, refreshes it as the work progresses, and files a finished list away together with its linked plan.
+- The system prompt now carries an `<unfinished_todos>` block listing the unfinished lists, controlled by the new `todo_write` switch under `[tools]`.
+- New `/todos` shortcut: copies the unfinished TODO context straight from the prompt.
+
+### Removed
+
+- The system prompt no longer carries the legacy task-planning rule; task planning now comes from the `todo_write` tool and the `<unfinished_todos>` context.
+
 ## [0.14.0] - 2026-09-12
 
 ### Added
