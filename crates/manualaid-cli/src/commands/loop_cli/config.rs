@@ -590,6 +590,17 @@ fn build_tool_menu(config: &Config) -> Menu {
         )
         .expect("unique menu key")
         .add(
+            MenuItem::auto(
+                t_fmt(
+                    "cli.config.todo_write",
+                    &[("state", &state(config.todo_write))],
+                ),
+                MenuAction::Command(LoopCommand::ToggleTodoWrite),
+            )
+            .unique("tool_menu_todo_write"),
+        )
+        .expect("unique menu key")
+        .add(
             MenuItem::keyed_alias(
                 "0",
                 &["q", "quit", "exit"],
@@ -1065,6 +1076,7 @@ mod tests {
             ("write", true),
             ("edit", true),
             ("skill", true),
+            ("todo_write", true),
         ] {
             let mut config = Config::default();
             command::toggle_tool(&mut config, &root, tool);
@@ -1074,6 +1086,7 @@ mod tests {
                 "write" => assert_eq!(config.write, !initial),
                 "edit" => assert_eq!(config.edit, !initial),
                 "skill" => assert_eq!(config.skill, !initial),
+                "todo_write" => assert_eq!(config.todo_write, !initial),
                 _ => unreachable!(),
             }
         }
@@ -1267,7 +1280,7 @@ mod tests {
         let mut config = Config::default();
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
-        push_test_input(&["1", "2", "3", "4", "5", "0"]);
+        push_test_input(&["1", "2", "3", "4", "5", "6", "0"]);
         let mut session = SessionLog::new();
         tool_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
@@ -1283,12 +1296,13 @@ mod tests {
         assert!(!config.write);
         assert!(!config.edit);
         assert!(!config.skill);
+        assert!(!config.todo_write);
         let content = std::fs::read_to_string(root.join(".ManualAid").join("config.toml")).unwrap();
         assert!(content.contains("[tools]"));
     }
 
     #[test]
-    fn render_tool_menu_shows_five_tools_and_back() {
+    fn render_tool_menu_shows_every_tool_and_back() {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let rendered = render_tool_menu(&Config::default());
@@ -1299,6 +1313,7 @@ mod tests {
             "cli.config.write",
             "cli.config.edit",
             "cli.config.skill",
+            "cli.config.todo_write",
             "cli.config.back",
         ] {
             assert!(rendered.contains(i18n::t_str(key).split("%{state}").next().unwrap()));

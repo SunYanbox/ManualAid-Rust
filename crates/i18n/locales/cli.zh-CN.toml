@@ -111,6 +111,7 @@ shell = "Shell 工具（当前：%{state}）"
 skill = "SKILL 工具（当前：%{state}）"
 skill_list = "SKILL 启用/禁用列表"
 title = "配置"
+todo_write = "TODO 工具（当前：%{state}）"
 tools_list = "工具启用/禁用列表"
 write = "Write 工具（当前：%{state}）"
 
@@ -146,6 +147,7 @@ menu_copy = "复制第 i 批（1 = 最新）工具调用结果"
 menu_exit = "退出"
 menu_generate = "生成工作区系统提示词"
 menu_history = "工具历史"
+no_todos = "没有可复制的未完成 TODO 列表"
 menu_input = "输入工具调用文本"
 menu_copy_prompt = "复制提示词"
 menu_invalid = "无效选项，请重试"
@@ -224,6 +226,7 @@ clear = "清屏"
 mode = "切换审批模式"
 ws = "复制工作区系统提示"
 tools = "列出可用工具"
+todos = "复制未完成的 TODO 上下文"
 copy = "复制轮次结果"
 lang = "切换语言"
 format = "切换工具调用格式"
@@ -246,6 +249,7 @@ text = """
   /ws              - 复制工作区系统提示
   /tools           - 复制已启用工具列表
   /skills          - 复制已启用 SKILL 列表
+  /todos           - 复制未完成的 TODO 上下文
   /compress        - 复制压缩会话提示词
   /compress-fence  - 复制压缩结果围栏
   /plan, /p        - 复制计划模式提示词
