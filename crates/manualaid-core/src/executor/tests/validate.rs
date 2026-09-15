@@ -4,7 +4,7 @@ use super::*;
 fn validate_requires_present_params() {
     let mut params = IndexMap::new();
     params.insert("file_path".to_string(), Value::String("/a".into()));
-    let error = validate_params(&params, ToolKind::Write).unwrap_err();
+    let error = validate_params(&params, &builtin_specs(ToolKind::Write), "write").unwrap_err();
     assert!(error.message.contains("content"));
 }
 
@@ -13,8 +13,8 @@ fn validate_accepts_valid_params() {
     let mut params = IndexMap::new();
     params.insert("file_path".to_string(), Value::String("/a".into()));
     params.insert("offset".to_string(), Value::from(1));
-    assert!(validate_params(&params, ToolKind::Read).is_ok());
-    assert!(validate_params(&params, ToolKind::Write).is_err());
+    assert!(validate_params(&params, &builtin_specs(ToolKind::Read), "read").is_ok());
+    assert!(validate_params(&params, &builtin_specs(ToolKind::Write), "write").is_err());
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn validate_rejects_wrong_type() {
     let mut params = IndexMap::new();
     params.insert("file_path".to_string(), Value::String("/a".into()));
     params.insert("offset".to_string(), Value::String("not-a-number".into()));
-    let error = validate_params(&params, ToolKind::Read).unwrap_err();
+    let error = validate_params(&params, &builtin_specs(ToolKind::Read), "read").unwrap_err();
     assert!(error.message.contains("expected type"));
 }
 
@@ -30,11 +30,11 @@ fn validate_rejects_wrong_type() {
 fn validate_rejects_empty_and_null_required_params() {
     let mut params = IndexMap::new();
     params.insert("file_path".to_string(), Value::String(String::new()));
-    let error = validate_params(&params, ToolKind::Read).unwrap_err();
+    let error = validate_params(&params, &builtin_specs(ToolKind::Read), "read").unwrap_err();
     assert!(error.message.contains("must not be empty"));
     let mut params = IndexMap::new();
     params.insert("file_path".to_string(), Value::Null);
-    let error = validate_params(&params, ToolKind::Read).unwrap_err();
+    let error = validate_params(&params, &builtin_specs(ToolKind::Read), "read").unwrap_err();
     assert!(error.message.contains("must not be null"));
 }
 

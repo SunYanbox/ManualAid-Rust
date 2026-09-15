@@ -5,7 +5,7 @@ fn coerce_integer_strings() {
     let mut params = IndexMap::new();
     params.insert("offset".to_string(), Value::String("60".into()));
     params.insert("limit".to_string(), Value::String("1.0".into()));
-    let coerced = coerce_params(&params, ToolKind::Read);
+    let coerced = coerce_params(&params, &builtin_specs(ToolKind::Read));
     assert_eq!(coerced.get("offset").and_then(Value::as_i64), Some(60));
     assert_eq!(coerced.get("limit").and_then(Value::as_i64), Some(1));
 }
@@ -14,7 +14,7 @@ fn coerce_integer_strings() {
 fn coerce_leaves_unparseable_strings_untouched() {
     let mut params = IndexMap::new();
     params.insert("offset".to_string(), Value::String("abc".into()));
-    let coerced = coerce_params(&params, ToolKind::Read);
+    let coerced = coerce_params(&params, &builtin_specs(ToolKind::Read));
     assert_eq!(coerced.get("offset").and_then(Value::as_str), Some("abc"));
 }
 
@@ -22,7 +22,7 @@ fn coerce_leaves_unparseable_strings_untouched() {
 fn coerce_leaves_non_string_values_untouched() {
     let mut params = IndexMap::new();
     params.insert("offset".to_string(), Value::Bool(true));
-    let coerced = coerce_params(&params, ToolKind::Read);
+    let coerced = coerce_params(&params, &builtin_specs(ToolKind::Read));
     assert_eq!(coerced.get("offset"), Some(&Value::Bool(true)));
 }
 
