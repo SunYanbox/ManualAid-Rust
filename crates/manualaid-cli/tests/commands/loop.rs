@@ -63,6 +63,11 @@ async fn execution_phase_draws_no_progress_line_under_capture() {
     // 控制台捕获期间进度行被禁用，因此脚本轮次的输出绝不含 `(Ns)` 前缀
     // 或光标转义序列。
     let capture = manualaid_cli::console::capture();
+    // Styling is forced off so any escape found below belongs to the progress
+    // line rather than to the approval preview's own coloring.
+    // 强制关闭样式，使下方找到的任何转义序列都来自进度行，而非审批预览
+    // 自身的着色。
+    let _style = crate::style_guard_disabled();
     let registry = FormatRegistry::new();
     let (_calls, results, _stats) = execute_round_with_approval(
         &executor(&std::env::temp_dir()),
@@ -75,6 +80,32 @@ async fn execution_phase_draws_no_progress_line_under_capture() {
     assert_eq!(results.len(), 1);
     let text = capture.text();
     assert!(!text.contains("(0s)"), "unexpected progress line: {text:?}");
+    assert!(!text.contains("\x1b["), "unexpected escape: {text:?}");
+}
+
+#[tokio::test]
+async fn capture_is_immune_to_a_leaked_style_switch() {
+    // `run_main` calls `style::auto_init()`, which turns styling on for the
+    // whole process whenever the harness's stdout is a terminal and never
+    // restores it, so a test that runs afterwards sees escape sequences in
+    // its captured output even though it asked for none. Simulate that
+    // leftover state and assert the capture stays plain.
+    // `run_main` 会调用 `style::auto_init()`，只要测试进程的 stdout 是终端
+    // 就会为整个进程打开样式且不还原，之后运行的测试便会在自己捕获的输出
+    // 里看到转义序列。这里模拟该残留状态，断言捕获输出仍为纯文本。
+    manualaid_cli::style::set_enabled(true);
+    let capture = manualaid_cli::console::capture();
+    let _style = crate::style_guard_disabled();
+    let (_calls, results, _stats) = execute_round_with_approval(
+        &executor(&std::env::temp_dir()),
+        &FormatRegistry::new(),
+        "<read><file_path>C:/windows/win.ini</file_path></read>",
+        |_| Approval::Approve,
+    )
+    .await
+    .unwrap();
+    assert_eq!(results.len(), 1);
+    let text = capture.text();
     assert!(!text.contains("\x1b["), "unexpected escape: {text:?}");
 }
 
