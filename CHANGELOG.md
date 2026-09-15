@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - `@` path completion keeps up with the project tree: the cached view is rebuilt on the next query once it turns 30 seconds old, or invalidated when a referenced path fails to resolve, so entries added, deleted or moved since the last rebuild appear or disappear in later suggestions (`complete/paths.rs`)
+- The command integration tests no longer leak the process-wide styling switch into each other, and the guard covering it restores the switch for every test that drives `run_main` (`crates/manualaid-cli/tests/commands.rs`, `tests/commands/loop.rs`, `tests/commands/handlers/`)
+- The process-wide test guards are now taken in one fixed order -- console capture, then style, then locale -- so the added locking cannot deadlock the test binary (`crates/manualaid-cli/tests/commands.rs`)
 
 ## [0.15.0] - 2026-09-15
 

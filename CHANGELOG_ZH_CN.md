@@ -9,6 +9,8 @@
 ### 变更
 
 - `@` 路径补全跟随项目树变化：缓存视图超过 30 秒后于下次查询重建，被引用的路径解析失败时亦被置为失效，自上次重建以来新建、删除或移动的条目因此在后续建议中出现或消失（`complete/paths.rs`）
+- 命令集成测试之间不再泄漏进程级样式开关，覆盖该开关的守卫会为每个驱动 `run_main` 的测试还原它（`crates/manualaid-cli/tests/commands.rs`、`tests/commands/loop.rs`、`tests/commands/handlers/`）
+- 进程级测试守卫改为按固定顺序取得——先控制台捕获、再样式、最后 locale——使新增的加锁不会让测试二进制死锁（`crates/manualaid-cli/tests/commands.rs`）
 
 ## [0.15.0] - 2026-09-15
 
