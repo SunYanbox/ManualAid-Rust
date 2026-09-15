@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The `@` file suggestions now keep up with the project: the file list behind them is rebuilt once it is more than 30 seconds old, or right after you reference a file that has since been deleted or moved, so stale entries stop being offered without restarting.
+- The `@` file suggestions keep up with your project: files you add, delete or move are picked up the next time the list refreshes, and a suggestion disappears once you reference a file that is no longer there.
 
 ## [0.15.0] - 2026-09-15
 
