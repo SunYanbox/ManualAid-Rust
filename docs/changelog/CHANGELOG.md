@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-15
+
 ### Added
 
 - New `todo_write` tool: keeps one TODO list per subject under `.ManualAid/todos/`, refreshes it as the work progresses, and files a finished list away together with its linked plan.

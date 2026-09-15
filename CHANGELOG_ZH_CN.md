@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-15
+
 ### 新增
 
 - 新增 `todo_write` 工具，管理 `<工作区>/.ManualAid/todos/<subject>.json` 下的持久化 TODO 列表：可创建列表、整体替换条目（`task` 与 `pending` / `in_progress` / `completed` 三种 `status`），未传 `create` 时列出相似主题而非创建近似重复的列表，列表全部完成时把列表归档到 `todos/done/`、把 `linked_plan` 指向的计划文件归档到 `plans/done/`，归档名带 RFC3339 时间戳与去重后缀
