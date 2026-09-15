@@ -96,6 +96,7 @@ pub(super) enum LoopCommand {
     ToggleWrite,
     ToggleEdit,
     ToggleSkill,
+    ToggleTodoWrite,
     ToggleAutoCopy,
     ToggleClearScreen,
     ToolMenu,
@@ -279,6 +280,10 @@ pub(super) async fn run_command<P: ClipboardProvider>(
         }
         LoopCommand::ToggleSkill => {
             toggle_tool(config, root, "skill");
+            CommandOutcome::Continue
+        }
+        LoopCommand::ToggleTodoWrite => {
+            toggle_tool(config, root, "todo_write");
             CommandOutcome::Continue
         }
         LoopCommand::ToggleAutoCopy => {
@@ -483,6 +488,7 @@ pub(super) fn toggle_tool(config: &mut Config, root: &Path, tool: &str) {
         "write" => config.write = !config.write,
         "edit" => config.edit = !config.edit,
         "skill" => config.skill = !config.skill,
+        "todo_write" => config.todo_write = !config.todo_write,
         _ => return,
     }
     persist_and_confirm(config, root, "cli.config.saved", "");

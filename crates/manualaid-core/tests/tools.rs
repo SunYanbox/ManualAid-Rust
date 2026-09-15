@@ -24,7 +24,7 @@ fn temp_file(tag: &str) -> std::path::PathBuf {
 #[test]
 fn all_tools_are_stable_and_unique() {
     let tools = all_tools();
-    assert_eq!(tools.len(), 5);
+    assert_eq!(tools.len(), 6);
     let names: Vec<&str> = tools.iter().map(ToolKind::name).collect();
     let unique: std::collections::HashSet<_> = names.iter().copied().collect();
     assert_eq!(unique.len(), names.len());
@@ -531,6 +531,14 @@ fn important_params_match_spec() {
     assert_eq!(ToolKind::Edit.important_params(), &["file_path"]);
     assert_eq!(ToolKind::Write.important_params(), &["file_path"]);
     assert_eq!(ToolKind::Skill.important_params(), &["skill"]);
+    assert_eq!(ToolKind::TodoWrite.important_params(), &["subject"]);
+}
+
+#[tokio::test]
+async fn todo_write_without_a_subject_is_a_failure() {
+    let result = ToolKind::TodoWrite.run(&IndexMap::new()).await;
+    assert!(!result.success);
+    assert!(result.output.contains("subject"));
 }
 
 #[test]

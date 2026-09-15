@@ -114,3 +114,31 @@ desc = "可用技能列表中的技能名称。不要猜测名称。"
 
 [tool.skill.param.args]
 desc = "技能的可选参数"
+
+[tool.todo_write]
+desc = """
+创建或刷新一份持久化 TODO 列表。
+
+- 每次调用都提交完整列表：已存储的任务会被你传入的任务整体替换，因此请始终包含仍未完成或正在进行的任务。
+- 列表存放于 `<workspace_root>/.ManualAid/todos/<subject>.json`，`subject` 同时充当文件名。属于同一项工作的多次调用请复用同一个 `subject`。
+- 尚不存在的主题只有在你传入 `create: true` 时才会创建；否则调用会报告列表未创建，并可能列出可复用的相似既有主题。
+- 当所有任务均为 `completed` 且 `linked_plan` 指向存在的计划文件时，列表与该计划会被归档进各自的 `done/` 目录。工作仍在进行时请至少保留一项未完成任务。
+"""
+
+[tool.todo_write.param.subject]
+desc = "任务列表的唯一主题，同时用作文件名。更新既有列表时复用同一个值。"
+
+[tool.todo_write.param.todos]
+desc = """
+完整任务列表，以对象组成的 JSON 数组给出：`[{"task": "...", "status": "pending"}, ...]`。
+
+- `task` 必须是非空字符串，描述一项任务。
+- `status` 必须是 `pending`、`in_progress` 或 `completed` 之一。
+- 数组至少包含一项，并整体替换此前存储的任务。
+"""
+
+[tool.todo_write.param.linked_plan]
+desc = "可选的计划文件名（不含 `.md` 扩展名），位于 `.ManualAid/plans/` 根下。传入时该文件必须已存在；不传则保留列表中已有的绑定。"
+
+[tool.todo_write.param.create]
+desc = "传入 `true` 以创建尚不存在的主题。新主题的首次调用必须为 `true`；列表已存在时该参数被忽略。"

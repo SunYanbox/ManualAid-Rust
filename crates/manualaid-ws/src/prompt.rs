@@ -45,8 +45,6 @@ pub fn build_system_prompt(
     out.push('\n');
     out.push_str(&i18n::t_str("prompt.system.user-action-note"));
     out.push('\n');
-    out.push_str(&i18n::t_str("prompt.copy.task-planning-rule"));
-    out.push('\n');
     out.push_str(&i18n::t_str("prompt.system.intent-output-rule"));
     out.push('\n');
     out.push_str(&t_fmt(
@@ -74,11 +72,23 @@ pub fn build_system_prompt(
     } else {
         String::new()
     };
+    // Unfinished TODO lists are injected only while the todo_write tool is
+    // enabled: the context is useless when the model cannot refresh it.
+    // 仅在 todo_write 工具启用时注入未完成 TODO 列表：模型无法刷新时该上下文
+    // 没有意义。
+    let todo_context = if config.todo_write {
+        manualaid_core::todo::unfinished_todos(workspace_root)
+            .map(|body| format!("<unfinished_todos>\n{body}\n</unfinished_todos>"))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
     out.push_str(&t_fmt(
         "prompt.system.dynamic-context",
         &[
             ("workspace_info", &workspace_info),
             ("skills_list", &skills_list),
+            ("todo_context", &todo_context),
         ],
     ));
     out.push_str("\n</system_prompt>");
@@ -211,6 +221,7 @@ fn is_enabled(config: &Config, tool: &ToolKind) -> bool {
         ToolKind::Edit => config.edit,
         ToolKind::Write => config.write,
         ToolKind::Skill => config.skill,
+        ToolKind::TodoWrite => config.todo_write,
     }
 }
 
@@ -787,12 +798,69 @@ mod tests {
     }
 
     #[test]
-    fn system_prompt_contains_system_reminder_note_and_task_planning_rule() {
+    fn system_prompt_drops_the_legacy_task_planning_rule() {
         let config = Config::default();
         let registry = FormatRegistry::new();
         let prompt = build_system_prompt(&config, Path::new("/ws"), &registry, &[], &[]);
         assert!(prompt.contains(&i18n::t_str("prompt.system.system-reminder-note")));
-        assert!(prompt.contains(&i18n::t_str("prompt.copy.task-planning-rule")));
+        // TODO planning moved into the `todo_write` tool, so the prompt-only
+        // rule must no longer be injected.
+        // TODO 规划已迁入 `todo_write` 工具，仅靠提示词的规则不应再注入。
+        assert!(!prompt.contains(&i18n::t_str("prompt.copy.task-planning-rule")));
+    }
+
+    /// Self-cleaning temporary workspace root.
+    /// 自清理的临时工作区根。
+    struct TempRoot(std::path::PathBuf);
+
+    impl TempRoot {
+        fn new(tag: &str) -> Self {
+            let path = std::env::temp_dir()
+                .join(format!("manualaid-ws-prompt-{tag}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(&path).expect("create temp root");
+            Self(path)
+        }
+    }
+
+    impl Drop for TempRoot {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn todo_context_is_injected_only_while_the_tool_is_enabled() {
+        let root = TempRoot::new("todo-context");
+        let plans = root.0.join(".ManualAid").join("plans");
+        let todos = root.0.join(".ManualAid").join("todos");
+        std::fs::create_dir_all(&plans).expect("create plans dir");
+        std::fs::create_dir_all(&todos).expect("create todos dir");
+        std::fs::write(plans.join("plan-a.md"), "# plan\n").expect("write plan");
+        std::fs::write(
+            todos.join("alpha.json"),
+            r#"{"subject":"alpha","create_datetime":"2026-01-01T00:00:00+00:00","update_datetime":"2026-01-01T00:00:00+00:00","linked_plan":"plan-a","todos":[{"task":"a","status":"pending"}]}"#,
+        )
+        .expect("write todo");
+
+        let registry = FormatRegistry::new();
+        let enabled = build_system_prompt(&Config::default(), &root.0, &registry, &[], &[]);
+        assert!(enabled.contains("<unfinished_todos>"));
+        assert!(enabled.contains("\nalpha: 0%\n"));
+        assert!(enabled.contains("</unfinished_todos>"));
+        // The injected block never carries a `<system-reminder>` wrapper; only
+        // the copied context does.
+        // 注入的区块不带 `<system-reminder>` 包裹；只有复制的上下文才带。
+        assert!(!enabled.contains("<system-reminder>\n<unfinished_todos>"));
+        assert!(!enabled.contains("%{todo_context}"));
+
+        let off = Config {
+            todo_write: false,
+            ..Config::default()
+        };
+        let disabled = build_system_prompt(&off, &root.0, &registry, &[], &[]);
+        assert!(!disabled.contains("<unfinished_todos>"));
+        assert!(!disabled.contains("%{todo_context}"));
     }
 
     #[test]

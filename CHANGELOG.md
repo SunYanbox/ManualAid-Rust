@@ -6,10 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The `todo_write` tool manages persistent TODO lists at `<workspace>/.ManualAid/todos/<subject>.json`: it creates a list, replaces its items (`task` plus a `status` of `pending` / `in_progress` / `completed`), reports the similar existing subjects instead of creating a near-duplicate when `create` is absent, and archives a finished list into `todos/done/` together with its `linked_plan` file into `plans/done/`, the archived names carrying an RFC3339 stamp and disambiguating suffixes
+- The system prompt injects an `<unfinished_todos>` block listing each unfinished list as `<subject>: <percent>%`, gated by the new `todo_write` switch under `[tools]`
+- The `/todos` inline command copies the same unfinished-TODO context wrapped in a `<system-reminder>` block, and the tool-config menu gains a TODO tool entry that persists the switch
+
 ### Changed
 
 - `AGENTS.md` states the release-PR title `chore(release): bump versions for vX.Y.Z` and scopes the pre-commit `cargo fmt` / `cargo clippy` / `cargo check` gate to changes touching code or the `i18n` crate's locale texts, and resolves several ambiguities: branches are cut from the freshly fetched `origin/main`, bug-fix PRs use `fix:` while Issue titles keep `bug:` / `feat(<scope>):`, the CHANGELOG check covers all four `CHANGELOG*.md` files, `i18n!()` is confined to the `i18n` crate, and the coverage target is a hard requirement for tests that do not pollute the system environment
 - `docs/commit-conventions.md` and `docs/issue-pr-guide.md` are aligned with `AGENTS.md` (pre-commit gate, title and label rules, CHANGELOG scope, graded local-check strategy), and `docs/source-test-organization.md` is deleted since its still-valid rules are covered by `AGENTS.md`
+
+### Removed
+
+- The legacy task-planning rule is no longer injected into the system prompt: `prompt.copy.task-planning-rule` is dropped from the built prompt, leaving `todo_write` and the `<unfinished_todos>` context to carry task planning; the text itself stays reachable through the copy-prompt path
 
 ## [0.14.0] - 2026-09-12
 

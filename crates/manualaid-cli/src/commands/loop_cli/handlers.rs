@@ -195,6 +195,24 @@ pub fn copy_task_planning_rule_with_provider<P: ClipboardProvider>(
     write_copied(provider, &text)
 }
 
+/// Copy the unfinished TODO context wrapped in a `<system-reminder>` block
+/// to the clipboard. The body is shared with the system-prompt injection, so
+/// only the outer tag differs between the two surfaces; when no list
+/// qualifies the notice is printed instead of an empty block.
+/// 将包裹在 `<system-reminder>` 块中的未完成 TODO 上下文复制到剪贴板。正文与
+/// 系统提示词注入共用，两处仅外层标签不同；没有符合项时打印提示而非空块。
+pub fn copy_unfinished_todos_with_provider<P: ClipboardProvider>(
+    provider: &P,
+    root: &Path,
+) -> Result<(), String> {
+    let Some(body) = manualaid_core::todo::unfinished_todos(root) else {
+        crate::console::out_println!("{}", i18n::t_str("cli.loop.no_todos"));
+        return Ok(());
+    };
+    let text = format!("<system-reminder>\n{body}\n</system-reminder>");
+    write_copied(provider, &text)
+}
+
 /// Copy the compressed-session prompt wrapped in a `<system-reminder>`
 /// block to the clipboard. The body is localized; the wrapper tags are
 /// fixed so external LLM chats always receive the same structure.

@@ -10,6 +10,7 @@ pub mod privacy;
 pub mod shell;
 pub mod skill;
 pub mod timer;
+pub mod todo;
 pub mod tools;
 pub mod user_dir;
 pub mod workspace;

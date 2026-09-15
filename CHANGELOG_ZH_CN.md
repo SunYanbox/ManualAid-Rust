@@ -6,10 +6,20 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 新增 `todo_write` 工具，管理 `<工作区>/.ManualAid/todos/<subject>.json` 下的持久化 TODO 列表：可创建列表、整体替换条目（`task` 与 `pending` / `in_progress` / `completed` 三种 `status`），未传 `create` 时列出相似主题而非创建近似重复的列表，列表全部完成时把列表归档到 `todos/done/`、把 `linked_plan` 指向的计划文件归档到 `plans/done/`，归档名带 RFC3339 时间戳与去重后缀
+- 系统提示词注入 `<unfinished_todos>` 块，逐行列出未完成列表的 `<subject>: <百分比>%`，由 `[tools]` 下新增的 `todo_write` 开关控制
+- 新增 `/todos` 内联命令，复制同样的未完成 TODO 上下文（以 `<system-reminder>` 块包裹）；工具配置菜单新增 TODO 工具项，切换后持久化
+
 ### 变更
 
 - `AGENTS.md` 明确发布 PR 命名为 `chore(release): bump versions for vX.Y.Z`，把提交前的 `cargo fmt` / `cargo clippy` / `cargo check` 门槛限定在涉及代码或 `i18n` crate 译文的变更，并消除多处歧义：分支从刚拉取的 `origin/main` 签出，缺陷修复 PR 用 `fix:` 而 Issue 标题沿用 `bug:` / `feat(<范围>):`，CHANGELOG 核对覆盖四份 `CHANGELOG*.md`，`i18n!()` 限定在 `i18n` crate 内，覆盖率成为对不污染系统环境的测试的硬性约束
 - `docs/commit-conventions.md` 与 `docs/issue-pr-guide.md` 同 `AGENTS.md` 对齐（提交前门槛、标题与标签规则、CHANGELOG 范围、本地检查分级策略），并删除 `docs/source-test-organization.md`，其中仍有效的规则已由 `AGENTS.md` 覆盖
+
+### 移除
+
+- 系统提示词不再注入旧版任务规划规则：构建提示词时删除 `prompt.copy.task-planning-rule`，任务规划改由 `todo_write` 工具与 `<unfinished_todos>` 上下文承担；该文案本身仍可通过复制提示词入口取得
 
 ## [0.14.0] - 2026-09-12
 

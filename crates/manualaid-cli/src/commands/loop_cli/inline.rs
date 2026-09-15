@@ -16,7 +16,7 @@ use super::handlers::{
     copy_enabled_tools_with_provider, copy_plan_mode_rule_with_provider,
     copy_round_index_with_provider, copy_round_result_with_provider,
     copy_skills_list_with_provider, copy_switch_mode_rule_with_provider,
-    copy_system_prompt_with_provider,
+    copy_system_prompt_with_provider, copy_unfinished_todos_with_provider,
 };
 use super::utils::{parse_round_index, t_fmt};
 
@@ -67,6 +67,10 @@ pub(crate) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
     BuiltinCommand {
         name: "/skills",
         desc_key: "cli.cmd.skills",
+    },
+    BuiltinCommand {
+        name: "/todos",
+        desc_key: "cli.cmd.todos",
     },
     BuiltinCommand {
         name: "/compress",
@@ -199,6 +203,11 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
         }
         ["/skills"] => {
             if let Err(e) = copy_skills_list_with_provider(provider) {
+                eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
+            }
+        }
+        ["/todos"] => {
+            if let Err(e) = copy_unfinished_todos_with_provider(provider, root) {
                 eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
             }
         }
@@ -750,6 +759,7 @@ mod tests {
             "/build",
             "/tools",
             "/skills",
+            "/todos",
         ] {
             let (mut config, registry, root, mut session, mut options) = setup();
             let mock = MockClipboard::new();
@@ -765,5 +775,90 @@ mod tests {
             );
             assert!(mock.read().unwrap().is_empty(), "{command}");
         }
+    }
+
+    /// Seed a workspace root with one unfinished TODO list bound to an
+    /// existing plan file.
+    /// 在一个工作区根中写入一份绑定到既有计划文件的未完成 TODO 列表。
+    fn seed_unfinished_todo(root: &std::path::Path) {
+        let plans = root.join(".ManualAid").join("plans");
+        let todos = root.join(".ManualAid").join("todos");
+        std::fs::create_dir_all(&plans).expect("create plans dir");
+        std::fs::create_dir_all(&todos).expect("create todos dir");
+        std::fs::write(plans.join("plan-a.md"), "# plan\n").expect("write plan");
+        std::fs::write(
+            todos.join("alpha.json"),
+            r#"{"subject":"alpha","create_datetime":"2026-01-01T00:00:00+00:00","update_datetime":"2026-01-01T00:00:00+00:00","linked_plan":"plan-a","todos":[{"task":"a","status":"pending"}]}"#,
+        )
+        .expect("write todo");
+    }
+
+    #[test]
+    fn inline_todos_copies_the_wrapped_unfinished_context() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        seed_unfinished_todo(&root);
+        let mock = MockClipboard::new();
+
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/todos",
+        );
+
+        let clipboard = mock.read().unwrap();
+        assert!(clipboard.starts_with("<system-reminder>\n"));
+        assert!(clipboard.ends_with("</system-reminder>"));
+        assert!(clipboard.contains("\nalpha: 0%\n"));
+    }
+
+    #[test]
+    fn inline_todos_reports_a_clipboard_write_error() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        seed_unfinished_todo(&root);
+        let mock = MockClipboard::new();
+        mock.set_write_error("mock write failure");
+
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/todos",
+        );
+
+        assert!(mock.read().unwrap().is_empty());
+    }
+
+    #[test]
+    fn inline_todos_without_a_list_prints_notice_and_keeps_the_clipboard_empty() {
+        let _capture = crate::console::capture();
+        let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let (mut config, registry, root, mut session, mut options) = setup();
+        let mock = MockClipboard::new();
+
+        handle_inline_command_with_provider(
+            &mock,
+            &mut config,
+            &registry,
+            &root,
+            &mut session,
+            &mut options,
+            "/todos",
+        );
+
+        assert!(mock.read().unwrap().is_empty());
     }
 }

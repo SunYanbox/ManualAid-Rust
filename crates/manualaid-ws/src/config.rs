@@ -100,6 +100,9 @@ pub struct ToolsSection {
     /// Whether the skill tool is enabled.
     /// Skill 工具是否启用。
     pub skill: Option<bool>,
+    /// Whether the todo_write tool is enabled.
+    /// Todo_write 工具是否启用。
+    pub todo_write: Option<bool>,
 }
 
 /// The `[permissions]` table of a config file.
@@ -137,6 +140,9 @@ pub struct Config {
     /// Whether the skill tool is enabled.
     /// Skill 工具是否启用。
     pub skill: bool,
+    /// Whether the todo_write tool is enabled.
+    /// Todo_write 工具是否启用。
+    pub todo_write: bool,
     /// Whitelisted shell commands.
     /// 白名单 shell 命令。
     pub allow_commands: Vec<String>,
@@ -158,6 +164,7 @@ impl Default for Config {
             edit: true,
             write: true,
             skill: true,
+            todo_write: true,
             allow_commands: Vec::new(),
             max_result_chars: 50_000,
             context_auto_load: true,
@@ -189,6 +196,7 @@ impl Config {
                 manualaid_core::tools::ToolKind::Edit => self.edit,
                 manualaid_core::tools::ToolKind::Write => self.write,
                 manualaid_core::tools::ToolKind::Skill => self.skill,
+                manualaid_core::tools::ToolKind::TodoWrite => self.todo_write,
             })
             .map(|tool| tool.name().to_string())
             .collect()
@@ -291,6 +299,11 @@ fn merge_with_issues(
             .skill
             .or(global.tools.skill)
             .unwrap_or(defaults.skill),
+        todo_write: project
+            .tools
+            .todo_write
+            .or(global.tools.todo_write)
+            .unwrap_or(defaults.todo_write),
         allow_commands: {
             let (allow_commands, allow_issues) = merge_allow_commands(
                 project.permissions.allow_commands,
@@ -508,6 +521,7 @@ pub fn save_project(project_root: &Path, config: &Config) -> CoreResult<()> {
     set_table_bool(&mut doc, "tools", "edit", config.edit);
     set_table_bool(&mut doc, "tools", "write", config.write);
     set_table_bool(&mut doc, "tools", "skill", config.skill);
+    set_table_bool(&mut doc, "tools", "todo_write", config.todo_write);
     set_table_array(
         &mut doc,
         "permissions",

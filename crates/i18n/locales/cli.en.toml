@@ -111,6 +111,7 @@ shell = "Shell tool (current: %{state})"
 skill = "SKILL tool (current: %{state})"
 skill_list = "SKILL enable/disable list"
 title = "Configuration"
+todo_write = "TODO tool (current: %{state})"
 tools_list = "Tools enable/disable list"
 write = "Write tool (current: %{state})"
 
@@ -146,6 +147,7 @@ menu_copy = "Copy the i-th latest batch results (1 = latest)"
 menu_exit = "Exit"
 menu_generate = "Generate workspace system prompt"
 menu_history = "Tool history"
+no_todos = "No unfinished TODO list to copy"
 menu_input = "Input tool call text"
 menu_copy_prompt = "Copy prompt"
 menu_invalid = "Invalid option, please try again"
@@ -224,6 +226,7 @@ clear = "Clear screen"
 mode = "Toggle approval mode"
 ws = "Copy workspace system prompt"
 tools = "List available tools"
+todos = "Copy the unfinished TODO context"
 copy = "Copy round result"
 lang = "Switch language"
 format = "Switch tool call format"
@@ -246,6 +249,7 @@ Available inline commands:
   /ws              - Copy workspace system prompt
   /tools           - Copy the enabled tools list
   /skills          - Copy the enabled skills list
+  /todos           - Copy the unfinished TODO context
   /compress        - Copy conversation compression prompt
   /compress-fence  - Copy compressed-result fence
   /plan, /p        - Copy plan mode prompt

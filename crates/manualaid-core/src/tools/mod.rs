@@ -8,6 +8,7 @@ pub mod edit;
 pub mod read;
 pub mod shell;
 pub mod skill;
+pub mod todo_write;
 pub mod tool;
 pub mod write;
 
@@ -26,6 +27,7 @@ pub fn all_tools() -> &'static [ToolKind] {
         ToolKind::Write,
         ToolKind::Shell,
         ToolKind::Skill,
+        ToolKind::TodoWrite,
     ]
 }
 

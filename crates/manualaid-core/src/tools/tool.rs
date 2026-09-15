@@ -157,6 +157,9 @@ pub enum ToolKind {
     /// Load a skill body (`skill`).
     /// 加载技能正文（`skill`）。
     Skill,
+    /// Create or refresh a persistent TODO list (`todo_write`).
+    /// 创建或刷新持久化 TODO 列表（`todo_write`）。
+    TodoWrite,
 }
 
 impl ToolKind {
@@ -169,6 +172,7 @@ impl ToolKind {
             Self::Edit => "edit",
             Self::Write => "write",
             Self::Skill => "skill",
+            Self::TodoWrite => "todo_write",
         }
     }
 
@@ -190,6 +194,7 @@ impl ToolKind {
             Self::Edit => "tool.edit.desc",
             Self::Write => "tool.write.desc",
             Self::Skill => "tool.skill.desc",
+            Self::TodoWrite => "tool.todo_write.desc",
         }
     }
 
@@ -291,6 +296,27 @@ impl ToolKind {
                 ToolParam::new("skill", "string", "tool.skill.param.skill.desc", true),
                 ToolParam::new("args", "string", "tool.skill.param.args.desc", false),
             ],
+            Self::TodoWrite => vec![
+                ToolParam::new(
+                    "subject",
+                    "string",
+                    "tool.todo_write.param.subject.desc",
+                    true,
+                ),
+                ToolParam::new("todos", "array", "tool.todo_write.param.todos.desc", true),
+                ToolParam::new(
+                    "linked_plan",
+                    "string",
+                    "tool.todo_write.param.linked_plan.desc",
+                    false,
+                ),
+                ToolParam::new(
+                    "create",
+                    "boolean",
+                    "tool.todo_write.param.create.desc",
+                    false,
+                ),
+            ],
         }
     }
 
@@ -308,6 +334,7 @@ impl ToolKind {
             Self::Shell => &["command"],
             Self::Read | Self::Edit | Self::Write => &["file_path"],
             Self::Skill => &["skill"],
+            Self::TodoWrite => &["subject"],
         }
     }
 
@@ -320,6 +347,7 @@ impl ToolKind {
             Self::Edit => super::edit::run(params).await,
             Self::Write => super::write::run(params).await,
             Self::Skill => super::skill::run(params).await,
+            Self::TodoWrite => super::todo_write::run(params).await,
         }
     }
 }
