@@ -84,18 +84,20 @@ async fn execution_phase_draws_no_progress_line_under_capture() {
 }
 
 #[tokio::test]
-async fn capture_is_immune_to_a_leaked_style_switch() {
+async fn capture_round_stays_plain_when_the_switch_was_left_on() {
     // `run_main` calls `style::auto_init()`, which turns styling on for the
     // whole process whenever the harness's stdout is a terminal and never
-    // restores it, so a test that runs afterwards sees escape sequences in
-    // its captured output even though it asked for none. Simulate that
-    // leftover state and assert the capture stays plain.
+    // restores it, so a capture that does not force the switch off sees escape
+    // sequences it never asked for. The value is raised under the lock, which
+    // is also what keeps this test from disturbing the ones running beside it.
     // `run_main` 会调用 `style::auto_init()`，只要测试进程的 stdout 是终端
-    // 就会为整个进程打开样式且不还原，之后运行的测试便会在自己捕获的输出
-    // 里看到转义序列。这里模拟该残留状态，断言捕获输出仍为纯文本。
-    manualaid_cli::style::set_enabled(true);
+    // 就会为整个进程打开样式且不还原，因此不强制关闭开关的捕获会看到自己
+    // 并未请求的转义序列。开关在持锁期间被抬起，这也保证本测试不会干扰
+    // 同时运行的其它测试。
     let capture = manualaid_cli::console::capture();
-    let _style = crate::style_guard_disabled();
+    let style = crate::style_guard();
+    manualaid_cli::style::set_enabled(true);
+    style.disable();
     let (_calls, results, _stats) = execute_round_with_approval(
         &executor(&std::env::temp_dir()),
         &FormatRegistry::new(),

@@ -45,16 +45,30 @@ fn style_guard_restores_the_switch_set_inside_it() {
 }
 
 #[test]
-fn style_guard_serializes_access_to_the_switch() {
+fn style_guard_disabled_forces_the_switch_off() {
     let style = style_guard();
+    // Standing in for the value `auto_init` leaves behind, written while the
+    // lock is held so no other test can observe it.
+    // 代表 `auto_init` 留下的值；写入发生在持锁期间，其他测试观察不到。
+    manualaid_cli::style::set_enabled(true);
+    style.disable();
+    assert!(
+        !manualaid_cli::style::is_enabled(),
+        "a disabled guard must hand out an off switch"
+    );
+}
+
+#[test]
+fn style_guard_serializes_access_to_the_switch() {
+    // Only the held side is asserted: once this guard drops, another test may
+    // legitimately take the lock, so the released side cannot be observed by
+    // probing it from here.
+    // 只断言持有侧：本守卫 drop 后其他测试可以合法地取得该锁，因此释放侧
+    // 无法在这里用探测的方式观察。
+    let _style = style_guard();
     assert!(
         STYLE_LOCK.try_lock().is_err(),
         "a live guard must hold the style lock"
-    );
-    drop(style);
-    assert!(
-        STYLE_LOCK.try_lock().is_ok(),
-        "dropping the guard must release the style lock"
     );
 }
 
@@ -69,6 +83,15 @@ fn style_guard_serializes_access_to_the_switch() {
 struct StyleGuard {
     _lock: MutexGuard<'static, ()>,
     original: bool,
+}
+
+impl StyleGuard {
+    /// Force styling off for the rest of the guard's lifetime, so a test
+    /// asserting plain output does not depend on the value it entered with.
+    /// 在守卫剩余生命周期内强制关闭样式，使断言纯文本输出的测试不依赖进入值。
+    fn disable(&self) {
+        manualaid_cli::style::set_enabled(false);
+    }
 }
 
 impl Drop for StyleGuard {
@@ -96,7 +119,7 @@ fn style_guard() -> StyleGuard {
 /// 观察到并发的切换，也不受此前泄漏值的影响。
 fn style_guard_disabled() -> StyleGuard {
     let guard = style_guard();
-    manualaid_cli::style::set_enabled(false);
+    guard.disable();
     guard
 }
 
