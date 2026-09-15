@@ -21,12 +21,24 @@ use super::handlers::finish_round_with_provider;
 use super::utils::t_fmt;
 use crate::dir_tree::{DirViewConfig, format_dir_tree};
 
-/// Run every `@token` in `line` as one path round. Returns `true` when at
-/// least one `@token` was recognized, even if it does not exist (the
-/// localized hint was printed). Returns `false` when no `@token` appears.
-/// 把 `line` 中的每个 `@token` 作为一轮路径操作执行。至少识别到一个
-/// `@token` 时返回 `true`（即使它不存在，也已打印本地化提示）；没有
-/// `@token` 时返回 `false`。
+/// What one path round did: whether any `@token` was recognized, and
+/// whether one of them no longer resolves. The caller owns the completion
+/// cache, so the round only reports the stale reference and leaves the
+/// invalidation to it.
+/// 一轮路径操作的结果：是否识别到 `@token`，以及其中是否有引用已不成立。
+/// 补全缓存由调用方持有，因此本轮只上报失效引用，失效动作留给调用方。
+pub(super) struct PathRoundOutcome {
+    /// At least one `@token` was recognized, even if it does not exist (the
+    /// localized hint was printed).
+    /// 至少识别到一个 `@token`（即使它不存在，也已打印本地化提示）。
+    pub(super) handled: bool,
+    /// At least one `@token` did not resolve to a file or a directory.
+    /// 至少有一个 `@token` 未对应到文件或目录。
+    pub(super) any_missing: bool,
+}
+
+/// Run every `@token` in `line` as one path round.
+/// 把 `line` 中的每个 `@token` 作为一轮路径操作执行。
 pub(super) async fn run_path_actions<P: ClipboardProvider>(
     provider: &P,
     executor: &Executor,
@@ -35,10 +47,11 @@ pub(super) async fn run_path_actions<P: ClipboardProvider>(
     session: &mut SessionLog,
     options: &mut LoopOptions,
     line: &str,
-) -> bool {
+) -> PathRoundOutcome {
     let mut calls = Vec::new();
     let mut results = Vec::new();
     let mut any_path = false;
+    let mut any_missing = false;
     let mut round_start = None;
 
     for raw_token in line.split_whitespace() {
@@ -79,11 +92,21 @@ pub(super) async fn run_path_actions<P: ClipboardProvider>(
                 "{}",
                 t_fmt("cli.complete.path_not_found", &[("path", relative)])
             );
+            // The cache may still offer this path; report it so the caller
+            // can mark the cached view stale, letting the next `@` query
+            // drop the entry instead of re-suggesting it until the interval
+            // elapses.
+            // 缓存可能仍在提供该路径；上报以使调用方把缓存置为过期，让
+            // 下一次 `@` 查询丢弃该条目，而不是在间隔结束前继续提示它。
+            any_missing = true;
         }
     }
 
     if results.is_empty() {
-        return any_path;
+        return PathRoundOutcome {
+            handled: any_path,
+            any_missing,
+        };
     }
 
     let stats = RoundStats {
@@ -104,7 +127,10 @@ pub(super) async fn run_path_actions<P: ClipboardProvider>(
         stats,
     )
     .await;
-    true
+    PathRoundOutcome {
+        handled: true,
+        any_missing,
+    }
 }
 
 /// Build the synthetic `path` call recorded for a directory reference; the

@@ -244,12 +244,17 @@ async fn loop_main_at(
             mode_hint(options.mode),
             i18n::t_str("cli.loop.menu_prompt")
         );
-        let path_cache = path_cache.clone();
+        // A dedicated clone for the editor closure: `spawn_blocking` takes
+        // ownership of it, and `path_cache` itself must stay available for
+        // the path-action round below.
+        // 为编辑器闭包单独克隆一份：`spawn_blocking` 会取得其所有权，而
+        // `path_cache` 本身须留给下方的路径引用回合使用。
+        let editor_cache = path_cache.clone();
         #[cfg(test)]
         let line = {
             let root = current_dir;
             match read_line_with_completion(&prompt, Some(input_history.clone()), |state| {
-                completion_candidates(state, root, &path_cache)
+                completion_candidates(state, root, &editor_cache)
             }) {
                 Some(line) => line,
                 None => break,
@@ -261,7 +266,7 @@ async fn loop_main_at(
             let input_history = input_history.clone();
             match tokio::task::spawn_blocking(move || {
                 read_line_with_completion(&prompt, Some(input_history), |state| {
-                    completion_candidates(state, &root, &path_cache)
+                    completion_candidates(state, &root, &editor_cache)
                 })
             })
             .await
@@ -306,7 +311,7 @@ async fn loop_main_at(
 
         if trimmed.contains('@') {
             let mode_before = options.mode;
-            let path_handled = path_action::run_path_actions(
+            let path_round = path_action::run_path_actions(
                 &manualaid_core::clipboard::RealClipboard,
                 &executor,
                 current_dir,
@@ -319,7 +324,17 @@ async fn loop_main_at(
             if options.mode != mode_before {
                 executor = build_executor(current_dir, &config, options.mode);
             }
-            if path_handled {
+            // A reference the cache still offered turned out to be gone;
+            // mark the view stale so the next `@` query rebuilds it. The
+            // rebuild stays on that later query, so a reference nothing
+            // follows costs no rescan.
+            // 缓存仍在提供的引用被证实已不存在；把视图置为过期，使下一次
+            // `@` 查询重建它。重建发生在之后的那次查询，因此其后没有别的
+            // `@` 引用时不会触发重扫。
+            if path_round.any_missing {
+                path_cache.lock().unwrap().invalidate();
+            }
+            if path_round.handled {
                 continue;
             }
         }
