@@ -5,6 +5,12 @@
 ### Changed
 
 - The `@` file suggestions keep up with your project: files you add, delete or move are picked up the next time the list refreshes, and a suggestion disappears once you reference a file that is no longer there.
+- When a round is too long to post in full, the notice handed to the AI points it at the exact `offset` and `limit` to resume from in the staged copy, overlapping a couple of lines so it rejoins the text just before the cut. Tools whose output was posted whole still list a plain line number.
+- The notice no longer asks the AI to adjust its tool calls.
+
+### Fixed
+
+- The staged-copy notice named a line above each tool's output, starting from the second tool, so reading from there began with a blank line.
 
 ## [0.15.0] - 2026-09-15
 
