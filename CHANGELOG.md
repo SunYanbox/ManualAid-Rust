@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The `@` path-completion cache is rebuilt once it ages past 30 seconds (`REFRESH_INTERVAL` in `complete/paths.rs`) or is invalidated by a reference that no longer resolves: `filter` calls `refresh_if_stale` first, which re-scans the stored root when `last_scan` is older than the interval or was cleared, refreshing both the visible walk and the browsed-directory caches, so files created, removed or moved while the loop runs appear in later suggestions; `run_path_actions` returns a `PathRoundOutcome` reporting whether any `@token` failed to resolve, and the loop calls the new `invalidate` on that report, so the stale entry is dropped at the next `@` query instead of after the interval; a never-scanned instance (an empty root) and a cache still inside the interval are left untouched, so the refresh stays lazy — the rebuild happens on that later query, not at the report itself, and no background task or per-key rescan is involved
+
 ## [0.15.0] - 2026-09-15
 
 ### Added
