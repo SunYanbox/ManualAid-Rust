@@ -1,5 +1,7 @@
 use super::*;
 
+use std::time::{Duration, Instant};
+
 use crate::test_support::temp_dir;
 
 /// Join path parts with the platform separator so assertions match the
@@ -158,5 +160,83 @@ fn rescan_replaces_the_cached_entries() {
     candidates.scan(&root);
     assert!(candidates.filter("first").is_empty());
     assert_eq!(candidates.filter("second").len(), 1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Push a cache past the refresh interval without waiting for wall-clock
+/// time, so the stale path stays deterministic in tests.
+/// 把缓存推到刷新间隔之外而无需真实等待墙钟时间，使过期路径在测试中
+/// 保持确定性。
+fn age_cache(candidates: &mut PathCandidates) {
+    candidates.last_scan = Some(Instant::now() - REFRESH_INTERVAL - Duration::from_secs(1));
+}
+
+#[test]
+fn stale_cache_is_rebuilt_on_the_next_query() {
+    let root = temp_dir("complete-paths-stale");
+    std::fs::write(root.join("first.txt"), "x").unwrap();
+    let mut candidates = scanned(&root);
+    assert_eq!(candidates.filter("first").len(), 1);
+
+    // Change the tree behind the cache's back, then age it: the next query
+    // must show the new file and drop the deleted one.
+    // 在缓存不知情的情况下改动目录树，然后将其置为过期：下一次查询必须
+    // 显示新文件并丢弃已删除的文件。
+    std::fs::remove_file(root.join("first.txt")).unwrap();
+    std::fs::write(root.join("second.txt"), "x").unwrap();
+    age_cache(&mut candidates);
+
+    assert!(candidates.filter("first").is_empty());
+    assert_eq!(candidates.filter("second").len(), 1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn fresh_cache_is_not_rebuilt() {
+    let root = temp_dir("complete-paths-fresh");
+    std::fs::write(root.join("first.txt"), "x").unwrap();
+    let mut candidates = scanned(&root);
+
+    // Inside the interval the cache is authoritative, so a deleted file
+    // stays visible until the view ages out.
+    // 在间隔内缓存即为准据，因此已删除的文件在视图过期前仍然可见。
+    std::fs::remove_file(root.join("first.txt")).unwrap();
+    assert_eq!(candidates.filter("first").len(), 1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn stale_cache_rebuilds_browsed_directory_contents() {
+    let root = temp_dir("complete-paths-browsed-stale");
+    let sub = root.join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(sub.join("main.rs"), "x").unwrap();
+    let mut candidates = scanned(&root);
+    assert_eq!(candidates.filter("sub/").len(), 1);
+
+    // Browsed directory caches are populated on demand, so they must be
+    // rebuilt along with the visible walk.
+    // 浏览过的目录缓存是按需填充的，因此必须与可见遍历一同重建。
+    std::fs::remove_file(sub.join("main.rs")).unwrap();
+    age_cache(&mut candidates);
+    assert!(candidates.filter("sub/").is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn invalidated_cache_is_rebuilt_on_the_next_query() {
+    let root = temp_dir("complete-paths-invalidated");
+    std::fs::write(root.join("first.txt"), "x").unwrap();
+    let mut candidates = scanned(&root);
+    assert_eq!(candidates.filter("first").len(), 1);
+
+    // A reference the cache offered turns out to be gone, so the loop
+    // invalidates it; the rebuild must follow on the next query, without
+    // waiting for the interval.
+    // 缓存提供的引用被证实已不存在，loop 因此将其置为过期；重建必须在
+    // 下一次查询发生，而不必等待该间隔。
+    std::fs::remove_file(root.join("first.txt")).unwrap();
+    candidates.invalidate();
+    assert!(candidates.filter("first").is_empty());
     let _ = std::fs::remove_dir_all(&root);
 }

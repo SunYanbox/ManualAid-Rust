@@ -244,7 +244,6 @@ async fn loop_main_at(
             mode_hint(options.mode),
             i18n::t_str("cli.loop.menu_prompt")
         );
-        let path_cache = path_cache.clone();
         #[cfg(test)]
         let line = {
             let root = current_dir;
@@ -259,6 +258,12 @@ async fn loop_main_at(
         let line = {
             let root = current_dir.to_path_buf();
             let input_history = input_history.clone();
+            // `spawn_blocking` takes ownership of the closure, so it needs
+            // its own cache reference; the outer `path_cache` stays
+            // available for the path round below.
+            // `spawn_blocking` 会取得闭包的所有权，因此需要自己的一份缓存
+            // 引用；外层 `path_cache` 留给下方的路径回合使用。
+            let path_cache = path_cache.clone();
             match tokio::task::spawn_blocking(move || {
                 read_line_with_completion(&prompt, Some(input_history), |state| {
                     completion_candidates(state, &root, &path_cache)
@@ -306,7 +311,7 @@ async fn loop_main_at(
 
         if trimmed.contains('@') {
             let mode_before = options.mode;
-            let path_handled = path_action::run_path_actions(
+            let path_round = path_action::run_path_actions(
                 &manualaid_core::clipboard::RealClipboard,
                 &executor,
                 current_dir,
@@ -319,7 +324,17 @@ async fn loop_main_at(
             if options.mode != mode_before {
                 executor = build_executor(current_dir, &config, options.mode);
             }
-            if path_handled {
+            // A reference the cache still offered turned out to be gone;
+            // mark the view stale so the next `@` query rebuilds it. The
+            // rebuild stays on that later query, so a reference nothing
+            // follows costs no rescan.
+            // 缓存仍在提供的引用被证实已不存在；把视图置为过期，使下一次
+            // `@` 查询重建它。重建发生在之后的那次查询，因此其后没有别的
+            // `@` 引用时不会触发重扫。
+            if path_round.any_missing {
+                path_cache.lock().unwrap().invalidate();
+            }
+            if path_round.handled {
                 continue;
             }
         }

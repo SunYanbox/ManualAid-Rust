@@ -1,12 +1,17 @@
 //! Path candidate provider for `@` completion. A visible-path walk serves
 //! ordinary searches, while ignored directories stay browsable as dimmed
-//! entries: entering one lists its direct children on demand and caches the
-//! result for the whole session.
+//! entries: entering one lists its direct children on demand. Every cached
+//! view is rebuilt once it ages past [`REFRESH_INTERVAL`] or is invalidated
+//! by a reference that no longer resolves, so files created, removed or moved
+//! while the loop runs show up in later suggestions.
 //! `@` 补全的路径候选提供者。未忽略路径走常规遍历；被忽略目录仍可作为
-//! 弱化条目浏览，进入时按需列举其直接子项并缓存整个会话。
+//! 弱化条目浏览，进入时按需列举其直接子项。所有缓存视图在超过
+//! [`REFRESH_INTERVAL`] 后重建，或因某个引用已不成立而被置为过期，使
+//! loop 运行期间新建、删除或移动的文件出现在后续建议中。
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use ignore::WalkBuilder;
 
@@ -19,6 +24,15 @@ const MAX_DEPTH: usize = 12;
 /// suggestion list.
 /// 单次搜索结果的条数上限，避免巨大的目录树淹没建议列表。
 const MAX_MATCHES: usize = 200;
+
+/// How long a built view stays usable before the next query rebuilds it. The
+/// `@` cache spans the whole session, but the project tree changes while the
+/// loop runs; refreshing on the first query past this interval keeps new and
+/// deleted files visible without rescanning on every key press.
+/// 已构建视图在下次查询触发重建前的可用时长。`@` 缓存贯穿整个会话，但
+/// loop 运行期间项目树会变化；超过该间隔后的首次查询触发刷新，既让新建
+/// 与删除的文件可见，又不必每次按键都重扫。
+const REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 
 /// One path suggestion; `dimmed` means the entry is ignored by the project's
 /// ignore rules but is still offered as a browsable target.
@@ -37,9 +51,12 @@ pub(crate) struct PathEntry {
     pub dimmed: bool,
 }
 
-/// Session-cached visible entries plus an on-demand cache of browsed
-/// directories.
-/// 会话缓存的可见条目，以及按需浏览目录的缓存。
+/// Cached visible entries plus an on-demand cache of browsed directories,
+/// both rebuilt once the cache ages past [`REFRESH_INTERVAL`] or is
+/// [invalidated](Self::invalidate).
+/// 缓存的可见条目，以及按需浏览目录的缓存；两者在缓存超过
+/// [`REFRESH_INTERVAL`] 后重建，或被
+/// [invalidate](Self::invalidate) 置为过期时重建。
 #[derive(Default)]
 pub(crate) struct PathCandidates {
     root: std::path::PathBuf,
@@ -49,6 +66,9 @@ pub(crate) struct PathCandidates {
     /// 以规范化的相对目录路径为键的目录内容缓存；空键表示项目根，保存
     /// 顶层视图。
     browsed: HashMap<String, Vec<PathEntry>>,
+    /// When the cached view was last built; `None` before the first scan.
+    /// 缓存视图上次构建的时刻；首次扫描前为 `None`。
+    last_scan: Option<Instant>,
 }
 
 impl PathCandidates {
@@ -62,16 +82,21 @@ impl PathCandidates {
         // 空键是查询为空时显示的根视图。
         let root_children = list_children(root);
         self.browsed.insert(String::new(), root_children);
+        self.last_scan = Some(Instant::now());
     }
 
-    /// Return path suggestions for `query`. Empty queries list the top level;
-    /// a trailing separator lists the direct children of the named directory;
+    /// Return path suggestions for `query`, rebuilding the cached view first
+    /// when it is older than [`REFRESH_INTERVAL`] or was
+    /// [invalidated](Self::invalidate). Empty queries list the top level; a
+    /// trailing separator lists the direct children of the named directory;
     /// other queries search the visible entries plus top-level ignored
     /// directories so a dimmed directory can still be entered.
-    /// 返回 `query` 对应的路径建议。空查询列出顶层；带尾分隔符时列出指定
-    /// 目录的直接子项；其他查询搜索可见条目并额外匹配顶层被忽略目录，
-    /// 使弱化目录仍可进入。
+    /// 返回 `query` 对应的路径建议；缓存视图超过 [`REFRESH_INTERVAL`] 或
+    /// 被 [invalidate](Self::invalidate) 置为过期时先重建。空查询列出
+    /// 顶层；带尾分隔符时列出指定目录的直接子项；其他查询搜索可见条目并
+    /// 额外匹配顶层被忽略目录，使弱化目录仍可进入。
     pub(crate) fn filter(&mut self, query: &str) -> Vec<PathEntry> {
+        self.refresh_if_stale();
         let normalized = query.replace('\\', "/");
         if normalized.is_empty() {
             return self.children("");
@@ -123,6 +148,42 @@ impl PathCandidates {
             .collect();
         matches.truncate(MAX_MATCHES);
         matches
+    }
+
+    /// Rebuild the cached view when it is older than [`REFRESH_INTERVAL`], or
+    /// when [`invalidate`](Self::invalidate) marked it stale, so files
+    /// created, removed or moved while the loop runs appear in the
+    /// suggestions. A never-scanned instance is left alone: without a root
+    /// there is nothing to rebuild from.
+    /// 缓存视图超过 [`REFRESH_INTERVAL`] 时重建，或被
+    /// [`invalidate`](Self::invalidate) 标记为过期时重建，使 loop 运行
+    /// 期间新建、删除或移动的文件出现在建议中。从未扫描过的实例不做
+    /// 处理：没有根路径就无从重建。
+    fn refresh_if_stale(&mut self) {
+        if self.root.as_os_str().is_empty() {
+            return;
+        }
+        if self
+            .last_scan
+            .is_some_and(|last_scan| last_scan.elapsed() < REFRESH_INTERVAL)
+        {
+            return;
+        }
+        let root = self.root.clone();
+        self.scan(&root);
+    }
+
+    /// Mark the cached view as out of date so the next query rebuilds it.
+    /// Called when a path the cache still offers turns out to be gone, so the
+    /// stale entry is dropped at the next `@` query instead of after the
+    /// interval. The rebuild itself stays lazy: it happens on that later
+    /// query, not here, so a reference that nothing follows costs nothing.
+    /// 把缓存视图标记为过期，使下一次查询重建。当缓存仍在提供的路径实际
+    /// 已不存在时调用，使这条过期条目在下一次 `@` 查询时即被丢弃，而不必
+    /// 等到间隔结束。重建本身保持惰性：发生在之后的那次查询而非本次调用，
+    /// 因此其后没有别的 `@` 引用时不会付出任何代价。
+    pub(crate) fn invalidate(&mut self) {
+        self.last_scan = None;
     }
 
     /// Return the cached direct children of the directory named by `dir_path`;
