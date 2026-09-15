@@ -39,7 +39,7 @@ use rmcp::model::{
     CallToolRequestParams, CallToolResult, ContentBlock, JsonObject, ResourceContents,
 };
 use rmcp::service::RunningService;
-use rmcp::transport::TokioChildProcess;
+use rmcp::transport::{StreamableHttpClientTransport, TokioChildProcess};
 use rmcp::{Peer, RoleClient, serve_client};
 use serde_json::Value;
 
@@ -106,13 +106,7 @@ impl McpClient {
 pub(crate) async fn open(config: &McpServerConfig) -> Result<(McpClient, Vec<McpTool>), String> {
     match config.transport {
         McpTransportKind::Stdio => open_stdio(config).await,
-        McpTransportKind::Http => Err(t_fmt(
-            "mcp.error.transport_unsupported",
-            &[
-                ("server", config.name.as_str()),
-                ("transport", McpTransportKind::Http.label()),
-            ],
-        )),
+        McpTransportKind::Http => open_http(config).await,
     }
 }
 
@@ -135,6 +129,42 @@ async fn open_stdio(config: &McpServerConfig) -> Result<(McpClient, Vec<McpTool>
         .map_err(|error| connect_failed(config, &error.to_string()))?
         .0;
 
+    finish_handshake(config, transport).await
+}
+
+/// Reach a remote server over Streamable HTTP and list its tools.
+/// 经 Streamable HTTP 访问远端服务器并列出其工具。
+///
+/// # Description
+/// The endpoint is used exactly as configured: redirects are disabled by the
+/// transport, so a URL the user did not write can never be reached.
+/// # 描述
+/// 端点按配置原样使用：传输层禁用了重定向，因此用户未曾写下的 URL 绝无可能
+/// 被访问。
+async fn open_http(config: &McpServerConfig) -> Result<(McpClient, Vec<McpTool>), String> {
+    let url = config.url.as_deref().unwrap_or_default();
+    let transport = StreamableHttpClientTransport::from_uri(url.to_string());
+    finish_handshake(config, transport).await
+}
+
+/// Complete the MCP handshake on a freshly built transport and list its tools.
+/// 在新建的传输上完成 MCP 握手并列出其工具。
+///
+/// # Description
+/// Both transports differ only in how the connection is established; the
+/// handshake, the discovery call and the conversion of what a server reports
+/// are shared so the two paths cannot drift apart.
+/// # 描述
+/// 两种传输只在如何建立连接上不同；握手、发现调用以及服务器报告内容的转换
+/// 都是共用的，使两条路径不会各自漂移。
+async fn finish_handshake<T, E, A>(
+    config: &McpServerConfig,
+    transport: T,
+) -> Result<(McpClient, Vec<McpTool>), String>
+where
+    T: rmcp::transport::IntoTransport<RoleClient, E, A>,
+    E: std::error::Error + Send + Sync + 'static,
+{
     let service = tokio::time::timeout(CONNECT_TIMEOUT, serve_client((), transport))
         .await
         .map_err(|_| connect_timeout(config))?
