@@ -217,6 +217,8 @@ title = "SKILL 配置"
 [cli.warning]
 invalid_config_value = "警告：配置文件 %{path} 中 `%{key}` 的值 '%{value}' 无效。可用值：%{available}。将使用默认值。"
 dangerous_allow_command = "警告：配置 %{path} 中的白名单命令 `%{command}` 命中黑名单命令，配置过于危险，已被忽略。"
+invalid_mcp_server = "警告：配置 %{path} 中的 MCP 服务器条目 `%{key}` 值 '%{value}' 无效，该条目已被跳过。"
+invalid_mcp_server_with_available = "警告：配置 %{path} 中的 MCP 服务器条目 `%{key}` 值 '%{value}' 无效。可用值：%{available}。该条目已被跳过。"
 
 [cli.cmd]
 help = "显示此帮助"

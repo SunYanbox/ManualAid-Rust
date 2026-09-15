@@ -40,6 +40,30 @@ pub(crate) fn format_config_issue(issue: &ConfigIssue) -> String {
                 ("path", &issue.path.display().to_string()),
             ],
         ),
+        ConfigIssueKind::InvalidMcpServer => {
+            let path = issue.path.display().to_string();
+            let available = issue.available_values.join(", ");
+            if available.is_empty() {
+                t_fmt(
+                    "cli.warning.invalid_mcp_server",
+                    &[
+                        ("key", &issue.key),
+                        ("value", &issue.value),
+                        ("path", &path),
+                    ],
+                )
+            } else {
+                t_fmt(
+                    "cli.warning.invalid_mcp_server_with_available",
+                    &[
+                        ("key", &issue.key),
+                        ("value", &issue.value),
+                        ("available", &available),
+                        ("path", &path),
+                    ],
+                )
+            }
+        }
     }
 }
 
