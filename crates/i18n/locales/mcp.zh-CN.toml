@@ -4,6 +4,11 @@
 [mcp.error]
 unknown_tool = "没有已启用的 MCP 服务器提供工具 `%{name}`"
 not_connected = "MCP 服务器 `%{server}` 未连接"
+connect_failed = "MCP 服务器 `%{server}` 连接失败：%{reason}"
+connect_timeout = "MCP 服务器 `%{server}` 未能在 %{seconds} 秒内完成握手"
+transport_unsupported = "MCP 服务器 `%{server}` 使用 %{transport} 传输，该传输尚未支持"
+call_failed = "MCP 工具 `%{tool}` 调用失败：%{reason}"
+call_timeout = "MCP 工具 `%{tool}` 未能在 %{seconds} 秒内返回结果"
 
 [mcp.approval]
 required = "`%{tool}` 由 MCP 服务器提供，其描述来自该服务器且不可信，执行前必须获得批准。"

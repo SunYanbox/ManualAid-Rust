@@ -17,8 +17,11 @@
 use std::collections::HashSet;
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+use rmcp::{Peer, RoleClient};
+
 use crate::file_io;
 use crate::mcp::config::{McpServerConfig, McpTransportKind};
+use crate::mcp::connect::McpClient;
 use crate::mcp::tool::McpTool;
 
 /// One configured server together with the tools discovered on it.
@@ -34,6 +37,10 @@ pub(crate) struct ServerState {
     /// Why the server contributed no tools, when that is the case.
     /// 服务器未贡献任何工具的原因（若确实如此）。
     pub error: Option<String>,
+    /// The live connection, absent when the server is disabled, failed to
+    /// connect, or has already been shut down.
+    /// 实时连接；服务器被禁用、连接失败或已关闭时不存在。
+    pub client: Option<McpClient>,
 }
 
 /// A read-only snapshot of one configured server.
@@ -162,6 +169,27 @@ pub fn server_status() -> Vec<McpServerStatus> {
             tool_count: server.tools.len(),
             error: server.error.clone(),
         })
+        .collect()
+}
+
+/// Clone the live connection of `server_name`, when it has one.
+/// 克隆 `server_name` 的实时连接（若存在）。
+pub(crate) fn peer_for(server_name: &str) -> Option<Peer<RoleClient>> {
+    read_store()
+        .servers
+        .iter()
+        .find(|server| server.config.name == server_name)
+        .and_then(|server| server.client.as_ref())
+        .map(|client| client.peer())
+}
+
+/// Take every live connection out of the store so the caller can close them.
+/// 取出存储中的每个实时连接，供调用方关闭。
+pub(crate) fn take_clients() -> Vec<McpClient> {
+    write_store()
+        .servers
+        .iter_mut()
+        .filter_map(|server| server.client.take())
         .collect()
 }
 

@@ -102,6 +102,7 @@ fn server_status_reports_each_configured_server() {
                 config: broken,
                 tools: Vec::new(),
                 error: Some("no command".to_string()),
+                client: None,
             },
         ]);
 
@@ -165,17 +166,19 @@ fn connect_all_installs_every_declared_server() {
         disabled.enabled = false;
         block_on(connect_all(&[broken, disabled, stdio("good")])).expect("connect_all succeeds");
 
-        // Every declared server keeps its slot with the reason it contributed
-        // nothing, but none contributes tools until the transport layer is
-        // wired up.
-        // 每个已声明服务器都保留自己的位置并记录未贡献工具的原因，但在传输层
-        // 接入前都不贡献工具。
+        // Every declared server keeps its slot, and the three ways a server
+        // can contribute nothing stay distinguishable: `broken` fails
+        // validation, `disabled` is never attempted, and `good` names a
+        // command that does not exist, so the connection itself fails.
+        // 每个已声明服务器都保留自己的位置，且三种「未贡献工具」的情形保持可
+        // 区分：`broken` 校验失败，`disabled` 从不尝试连接，`good` 指向一个
+        // 不存在的命令，因此连接本身失败。
         let status = server_status();
         assert_eq!(status.len(), 3);
         assert!(status[0].error.is_some());
         assert!(!status[1].enabled);
         assert_eq!(status[1].error, None);
-        assert_eq!(status[2].error, None);
+        assert!(status[2].error.is_some());
         assert!(all_tools().is_empty());
         assert!(enabled_tools().is_empty());
         reset();

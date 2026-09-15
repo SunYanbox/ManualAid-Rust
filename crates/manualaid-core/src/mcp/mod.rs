@@ -18,6 +18,7 @@
 //! 每次 MCP 调用都需要用户明确批准，因为服务器提供的工具描述属于不可信输入。
 
 mod config;
+mod connect;
 mod schema;
 mod store;
 mod tool;
@@ -54,13 +55,42 @@ use store::ServerState;
 pub async fn connect_all(servers: &[McpServerConfig]) -> CoreResult<()> {
     let mut states = Vec::with_capacity(servers.len());
     for server in servers {
-        let error = server.validate().err();
-        states.push(ServerState {
-            config: server.clone(),
-            tools: Vec::new(),
-            error,
-        });
+        if let Err(reason) = server.validate() {
+            states.push(ServerState {
+                config: server.clone(),
+                tools: Vec::new(),
+                error: Some(reason),
+                client: None,
+            });
+            continue;
+        }
+        if !server.enabled {
+            states.push(ServerState {
+                config: server.clone(),
+                tools: Vec::new(),
+                error: None,
+                client: None,
+            });
+            continue;
+        }
+        match connect::open(server).await {
+            Ok((client, tools)) => states.push(ServerState {
+                config: server.clone(),
+                tools,
+                error: None,
+                client: Some(client),
+            }),
+            Err(reason) => states.push(ServerState {
+                config: server.clone(),
+                tools: Vec::new(),
+                error: Some(reason),
+                client: None,
+            }),
+        }
     }
+    // Installing replaces the previous list, so any connection that is no
+    // longer wanted is dropped here and closed by the service loop.
+    // 安装会替换先前的列表，因此不再需要的连接在此被丢弃并由服务循环关闭。
     store::install(states);
     Ok(())
 }
@@ -74,6 +104,13 @@ pub async fn connect_all(servers: &[McpServerConfig]) -> CoreResult<()> {
 /// # 描述
 /// 在进程退出前调用，以免在丢弃句柄会被跳过的平台上留下子服务器进程。
 pub async fn shutdown() -> CoreResult<()> {
+    // Take the clients out first so the store no longer hands out peers for a
+    // connection that is being closed.
+    // 先取出客户端，使存储不再为一个正在关闭的连接发放句柄。
+    let clients = store::take_clients();
+    for client in clients {
+        client.close().await;
+    }
     store::reset();
     Ok(())
 }
@@ -95,14 +132,16 @@ pub async fn call_tool(exposed_name: &str, params: &IndexMap<String, Value>) -> 
             t_fmt("mcp.error.unknown_tool", &[("name", exposed_name)]),
         );
     };
-    let _ = params;
-    ToolResult::failure(
-        exposed_name,
-        t_fmt(
-            "mcp.error.not_connected",
-            &[("server", tool.server_name.as_str())],
-        ),
-    )
+    let Some(peer) = store::peer_for(&tool.server_name) else {
+        return ToolResult::failure(
+            exposed_name,
+            t_fmt(
+                "mcp.error.not_connected",
+                &[("server", tool.server_name.as_str())],
+            ),
+        );
+    };
+    connect::call(&peer, &tool, params).await
 }
 
 /// Clear the store. Hidden from docs because it exists for tests.

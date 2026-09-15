@@ -9,6 +9,7 @@ use super::store::ServerState;
 use super::*;
 
 mod config;
+mod connect;
 mod schema;
 mod store;
 
@@ -82,6 +83,7 @@ fn state(config: McpServerConfig, tools: Vec<McpTool>) -> ServerState {
         config,
         tools,
         error: None,
+        client: None,
     }
 }
 
