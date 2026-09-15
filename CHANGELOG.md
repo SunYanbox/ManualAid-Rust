@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-15
+
 ### Added
 
 - The `todo_write` tool manages persistent TODO lists at `<workspace>/.ManualAid/todos/<subject>.json`: it creates a list, replaces its items (`task` plus a `status` of `pending` / `in_progress` / `completed`), reports the similar existing subjects instead of creating a near-duplicate when `create` is absent, and archives a finished list into `todos/done/` together with its `linked_plan` file into `plans/done/`, the archived names carrying an RFC3339 stamp and disambiguating suffixes
