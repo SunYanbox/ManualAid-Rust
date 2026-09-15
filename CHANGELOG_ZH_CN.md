@@ -11,6 +11,13 @@
 - `@` 路径补全跟随项目树变化：缓存视图超过 30 秒后于下次查询重建，被引用的路径解析失败时亦被置为失效，自上次重建以来新建、删除或移动的条目因此在后续建议中出现或消失（`complete/paths.rs`）
 - 命令集成测试之间不再泄漏进程级样式开关，覆盖该开关的守卫会为每个驱动 `run_main` 的测试还原它（`crates/manualaid-cli/tests/commands.rs`、`tests/commands/loop.rs`、`tests/commands/handlers/`）
 - 进程级测试守卫改为按固定顺序取得——先控制台捕获、再样式、最后 locale——使新增的加锁不会让测试二进制死锁（`crates/manualaid-cli/tests/commands.rs`）
+- 截断轮次对代理尚未完全看到的结果给出指回暂存副本 `.ManualAid/temp/<sha256>.md` 的可续读 `offset`/`limit`：offset 从首个未显示行往前回退 `CONTEXT_LINES_BEFORE_CUT` 行，limit 读到该结果的块尾部；完整显示的结果仍只给起始行（`manualaid-ws/src/prompt.rs`）
+- 暂存清单的表头由「起始行号」改为「位置」，表头与条目文案改由 `truncated_persisted_entry` / `truncated_persisted_entry_resume` 译文提供，不再在 Rust 中拼接（`manualaid-ws/src/prompt.rs`、`i18n/locales/common.{en,zh-CN}.toml`）
+- 轮次截断警告不再要求代理调整工具调用参数（`i18n/locales/common.{en,zh-CN}.toml`）
+
+### 修复
+
+- 暂存提示为第二个及以后的结果报出的行号比实际早一行，落在块之间的分隔空行上，按该 offset 读取会以空行开头（`manualaid-ws/src/prompt.rs`）
 
 ## [0.15.0] - 2026-09-15
 

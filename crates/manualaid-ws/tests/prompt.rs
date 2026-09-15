@@ -52,6 +52,43 @@ fn test_workspace_root(tag: &str) -> PathBuf {
     std::env::temp_dir().join(format!("manualaid-ws-prompt-{tag}-{}", std::process::id()))
 }
 
+/// The persisted temp file written for a truncating round. Each test uses its
+/// own workspace root, so exactly one file is expected.
+/// 截断轮次写入的暂存临时文件。每个测试使用独立工作区根目录，因此预期只有
+/// 一个文件。
+fn single_temp_file(root: &Path) -> PathBuf {
+    let temp_dir = root.join(".ManualAid").join("temp");
+    let entries: Vec<_> = std::fs::read_dir(&temp_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    assert_eq!(entries.len(), 1, "expected exactly one persisted file");
+    entries[0].path()
+}
+
+/// Extract the `offset`/`limit` pair from a rendered resume hint.
+/// 从渲染出的续读指引中提取 `offset`/`limit` 取值。
+fn parse_resume_hint(text: &str) -> (usize, usize) {
+    let head = "offset=";
+    let start = text.find(head).expect("no resume hint rendered") + head.len();
+    let rest = &text[start..];
+    let first_number = |s: &str| -> usize {
+        s.split(|c: char| !c.is_ascii_digit())
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap()
+    };
+    let limit_at = rest.find("limit=").unwrap() + "limit=".len();
+    (first_number(rest), first_number(&rest[limit_at..]))
+}
+
+/// Build `count` lines of 100 characters each (99 payload chars + newline).
+/// 构造 `count` 行、每行 100 字符（99 个载荷字符 + 换行）的文本。
+fn lines_of_100(count: usize) -> String {
+    format!("{}\n", "α".repeat(99)).repeat(count)
+}
+
 #[test]
 fn tools_list_uses_localized_descriptions() {
     with_locale("en", || {
@@ -557,8 +594,15 @@ fn format_results_persists_full_output_when_truncated() {
         ];
         let text = format_results(&results, 600, &root);
         assert!(text.contains("have been saved to"));
-        assert!(text.contains("- read (file_path=\"/a.txt\"): line 1"));
-        assert!(text.contains("- shell: line"));
+        // Neither result is longer than the keep floor, so both are dropped
+        // whole and each still gets a resumable hint. The second block starts
+        // two blank-separator lines after the first ends.
+        // 两个结果都不超过保底阈值，因此都被整块丢弃，但仍各有一条续读指引。
+        // 第二个块起始于第一个块结束后两条分隔空行处。
+        assert!(text.contains("- read (file_path=\"/a.txt\"): starts at line 1;"));
+        assert!(text.contains("use offset=1, limit=3 to read the following content"));
+        assert!(text.contains("- shell: starts at line 5;"));
+        assert!(text.contains("use offset=3, limit=5 to read the following content"));
 
         // The persisted file must exist under `.ManualAid/temp/` and contain
         // the complete un-truncated tool outputs.
@@ -646,8 +690,13 @@ fn format_results_truncates_user_action_with_same_pipeline() {
         assert!(text.contains("[USER_ACTION kind=\"exec\" command=\"cargo test\"]"));
         assert!(text.contains("[END USER_ACTION]"));
         assert!(text.contains("[Output truncated: 1000 of 3000 chars removed]"));
-        // The persisted list uses `kind (label)` for user actions.
-        assert!(text.contains("- exec (cargo test): line 1"));
+        // The persisted list uses `kind (label)` for user actions. A
+        // single-line output has no newline in the kept prefix, so the
+        // two-line back-off is clamped to the first line of the file.
+        // 暂存清单对用户操作使用 `kind (label)`。单行输出的保留前缀中没有
+        // 换行，两行回退被钳到文件首行。
+        assert!(text.contains("- exec (cargo test): starts at line 1;"));
+        assert!(text.contains("use offset=1, limit=3 to read the following content"));
 
         // The persisted file must contain the complete user action wrapper.
         let temp_dir = root.join(".ManualAid").join("temp");
@@ -660,6 +709,136 @@ fn format_results_truncates_user_action_with_same_pipeline() {
         assert_eq!(content.matches('χ').count(), 3_000);
         assert!(content.contains("[USER_ACTION kind=\"exec\" command=\"cargo test\"]"));
         assert!(content.contains("[END USER_ACTION]"));
+        let _ = std::fs::remove_dir_all(&root);
+    });
+}
+
+#[test]
+fn format_results_persisted_entries_locate_every_result() {
+    with_locale("en", || {
+        let root = test_workspace_root("entry-lines");
+        let results = vec![
+            ToolResult::success("read", "a\nb", true)
+                .with_params_summary("file_path=\"/a.txt\"".to_string()),
+            ToolResult::failure("shell", "c\nd"),
+        ];
+        // 6 content chars against a 4-char budget: the first result fits and is
+        // shown whole, the second is dropped, and both stay locatable.
+        // 总量 6 字符对 4 字符预算：首个结果放得下、完整显示，第二个被丢弃，
+        // 两者都应能在暂存文件中被定位。
+        let text = format_results(&results, 4, &root);
+
+        assert!(
+            text.contains("- read (file_path=\"/a.txt\"): line 1"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- shell: starts at line 6; use offset=4, limit=6"),
+            "{text}"
+        );
+        // A result shown whole needs no resume hint.
+        // 完整显示的结果不需要续读指引。
+        assert!(
+            !text.contains("- read (file_path=\"/a.txt\"): starts at"),
+            "{text}"
+        );
+
+        let content = std::fs::read_to_string(single_temp_file(&root)).unwrap();
+        let lines: Vec<&str> = content.split('\n').collect();
+        assert!(lines[0].starts_with("[TOOL_RESULT read success=true"));
+        assert!(lines[5].starts_with("[TOOL_RESULT shell success=false"));
+        let _ = std::fs::remove_dir_all(&root);
+    });
+}
+
+#[test]
+fn format_results_resume_hint_offsets_back_two_lines() {
+    with_locale("en", || {
+        let root = test_workspace_root("resume-offset");
+        // 40 lines of 100 chars against a 2000-char budget keeps exactly 20
+        // lines, so the first hidden line is the 21st content line — temp line
+        // 22 — and the hint backs off two lines to temp line 20. The block ends
+        // at the footer line, 43.
+        // 4000 字符对 2000 预算恰好保留 20 行，首个未显示行为第 21 个正文行
+        //（临时文件第 22 行），指引回退两行到第 20 行；块在尾部行 43 结束。
+        let results = vec![ToolResult::success("read", lines_of_100(40), true)];
+        let text = format_results(&results, 2_000, &root);
+        assert!(
+            text.contains("use offset=20, limit=24 to read the following content"),
+            "{text}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    });
+}
+
+#[test]
+fn format_results_resume_hint_clamps_offset_to_the_first_line() {
+    with_locale("en", || {
+        let root = test_workspace_root("resume-clamp");
+        // A single-line output leaves no newline in the kept prefix, so the
+        // two-line back-off would point before the start of the file.
+        // 单行输出在保留前缀中没有换行，两行回退会越过文件开头。
+        let results = vec![ToolResult::success("read", "χ".repeat(3_000), true)];
+        let text = format_results(&results, 2_000, &root);
+        assert!(
+            text.contains("use offset=1, limit=3 to read the following content"),
+            "{text}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    });
+}
+
+#[test]
+fn format_results_resume_hint_recovers_the_omitted_content() {
+    with_locale("en", || {
+        let root = test_workspace_root("resume-roundtrip");
+        let full = lines_of_100(40);
+        let results = vec![ToolResult::success("read", full.clone(), true)];
+        let text = format_results(&results, 2_000, &root);
+
+        let (offset, limit) = parse_resume_hint(&text);
+        let content = std::fs::read_to_string(single_temp_file(&root)).unwrap();
+
+        // `read` slices by 1-based `offset` with `limit` counting lines. The
+        // tool's own slicing is private to `manualaid-core`, so the resume
+        // semantics are mirrored here rather than called.
+        // `read` 按 1 基行号切片、`limit` 为行数。该切片函数是
+        // `manualaid-core` 私有的，因此这里复现其语义而非直接调用。
+        let lines: Vec<&str> = content.split_inclusive('\n').collect();
+        let end = (offset - 1 + limit).min(lines.len());
+        let recovered = lines[offset - 1..end].join("");
+
+        let source: Vec<&str> = full.split_inclusive('\n').collect();
+        let context: String = source[18..20].concat();
+        let omitted: String = source[20..].concat();
+        assert_eq!(
+            recovered,
+            format!("{context}{omitted}\n[END TOOL_RESULT read]"),
+            "the hint must recover the omitted content preceded by two lines of context"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    });
+}
+
+#[test]
+fn format_results_round_warning_drops_parameter_advice() {
+    with_locale("en", || {
+        let root = test_workspace_root("no-advice-en");
+        let results = vec![ToolResult::success("read", "χ".repeat(3_000), true)];
+        let text = format_results(&results, 2_000, &root);
+        assert!(
+            text.contains("Output exceeded 2000 characters (total: 3000)"),
+            "{text}"
+        );
+        assert!(!text.contains("adjust"), "{text}");
+        let _ = std::fs::remove_dir_all(&root);
+    });
+    with_locale("zh-CN", || {
+        let root = test_workspace_root("no-advice-zh");
+        let results = vec![ToolResult::success("read", "χ".repeat(3_000), true)];
+        let text = format_results(&results, 2_000, &root);
+        assert!(text.contains("已按比例截断"), "{text}");
+        assert!(!text.contains("请调整"), "{text}");
         let _ = std::fs::remove_dir_all(&root);
     });
 }
