@@ -1,0 +1,9 @@
+# Errors and approvals reported by the MCP client layer.
+# MCP 客户端层报告的错误与审批。
+
+[mcp.error]
+unknown_tool = "No enabled MCP server provides the tool `%{name}`"
+not_connected = "MCP server `%{server}` is not connected"
+
+[mcp.approval]
+required = "`%{tool}` is provided by an MCP server. Its description comes from that server and cannot be trusted, so it must be approved before it runs."
