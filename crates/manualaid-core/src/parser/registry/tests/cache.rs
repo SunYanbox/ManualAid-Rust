@@ -46,7 +46,11 @@ fn renders_template_for_current_mode() {
     registry
         .set_mode(RegistryMode::Fixed(ToolCallFormat::JsonCodeblock))
         .unwrap();
-    let template = registry.render_tool_call_template(&ToolKind::Read).unwrap();
+    let template = registry
+        .render_tool_call_template(&crate::parser::ToolTemplate::from_kind(
+            crate::tools::ToolKind::Read,
+        ))
+        .unwrap();
     assert!(template.contains("\"tool_use\": \"read\""));
 }
 
@@ -66,7 +70,9 @@ fn render_template_in_fixed_mode_reports_missing_parser() {
     // 从注册表移除解析器后，固定模式应报"未注册"错误。
     registry.parsers.write().unwrap().shift_remove("xml");
     let err = registry
-        .render_tool_call_template(&ToolKind::Read)
+        .render_tool_call_template(&crate::parser::ToolTemplate::from_kind(
+            crate::tools::ToolKind::Read,
+        ))
         .expect_err("fixed mode with a removed parser must fail");
     assert!(
         err.message

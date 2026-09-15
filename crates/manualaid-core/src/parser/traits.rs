@@ -7,9 +7,9 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::template::ToolTemplate;
 use super::tool_set::EnabledToolSet;
 use crate::tools::ToolCallFormat;
-use crate::tools::ToolKind;
 
 /// A single tool call parsed from raw text input.
 /// 从原始文本输入中解析出的单个工具调用。
@@ -151,8 +151,9 @@ pub trait ToolCallFormatParser: Send + Sync {
     fn try_parse(&self, input: &str, tools: &EnabledToolSet) -> Result<ParseOutcome, ParseError>;
 
     /// Generate a standard call example for `tool` in this parser's own
-    /// wire format, used by the prompt builder.
+    /// wire format, used by the prompt builder. The view keeps the parser
+    /// unaware of whether the tool is built in or came from an MCP server.
     /// 为此解析器自己的线格式中的 `tool` 生成标准调用示例，供提示词
-    /// 构建器使用。
-    fn tool_call_template(&self, tool: &ToolKind) -> String;
+    /// 构建器使用。该视图使解析器不感知工具是内置的还是来自 MCP 服务器。
+    fn tool_call_template(&self, tool: &ToolTemplate<'_>) -> String;
 }

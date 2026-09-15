@@ -11,10 +11,10 @@
 use indexmap::IndexMap;
 use serde_json::Value;
 
+use super::template::ToolTemplate;
 use super::tool_set::EnabledToolSet;
 use super::traits::{ParseError, ParseOutcome, ParsedToolCall, ToolCallFormatParser};
 use crate::tools::ToolCallFormat;
-use crate::tools::ToolKind;
 
 /// Parser for the JSON-fenced-code-block tool-call format.
 /// JSON 围栏代码块工具调用格式的解析器。
@@ -37,9 +37,9 @@ impl ToolCallFormatParser for JsonCodeblockParser {
         })
     }
 
-    fn tool_call_template(&self, tool: &ToolKind) -> String {
-        let name = tool.name();
-        let params = tool.parameters();
+    fn tool_call_template(&self, tool: &ToolTemplate<'_>) -> String {
+        let name = tool.name;
+        let params = &tool.params;
         let mut out = format!("{{\n  \"tool_use\": \"{name}\",\n  \"params\": {{");
         for (index, param) in params.iter().enumerate() {
             let comma = if index + 1 == params.len() { "" } else { "," };

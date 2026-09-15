@@ -15,10 +15,10 @@
 use indexmap::IndexMap;
 use serde_json::Value;
 
+use super::template::ToolTemplate;
 use super::tool_set::EnabledToolSet;
 use super::traits::{ParseError, ParseOutcome, ParsedToolCall, ToolCallFormatParser};
 use crate::tools::ToolCallFormat;
-use crate::tools::ToolKind;
 
 /// Parser for the home-grown XML tool-call format.
 /// 自研 XML 工具调用格式的解析器。
@@ -219,11 +219,11 @@ impl ToolCallFormatParser for XmlParser {
         Ok(ParseOutcome { calls, warnings })
     }
 
-    fn tool_call_template(&self, tool: &ToolKind) -> String {
-        let name = tool.name();
-        let params = tool.parameters();
+    fn tool_call_template(&self, tool: &ToolTemplate<'_>) -> String {
+        let name = tool.name;
+        let params = &tool.params;
         let mut out = format!("<{name}>\n");
-        for param in &params {
+        for param in params {
             let comment = if param.required {
                 ""
             } else {

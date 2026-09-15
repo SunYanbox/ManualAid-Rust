@@ -119,7 +119,9 @@ pub(super) fn copy_tool_template<P: ClipboardProvider>(
     registry: &FormatRegistry,
     tool: &ToolKind,
 ) {
-    match registry.render_tool_call_template(tool) {
+    match registry
+        .render_tool_call_template(&manualaid_core::parser::ToolTemplate::from_kind(*tool))
+    {
         Ok(template) => match provider.write(&template) {
             Ok(()) => print_muted_block(&[i18n::t_str("cli.loop.copied")]),
             Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),

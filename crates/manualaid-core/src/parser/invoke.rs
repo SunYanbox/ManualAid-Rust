@@ -11,10 +11,10 @@
 use indexmap::IndexMap;
 use serde_json::Value;
 
+use super::template::ToolTemplate;
 use super::tool_set::EnabledToolSet;
 use super::traits::{ParseError, ParseOutcome, ParsedToolCall, ToolCallFormatParser};
 use crate::tools::ToolCallFormat;
-use crate::tools::ToolKind;
 
 /// The fixed tag name for tool elements in the invoke format.
 /// invoke 格式中工具元素的固定标签名。
@@ -248,11 +248,11 @@ impl ToolCallFormatParser for InvokeParser {
         Ok(ParseOutcome { calls, warnings })
     }
 
-    fn tool_call_template(&self, tool: &ToolKind) -> String {
-        let name = tool.name();
-        let params = tool.parameters();
+    fn tool_call_template(&self, tool: &ToolTemplate<'_>) -> String {
+        let name = tool.name;
+        let params = &tool.params;
         let mut out = format!("<{TOOL_TAG} name=\"{name}\">\n");
-        for param in &params {
+        for param in params {
             let comment = if param.required {
                 ""
             } else {

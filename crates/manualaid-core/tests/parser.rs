@@ -41,7 +41,9 @@ fn xml_parses_and_renders_template() {
         Some("/tmp/a.txt")
     );
 
-    let template = parser.tool_call_template(&ToolKind::Edit);
+    let template = parser.tool_call_template(&manualaid_core::parser::ToolTemplate::from_kind(
+        ToolKind::Edit,
+    ));
     assert!(template.contains("<edit>"));
     assert!(template.contains("<file_path>"));
 }
@@ -344,7 +346,9 @@ fn registry_fixed_mode_switches_parser() {
         .set_mode(RegistryMode::Fixed(ToolCallFormat::JsonCodeblock))
         .unwrap();
     let template = registry
-        .render_tool_call_template(&ToolKind::Write)
+        .render_tool_call_template(&manualaid_core::parser::ToolTemplate::from_kind(
+            ToolKind::Write,
+        ))
         .unwrap();
     assert!(template.contains("\"tool_use\": \"write\""));
     assert_eq!(registry.mode().unwrap().label(), "json-codeblock");
@@ -442,7 +446,11 @@ fn registry_set_enabled_tools_ignores_unknown_names() {
 #[test]
 fn registry_default_and_auto_render() {
     let registry = FormatRegistry::default();
-    let template = registry.render_tool_call_template(&ToolKind::Read).unwrap();
+    let template = registry
+        .render_tool_call_template(&manualaid_core::parser::ToolTemplate::from_kind(
+            ToolKind::Read,
+        ))
+        .unwrap();
     assert!(template.contains("\"tool_use\": \"read\""));
 }
 
@@ -818,7 +826,9 @@ fn invoke_parses_and_renders_template() {
         Some("/tmp/a.txt")
     );
 
-    let template = parser.tool_call_template(&ToolKind::Edit);
+    let template = parser.tool_call_template(&manualaid_core::parser::ToolTemplate::from_kind(
+        ToolKind::Edit,
+    ));
     assert!(template.contains("<invoke name=\"edit\">"));
     assert!(template.contains("<parameter name=\"file_path\">"));
 }
@@ -1095,7 +1105,9 @@ fn registry_fixed_mode_switches_to_invoke() {
         .set_mode(RegistryMode::Fixed(ToolCallFormat::Invoke))
         .unwrap();
     let template = registry
-        .render_tool_call_template(&ToolKind::Write)
+        .render_tool_call_template(&manualaid_core::parser::ToolTemplate::from_kind(
+            ToolKind::Write,
+        ))
         .unwrap();
     assert!(template.contains("<invoke name=\"write\">"));
     assert_eq!(registry.mode().unwrap().label(), "invoke");
