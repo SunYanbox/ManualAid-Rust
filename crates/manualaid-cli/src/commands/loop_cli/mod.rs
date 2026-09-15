@@ -244,17 +244,11 @@ async fn loop_main_at(
             mode_hint(options.mode),
             i18n::t_str("cli.loop.menu_prompt")
         );
-        // A dedicated clone for the editor closure: `spawn_blocking` takes
-        // ownership of it, and `path_cache` itself must stay available for
-        // the path-action round below.
-        // 为编辑器闭包单独克隆一份：`spawn_blocking` 会取得其所有权，而
-        // `path_cache` 本身须留给下方的路径引用回合使用。
-        let editor_cache = path_cache.clone();
         #[cfg(test)]
         let line = {
             let root = current_dir;
             match read_line_with_completion(&prompt, Some(input_history.clone()), |state| {
-                completion_candidates(state, root, &editor_cache)
+                completion_candidates(state, root, &path_cache)
             }) {
                 Some(line) => line,
                 None => break,
@@ -264,9 +258,15 @@ async fn loop_main_at(
         let line = {
             let root = current_dir.to_path_buf();
             let input_history = input_history.clone();
+            // `spawn_blocking` takes ownership of the closure, so it needs
+            // its own cache reference; the outer `path_cache` stays
+            // available for the path round below.
+            // `spawn_blocking` 会取得闭包的所有权，因此需要自己的一份缓存
+            // 引用；外层 `path_cache` 留给下方的路径回合使用。
+            let path_cache = path_cache.clone();
             match tokio::task::spawn_blocking(move || {
                 read_line_with_completion(&prompt, Some(input_history), |state| {
-                    completion_candidates(state, &root, &editor_cache)
+                    completion_candidates(state, &root, &path_cache)
                 })
             })
             .await
