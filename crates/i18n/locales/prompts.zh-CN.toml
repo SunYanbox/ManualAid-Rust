@@ -123,7 +123,7 @@ dynamic-context = """
 </dynamic-context>
 """
 
-todo-context-lead = "以下 TODO 列表尚未完成。不要主动推进它们；仅当当前没有任何任务时，才可以提出来让用户知晓。仅当用户明确要求继续其中某项时，再读取 `<project-root>/.ManualAid/todos/<subject>.json` 来加载该 TODO。"
+todo-context-lead = "以下 TODO 列表尚未完成。不要主动推进它们。当前任务与其中某项明显相关时，请立即读取 `<project-root>/.ManualAid/todos/<subject>.json` 加载该 TODO，使其任务为当前工作提供依据；当前没有任何任务时，可将其提出让用户知晓。"
 
 context-files-reminder = """
 以下工作区说明可能与你当前的工作相关。适用时请将其作为指导，更具体的指令优先于更宽泛的指令，并且它们不会覆盖系统、开发者或用户的直接指令。
