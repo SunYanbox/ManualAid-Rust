@@ -123,6 +123,7 @@ desc = """
 - 列表存放于 `<workspace_root>/.ManualAid/todos/<subject>.json`，`subject` 同时充当文件名。属于同一项工作的多次调用请复用同一个 `subject`。
 - 尚不存在的主题只有在你传入 `create: true` 时才会创建；否则调用会报告列表未创建，并可能列出可复用的相似既有主题。
 - 当所有任务均为 `completed` 且 `linked_plan` 指向存在的计划文件时，列表与该计划会被归档进各自的 `done/` 目录。工作仍在进行时请至少保留一项未完成任务。
+- 当这项工作在 `<workspace_root>/.ManualAid/plans/` 下已有计划文件时，请在首次创建列表的调用中传入 `linked_plan`，之后继续传入。未绑定计划的列表不会出现在之后会话的 `<unfinished_todos>` 中。
 """
 
 [tool.todo_write.param.subject]
@@ -138,7 +139,7 @@ desc = """
 """
 
 [tool.todo_write.param.linked_plan]
-desc = "可选的计划文件名（不含 `.md` 扩展名），位于 `.ManualAid/plans/` 根下。传入时该文件必须已存在；不传则保留列表中已有的绑定。"
+desc = "计划文件名（不含 `.md` 扩展名），位于 `.ManualAid/plans/` 根下。传入时该文件必须已存在。工作已有计划时，请在首次创建列表的调用中传入，使两者保持绑定；后续调用可省略，以保留已存储的绑定。"
 
 [tool.todo_write.param.create]
 desc = "传入 `true` 以创建尚不存在的主题。新主题的首次调用必须为 `true`；列表已存在时该参数被忽略。"

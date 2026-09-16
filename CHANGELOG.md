@@ -6,9 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-16
+
 ### Changed
 
 - `@` path completion keeps up with the project tree: the cached view is rebuilt on the next query once it turns 30 seconds old, or invalidated when a referenced path fails to resolve, so entries added, deleted or moved since the last rebuild appear or disappear in later suggestions (`complete/paths.rs`)
+- The command integration tests no longer leak the process-wide styling switch into each other, and the guard covering it restores the switch for every test that drives `run_main` (`crates/manualaid-cli/tests/commands.rs`, `tests/commands/loop.rs`, `tests/commands/handlers/`)
+- The process-wide test guards are now taken in one fixed order -- console capture, then style, then locale -- so the added locking cannot deadlock the test binary (`crates/manualaid-cli/tests/commands.rs`)
+- A truncated round lists a resumable `offset`/`limit` pair into the staged `.ManualAid/temp/<sha256>.md` copy for every result the agent has not fully seen: the offset backs off `CONTEXT_LINES_BEFORE_CUT` lines before the first hidden line and the limit runs through that result's block footer, while a result shown whole keeps a plain start line (`manualaid-ws/src/prompt.rs`)
+- The staged-output list heading reads as a location rather than a start line, and the heading and entry texts come from the `truncated_persisted_entry` / `truncated_persisted_entry_resume` locales instead of being formatted in Rust (`manualaid-ws/src/prompt.rs`, `i18n/locales/common.{en,zh-CN}.toml`)
+- When a round is too long to post in full, the truncation warning no longer asks the agent to adjust its tool call parameters (`i18n/locales/common.{en,zh-CN}.toml`)
+- The unfinished-TODO context now has the agent read a list as soon as the current task is clearly related to it, instead of only when the user explicitly asks to continue that list (`i18n/locales/prompts.{en,zh-CN}.toml`)
+- The `todo_write` tool description asks for `linked_plan` on the first call that creates a list whose work already has a plan, and the parameter states the same timing, so the list keeps appearing under `<unfinished_todos>` in later sessions (`i18n/locales/tools.{en,zh-CN}.toml`)
+
+### Fixed
+
+- The staged-output notice reported every result after the first one line early, placing the recorded start line on the blank separator between blocks, so a `read` at that offset began with an empty line (`manualaid-ws/src/prompt.rs`)
 
 ## [0.15.0] - 2026-09-15
 

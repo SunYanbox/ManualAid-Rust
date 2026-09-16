@@ -2,7 +2,7 @@
 //! 公共命令分发与退出码逻辑的集成测试。
 
 use std::fs;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use clap::Parser;
 
@@ -22,6 +22,106 @@ static LOCALE_LOCK: Mutex<()> = Mutex::new(());
 /// Serializes tests that toggle the process-wide style state.
 /// 串行化切换进程级样式状态的测试。
 static STYLE_LOCK: Mutex<()> = Mutex::new(());
+
+// A test may need more than one of the process-wide guards, so they must be
+// taken in one order everywhere: console capture first, then the style lock,
+// then the locale lock. Taking them in a mixed order lets two tests each hold
+// what the other waits for, which deadlocks the whole binary.
+// 单个测试可能同时需要多个进程级守卫，因此各处必须按同一顺序取得：先控制台
+// 捕获、再样式锁、最后 locale 锁。顺序不一致会让两个测试各持对方所需，导致
+// 整个二进制死锁。
+
+#[test]
+fn style_guard_restores_the_switch_set_inside_it() {
+    manualaid_cli::style::set_enabled(true);
+    {
+        let _style = style_guard();
+        manualaid_cli::style::set_enabled(false);
+    }
+    assert!(
+        manualaid_cli::style::is_enabled(),
+        "the guard must restore the switch it entered with"
+    );
+}
+
+#[test]
+fn style_guard_disabled_forces_the_switch_off() {
+    let style = style_guard();
+    // Standing in for the value `auto_init` leaves behind, written while the
+    // lock is held so no other test can observe it.
+    // 代表 `auto_init` 留下的值；写入发生在持锁期间，其他测试观察不到。
+    manualaid_cli::style::set_enabled(true);
+    style.disable();
+    assert!(
+        !manualaid_cli::style::is_enabled(),
+        "a disabled guard must hand out an off switch"
+    );
+}
+
+#[test]
+fn style_guard_serializes_access_to_the_switch() {
+    // Only the held side is asserted: once this guard drops, another test may
+    // legitimately take the lock, so the released side cannot be observed by
+    // probing it from here.
+    // 只断言持有侧：本守卫 drop 后其他测试可以合法地取得该锁，因此释放侧
+    // 无法在这里用探测的方式观察。
+    let _style = style_guard();
+    assert!(
+        STYLE_LOCK.try_lock().is_err(),
+        "a live guard must hold the style lock"
+    );
+}
+
+/// Holds the process-wide style lock for one test and restores the switch to
+/// the value it entered with.
+///
+/// `run_main` calls `style::auto_init()`, which overwrites the process-wide
+/// switch and never restores it, so a test driving it would otherwise leave
+/// every test that follows running under a styling state it never asked for.
+/// `run_main` 会调用 `style::auto_init()`，它会覆盖进程级开关且不还原，
+/// 因此驱动它的测试否则会让其后的每个测试运行在自己未曾请求的样式状态下。
+struct StyleGuard {
+    _lock: MutexGuard<'static, ()>,
+    original: bool,
+}
+
+impl StyleGuard {
+    /// Force styling off for the rest of the guard's lifetime, so a test
+    /// asserting plain output does not depend on the value it entered with.
+    /// 在守卫剩余生命周期内强制关闭样式，使断言纯文本输出的测试不依赖进入值。
+    fn disable(&self) {
+        manualaid_cli::style::set_enabled(false);
+    }
+}
+
+impl Drop for StyleGuard {
+    fn drop(&mut self) {
+        manualaid_cli::style::set_enabled(self.original);
+    }
+}
+
+/// Take the style lock and restore the switch when the guard drops.
+/// 取得样式锁，并在守卫 drop 时还原开关。
+fn style_guard() -> StyleGuard {
+    let _lock = STYLE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    StyleGuard {
+        _lock,
+        original: manualaid_cli::style::is_enabled(),
+    }
+}
+
+/// Take the style lock with styling forced off for the guard's lifetime, so a
+/// test asserting on plain output sees neither a concurrent toggle nor a value
+/// leaked before it started.
+/// 取得样式锁，并在守卫存活期间强制关闭样式，使断言纯文本输出的测试既不会
+/// 观察到并发的切换，也不受此前泄漏值的影响。
+fn style_guard_disabled() -> StyleGuard {
+    let guard = style_guard();
+    guard.disable();
+    guard
+}
 
 fn parse(args: &[&str]) -> Cli {
     Cli::try_parse_from(args).expect("args should parse")
@@ -55,6 +155,10 @@ fn run_main_returns_success_for_no_args() {
 
 #[test]
 fn run_main_returns_failure_for_invalid_restore() {
+    // `run_main` runs `style::auto_init()`, so the switch must be restored
+    // before this test releases the lock.
+    // `run_main` 会执行 `style::auto_init()`，因此本测试释放锁前必须还原开关。
+    let _style = style_guard();
     let _guard = LOCALE_LOCK.lock().unwrap();
     i18n::set_locale("en");
     let dir = common::TempDir::new("run-main-err");
@@ -138,6 +242,7 @@ fn run_debug_shell_dispatches_with_scripted_confirm() {
 
 #[test]
 fn run_debug_shell_denied_command_fails() {
+    let _style = style_guard();
     let _guard = LOCALE_LOCK.lock().unwrap();
     i18n::set_locale("en");
     let cli = parse(&["manualaid-cli", "debug", "shell", "rm -rf /"]);

@@ -1,8 +1,8 @@
 //! Tests for session summary, tool history and preview truncation.
 //! 会话摘要、工具历史与预览截断的测试。
 
+use crate::LOCALE_LOCK;
 use crate::common;
-use crate::{LOCALE_LOCK, STYLE_LOCK};
 use manualaid_cli::commands::loop_cli::{
     copy_round_result_with_provider, print_session_summary, push_test_input, show_tool_history,
     truncate_preview_lines,
@@ -61,14 +61,10 @@ async fn copy_preview_is_indented_and_collapsed() {
     let mock = MockClipboard::new();
     let root = common::TempDir::new("copy-preview-indent");
     let session = super::session_with_round(root.path()).await;
-    let _style_lock = STYLE_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _style = crate::style_guard_disabled();
     let _locale_lock = LOCALE_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let _style_guard = super::StyleGuard::new();
-    manualaid_cli::style::set_enabled(false);
     i18n::set_locale("en");
     push_test_input(&[super::LATEST_ROUND_INDEX]);
     copy_round_result_with_provider(&mock, root.path(), &session, 100);
@@ -89,14 +85,10 @@ async fn copy_preview_is_indented_and_collapsed() {
 #[allow(clippy::await_holding_lock)]
 async fn show_tool_history_lists_newest_first() {
     let _capture = manualaid_cli::console::capture();
-    let _style_lock = STYLE_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _style = crate::style_guard_disabled();
     let _locale_lock = LOCALE_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let _style_guard = super::StyleGuard::new();
-    manualaid_cli::style::set_enabled(false);
     i18n::set_locale("en");
     let root = common::TempDir::new("history");
     let mut session = SessionLog::new();

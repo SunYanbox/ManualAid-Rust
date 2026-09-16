@@ -454,6 +454,13 @@ fn skills_list_text(skills: &[Skill]) -> String {
 /// 任何被截断的单个工具结果最少保留的字符数。不超过该值的结果永不被缩短。
 const MIN_KEEP_CHARS: usize = 1000;
 
+/// Lines of already-shown context repeated when a resume hint points back
+/// into the persisted copy, so the agent rejoins the text a little before
+/// the cut rather than exactly at it.
+/// 续读指引指回暂存副本时重复的、已显示过的上下文行数，使代理在截断点
+/// 稍前处重新接入文本，而非恰好从截断点开始。
+const CONTEXT_LINES_BEFORE_CUT: usize = 2;
+
 /// A tool result split into its XML wrapper parts and the variable content
 /// for easy size accounting and truncation.
 /// 将工具结果拆分为 XML 包裹部分与可变内容部分，便于尺寸计算与截断。
@@ -474,13 +481,18 @@ struct ResultPart {
 /// `MIN_KEEP_CHARS` characters; shorter results stay whole. Each
 /// truncated result carries a notice with its removed character count, and
 /// a round-level warning is appended at the end so both the user and the
-/// LLM know content was omitted.
+/// LLM know content was omitted. That warning is followed by one list entry
+/// per result pointing into the persisted copy whenever the outputs were
+/// successfully saved, so the omitted lines can be read back with the `read`
+/// tool's `offset`/`limit` parameters.
 /// 将一轮执行结果渲染为 XML 包裹文本，供回贴到外部 LLM 聊天。字符限制
 /// 只作用于各工具输出之和（不计 XML 包裹部分）。当该和超过
 /// `max_result_chars` 时，每个超过 `MIN_KEEP_CHARS` 字符的结果按原始
 /// 大小比例截断，且至少保留 `MIN_KEEP_CHARS` 字符；较短的结果保持
 /// 完整。每个被截断的结果附带一条含被截断字符数的标注，末尾追加轮次
-/// 警告，让用户与 LLM 都能知晓内容已被省略。
+/// 警告，让用户与 LLM 都能知晓内容已被省略。暂存成功时，警告之后为每个
+/// 结果附一条指向暂存副本的清单条目，使被省略的行可用 `read` 工具的
+/// `offset`/`limit` 参数读回。
 pub fn format_results(
     results: &[ToolResult],
     max_result_chars: usize,
@@ -518,13 +530,6 @@ pub fn format_results(
             .join(separator);
     }
 
-    let mut round_warning = format!(
-        "\n\n{}",
-        i18n::t_str("truncated_round_warning")
-            .replace("%{max_chars}", &max_result_chars.to_string())
-            .replace("%{total_chars}", &content_total.to_string())
-    );
-
     // Persist the complete un-truncated tool outputs to
     // `<workspace_root>/.ManualAid/temp/<sha256>.md` so the model can still
     // inspect the omitted content when needed. Failures are silent: the
@@ -532,27 +537,14 @@ pub fn format_results(
     // 将未截断的完整工具输出写入 `<workspace_root>/.ManualAid/temp/<sha256>.md`，
     // 使模型在需要时仍可查看被省略的内容。写文件失败时静默降级：截断文本
     // 保持可用，复制流程不被中断。
-    if let Some((temp_path, start_lines)) = persist_full_output(&parts, workspace_root) {
-        let tools: Vec<String> = parts
-            .iter()
-            .enumerate()
-            .map(|(i, part)| {
-                let display = if let Some(action) = &part.user_action {
-                    format!("{} ({})", action.kind.as_str(), action.label)
-                } else if part.params_summary.is_empty() {
-                    part.tool_name.clone()
-                } else {
-                    format!("{} ({})", part.tool_name, part.params_summary)
-                };
-                format!("- {display}: line {}", start_lines[i])
-            })
-            .collect();
-        round_warning.push_str(
-            &i18n::t_str("truncated_persisted_notice")
-                .replace("%{temp_path}", &temp_path.to_string_lossy())
-                .replace("%{tools}", &tools.join("\n")),
-        );
-    }
+    let persisted = persist_full_output(&parts, workspace_root);
+
+    // `Some(line)` marks the first temp-file line the agent has not seen, so
+    // the list entry can point them back at it; `None` means the result is
+    // shown whole and needs no pointer.
+    // `Some(line)` 表示代理尚未看到的首个临时文件行，供清单条目指回该处；
+    // `None` 表示结果完整显示、无需指引。
+    let mut hidden: Vec<Option<usize>> = vec![None; parts.len()];
 
     // Short results are never shortened and do not take part in the
     // proportional split; they still occupy their full length in the budget.
@@ -568,13 +560,27 @@ pub fn format_results(
     // remaining content fits, then append the round warning.
     // 没有可缩短的结果：从末尾整块丢弃，直到剩余内容放得下，再追加警告。
     if eligible.is_empty() {
-        let mut result = String::new();
+        let mut shown = 0usize;
         let mut used = 0usize;
         for p in &parts {
             let content_len = p.content.chars().count();
             if used + content_len > max_result_chars {
                 break;
             }
+            used += content_len;
+            shown += 1;
+        }
+        // A dropped result was never shown at all, so the point to resume
+        // from is its own first line.
+        // 被丢弃的结果完全未显示，因此从它自己的首行续读。
+        if let Some((_, ranges)) = &persisted {
+            for (slot, range) in hidden.iter_mut().zip(ranges).skip(shown) {
+                *slot = Some(range.start);
+            }
+        }
+
+        let mut result = String::new();
+        for p in parts.iter().take(shown) {
             let block = format!("{}{}{}", p.header, p.content, p.footer);
             if result.is_empty() {
                 result.push_str(&block);
@@ -582,9 +588,14 @@ pub fn format_results(
                 result.push_str(separator);
                 result.push_str(&block);
             }
-            used += content_len;
         }
-        result.push_str(&round_warning);
+        result.push_str(&round_tail(
+            &parts,
+            &hidden,
+            persisted.as_ref(),
+            max_result_chars,
+            content_total,
+        ));
         return result;
     }
 
@@ -628,6 +639,12 @@ pub fn format_results(
         }
     }
 
+    if let Some((_, ranges)) = &persisted {
+        for &i in &eligible {
+            hidden[i] = Some(first_hidden_line(&parts[i], &ranges[i], allocs[i]));
+        }
+    }
+
     let mut blocks: Vec<String> = Vec::with_capacity(parts.len());
     for (i, part) in parts.iter().enumerate() {
         if eligible.contains(&i) {
@@ -647,8 +664,107 @@ pub fn format_results(
     }
 
     let mut result = blocks.join(separator);
-    result.push_str(&round_warning);
+    result.push_str(&round_tail(
+        &parts,
+        &hidden,
+        persisted.as_ref(),
+        max_result_chars,
+        content_total,
+    ));
     result
+}
+
+/// Render the round-level truncation warning, followed by one list entry per
+/// result when the outputs were persisted. Entries let the agent resume from
+/// the temp file with the `read` tool; see [`persisted_entry`].
+/// 渲染轮次截断警告；暂存成功时再附上每个结果一条的清单条目。条目使代理
+/// 可用 `read` 工具从临时文件续读；见 [`persisted_entry`]。
+fn round_tail(
+    parts: &[ResultPart],
+    hidden: &[Option<usize>],
+    persisted: Option<&(PathBuf, Vec<PartRange>)>,
+    max_result_chars: usize,
+    content_total: usize,
+) -> String {
+    let mut tail = format!(
+        "\n\n{}",
+        i18n::t_str("truncated_round_warning")
+            .replace("%{max_chars}", &max_result_chars.to_string())
+            .replace("%{total_chars}", &content_total.to_string())
+    );
+
+    if let Some((temp_path, ranges)) = persisted {
+        let tools: Vec<String> = parts
+            .iter()
+            .zip(ranges)
+            .enumerate()
+            .map(|(i, (part, range))| persisted_entry(&persisted_label(part), range, hidden[i]))
+            .collect();
+        tail.push_str(
+            &i18n::t_str("truncated_persisted_notice")
+                .replace("%{temp_path}", &temp_path.to_string_lossy())
+                .replace("%{tools}", &tools.join("\n")),
+        );
+    }
+
+    tail
+}
+
+/// Label identifying one result inside the persisted-output list.
+/// 在暂存输出清单中标识单个结果的标签。
+fn persisted_label(part: &ResultPart) -> String {
+    if let Some(action) = &part.user_action {
+        format!("{} ({})", action.kind.as_str(), action.label)
+    } else if part.params_summary.is_empty() {
+        part.tool_name.clone()
+    } else {
+        format!("{} ({})", part.tool_name, part.params_summary)
+    }
+}
+
+/// Render one persisted-output list entry. A result shown whole only needs its
+/// start line; a result the agent has not fully seen gets an `offset`/`limit`
+/// pair spanning from two lines before the first unseen line through the end
+/// of that result's block, so the resumed read repeats a little context and
+/// stops at the block footer.
+/// 渲染单条暂存输出清单条目。完整显示的结果只需起始行；尚未完全看到的结果
+/// 给出 `offset`/`limit`，范围从首个未显示行往前两行起、到该结果块的末尾止，
+/// 使续读重复一点上下文并停在块尾部。
+fn persisted_entry(label: &str, range: &PartRange, first_hidden: Option<usize>) -> String {
+    let line = range.start.to_string();
+    let Some(hidden) = first_hidden else {
+        return t_fmt(
+            "truncated_persisted_entry",
+            &[("tool", label), ("line", &line)],
+        );
+    };
+
+    let offset = hidden.saturating_sub(CONTEXT_LINES_BEFORE_CUT).max(1);
+    let limit = range.end.saturating_sub(offset) + 1;
+    t_fmt(
+        "truncated_persisted_entry_resume",
+        &[
+            ("tool", label),
+            ("line", &line),
+            ("offset", &offset.to_string()),
+            ("limit", &limit.to_string()),
+        ],
+    )
+}
+
+/// The first line of `part`'s block that a truncated output does not show.
+/// The header occupies its own lines; the kept prefix ends on the line where
+/// the cut fell, so that whole line is unseen from the cut point onwards.
+/// 截断输出未显示的、`part` 块的首个行号。头部独占若干行；保留前缀结束于
+/// 截断点所在行，因此该整行自截断点起即未显示。
+fn first_hidden_line(part: &ResultPart, range: &PartRange, kept_chars: usize) -> usize {
+    let kept_newlines = part
+        .content
+        .chars()
+        .take(kept_chars)
+        .filter(|c| *c == '\n')
+        .count();
+    range.start + part.header.matches('\n').count() + kept_newlines
 }
 
 /// Lowercase hex encoding of `SHA-256(content)` (64 hex characters).
@@ -660,36 +776,62 @@ fn sha256_hex(content: &str) -> String {
     hash.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// The span of lines one result block occupies in the persisted temp file.
+/// 单个结果块在暂存临时文件中占用的行范围。
+struct PartRange {
+    /// First line of the block, its `[TOOL_RESULT ...]` header included.
+    /// 块的首行，含 `[TOOL_RESULT ...]` 头部。
+    start: usize,
+    /// Last line holding any of the block's characters, footer included.
+    /// 含块中字符的末行，含尾部。
+    end: usize,
+}
+
 /// Persist the complete un-truncated tool outputs to
 /// `<workspace_root>/.ManualAid/temp/<sha256>.md`. Returns the written file
-/// path and the 1-based start line of each part within that file, or `None`
+/// path and the 1-based line span of each part within that file, or `None`
 /// when the directory cannot be created or the write fails.
 /// 将未截断的完整工具输出写入 `<workspace_root>/.ManualAid/temp/<sha256>.md`。
-/// 返回写入的文件路径以及每个部分在该文件中的 1 基起始行号；目录创建或
+/// 返回写入的文件路径以及每个部分在该文件中的 1 基行范围；目录创建或
 /// 写入失败时返回 `None`。
 fn persist_full_output(
     parts: &[ResultPart],
     workspace_root: &Path,
-) -> Option<(PathBuf, Vec<usize>)> {
+) -> Option<(PathBuf, Vec<PartRange>)> {
     let separator = "\n\n";
     let mut full = String::new();
-    let mut start_lines = Vec::with_capacity(parts.len());
+    let mut ranges = Vec::with_capacity(parts.len());
+    // Advance a running line number instead of recounting `full` per part:
+    // the separator must be accounted for *before* a block's first line is
+    // recorded, and counting the accumulated text would make it quadratic.
+    // 用运行中的行号推进，而不是逐块重数 `full`：分隔符必须在记录块的
+    // 首行之前计入，且重复统计累积文本会退化为平方复杂度。
+    let mut line = 1usize;
     for (i, part) in parts.iter().enumerate() {
-        // Record the 1-based start line before appending this part so the
-        // first block starts at line 1.
-        // 在追加当前块之前记录 1 基起始行号，使第一个块从第 1 行开始。
-        start_lines.push(full.lines().count() + 1);
         if i > 0 {
             full.push_str(separator);
+            line += separator.matches('\n').count();
         }
-        full.push_str(&format!("{}{}{}", part.header, part.content, part.footer));
+        let block = format!("{}{}{}", part.header, part.content, part.footer);
+        let newlines = block.matches('\n').count();
+        let start = line;
+        // Blocks close with the footer's `]`, so a block never ends on a
+        // newline; the guard keeps the span correct if that ever changes.
+        // 块以尾部的 `]` 收束，故永不结束于换行；该保护使行范围在假设
+        // 变化时仍然正确。
+        let end = start + newlines - usize::from(block.ends_with('\n'));
+        ranges.push(PartRange { start, end });
+        full.push_str(&block);
+        // The next character lands one line further on per newline emitted.
+        // 每输出一个换行，下一个字符所在行号前进一行。
+        line = start + newlines;
     }
 
     let temp_dir = workspace_root.join(".ManualAid").join("temp");
     std::fs::create_dir_all(&temp_dir).ok()?;
     let file_path = temp_dir.join(format!("{}.md", sha256_hex(&full)));
     std::fs::write(&file_path, &full).ok()?;
-    Some((file_path, start_lines))
+    Some((file_path, ranges))
 }
 
 /// Render the opening bracket line of a tool result. The parameter summary

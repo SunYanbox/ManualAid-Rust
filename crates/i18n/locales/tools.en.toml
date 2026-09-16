@@ -123,6 +123,7 @@ Create or refresh a persistent TODO list.
 - The list is stored at `<workspace_root>/.ManualAid/todos/<subject>.json`, and `subject` doubles as the file name. Reuse the same `subject` across calls that belong to the same piece of work.
 - A subject that does not exist yet is only created when you pass `create: true`; otherwise the call reports that the list was not created and may list similar existing subjects you could reuse instead.
 - When every task is `completed` and `linked_plan` points at an existing plan file, the list and that plan are archived into the matching `done/` directory. Keep at least one task unfinished while the work is still going on.
+- When the work already has a plan file under `<workspace_root>/.ManualAid/plans/`, pass `linked_plan` on the first call that creates the list and keep passing it afterwards. A list without a linked plan does not appear under `<unfinished_todos>` in later sessions.
 """
 
 [tool.todo_write.param.subject]
@@ -138,7 +139,7 @@ The full task list, given as a JSON array of objects: `[{"task": "...", "status"
 """
 
 [tool.todo_write.param.linked_plan]
-desc = "Optional plan file name without the `.md` extension, located directly under `.ManualAid/plans/`. It must already exist when passed. Omitting it keeps the binding already stored on the list."
+desc = "Plan file name without the `.md` extension, located directly under `.ManualAid/plans/`. It must already exist when passed. Pass it on the first call that creates the list when the work already has a plan, so the two stay bound; later calls may omit it to keep the stored binding."
 
 [tool.todo_write.param.create]
 desc = "Pass `true` to create a subject that does not exist yet. Required on the first call for a new subject; ignored once the list exists."
