@@ -13,26 +13,6 @@ use manualaid_core::executor::Executor;
 use manualaid_core::parser::FormatRegistry;
 use manualaid_ws::session::{RoundStats, SessionLog};
 
-/// Restores the process-wide styling switch to its previous value on drop.
-/// 在 drop 时将进程级样式开关恢复为进入前的值。
-struct StyleGuard {
-    original: bool,
-}
-
-impl StyleGuard {
-    fn new() -> Self {
-        Self {
-            original: manualaid_cli::style::is_enabled(),
-        }
-    }
-}
-
-impl Drop for StyleGuard {
-    fn drop(&mut self) {
-        manualaid_cli::style::set_enabled(self.original);
-    }
-}
-
 /// Round index selecting the most recent (and only) round in these tests.
 /// 这些测试中选择最近（且唯一）轮次的轮次索引。
 const LATEST_ROUND_INDEX: &str = "1";

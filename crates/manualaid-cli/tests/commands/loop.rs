@@ -63,6 +63,11 @@ async fn execution_phase_draws_no_progress_line_under_capture() {
     // 控制台捕获期间进度行被禁用，因此脚本轮次的输出绝不含 `(Ns)` 前缀
     // 或光标转义序列。
     let capture = manualaid_cli::console::capture();
+    // Styling is forced off so any escape found below belongs to the progress
+    // line rather than to the approval preview's own coloring.
+    // 强制关闭样式，使下方找到的任何转义序列都来自进度行，而非审批预览
+    // 自身的着色。
+    let _style = crate::style_guard_disabled();
     let registry = FormatRegistry::new();
     let (_calls, results, _stats) = execute_round_with_approval(
         &executor(&std::env::temp_dir()),
@@ -75,6 +80,34 @@ async fn execution_phase_draws_no_progress_line_under_capture() {
     assert_eq!(results.len(), 1);
     let text = capture.text();
     assert!(!text.contains("(0s)"), "unexpected progress line: {text:?}");
+    assert!(!text.contains("\x1b["), "unexpected escape: {text:?}");
+}
+
+#[tokio::test]
+async fn capture_round_stays_plain_when_the_switch_was_left_on() {
+    // `run_main` calls `style::auto_init()`, which turns styling on for the
+    // whole process whenever the harness's stdout is a terminal and never
+    // restores it, so a capture that does not force the switch off sees escape
+    // sequences it never asked for. The value is raised under the lock, which
+    // is also what keeps this test from disturbing the ones running beside it.
+    // `run_main` 会调用 `style::auto_init()`，只要测试进程的 stdout 是终端
+    // 就会为整个进程打开样式且不还原，因此不强制关闭开关的捕获会看到自己
+    // 并未请求的转义序列。开关在持锁期间被抬起，这也保证本测试不会干扰
+    // 同时运行的其它测试。
+    let capture = manualaid_cli::console::capture();
+    let style = crate::style_guard();
+    manualaid_cli::style::set_enabled(true);
+    style.disable();
+    let (_calls, results, _stats) = execute_round_with_approval(
+        &executor(&std::env::temp_dir()),
+        &FormatRegistry::new(),
+        "<read><file_path>C:/windows/win.ini</file_path></read>",
+        |_| Approval::Approve,
+    )
+    .await
+    .unwrap();
+    assert_eq!(results.len(), 1);
+    let text = capture.text();
     assert!(!text.contains("\x1b["), "unexpected escape: {text:?}");
 }
 
