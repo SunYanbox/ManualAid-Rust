@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-16
+
 ### Changed
 
 - `@` path completion keeps up with the project tree: the cached view is rebuilt on the next query once it turns 30 seconds old, or invalidated when a referenced path fails to resolve, so entries added, deleted or moved since the last rebuild appear or disappear in later suggestions (`complete/paths.rs`)
