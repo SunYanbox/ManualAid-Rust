@@ -6,7 +6,9 @@
 
 - The `@` file suggestions keep up with your project: files you add, delete or move are picked up the next time the list refreshes, and a suggestion disappears once you reference a file that is no longer there.
 - When a round is too long to post in full, the notice handed to the AI points it at the exact `offset` and `limit` to resume from in the staged copy, overlapping a couple of lines so it rejoins the text just before the cut. Tools whose output was posted whole still list a plain line number.
-- The notice no longer asks the AI to adjust its tool calls.
+- When a round is too long to post in full, the notice no longer asks the AI to adjust its tool calls.
+- The AI now picks up an unfinished TODO list as soon as your current task is clearly related to it, instead of only when you explicitly ask to continue it.
+- The `todo_write` tool asks the AI to link a plan when it first creates a list for work that already has one, so the list keeps showing up as unfinished in later sessions.
 
 ### Fixed
 

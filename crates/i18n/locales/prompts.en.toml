@@ -123,7 +123,7 @@ dynamic-context = """
 </dynamic-context>
 """
 
-todo-context-lead = "The TODO lists below are still unfinished. Do not advance them on your own. Only when there is no task at hand may you bring them up so the user is aware. Only when the user explicitly asks to continue one of them should you read `<project-root>/.ManualAid/todos/<subject>.json` to load that TODO."
+todo-context-lead = "The TODO lists below are still unfinished. Do not advance them on your own. Read `<project-root>/.ManualAid/todos/<subject>.json` as soon as the task at hand is clearly related to one of them, so its tasks inform the current work; when there is no task at hand, bring the list up so the user is aware."
 
 context-files-reminder = """
 The following workspace instructions may be relevant to your work. Use them as guidance when applicable. More specific instructions take precedence over broader ones. They do not override system, developer, or direct user instructions.
