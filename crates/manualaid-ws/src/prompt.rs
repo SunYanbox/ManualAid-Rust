@@ -133,7 +133,9 @@ pub fn tool_calling_format_description(registry: &FormatRegistry) -> String {
         "{}\n```func_calls\n{}\n```\n{}\n",
         i18n::t_str("cli.prompt.format_desc"),
         registry
-            .render_tool_call_template(&ToolKind::Read)
+            .render_tool_call_template(&manualaid_core::parser::ToolTemplate::from_kind(
+                ToolKind::Read,
+            ))
             .unwrap_or_default(),
         i18n::t_str("cli.prompt.func_calls_notes")
     )
@@ -172,7 +174,42 @@ pub fn render_tools_list(config: &Config, registry: &FormatRegistry) -> String {
         }
 
         out.push_str("**Call template:**\n\n```func_calls\n");
-        if let Ok(template) = registry.render_tool_call_template(tool) {
+        if let Ok(template) = registry
+            .render_tool_call_template(&manualaid_core::parser::ToolTemplate::from_kind(*tool))
+        {
+            out.push_str(&template);
+        }
+        out.push_str("\n```\n\n");
+    }
+
+    // MCP tools follow the built-ins: they are enabled per server rather than
+    // per tool, so the `[tools]` switches do not apply to them.
+    // MCP 工具列在内置工具之后：它们按服务器而非按工具启用，因此
+    // `[tools]` 开关对其不适用。
+    for tool in manualaid_core::mcp::enabled_tools() {
+        let _ = write!(out, "## {}\n\n{}\n\n", tool.exposed_name, tool.description);
+
+        if !tool.params.is_empty() {
+            out.push_str("**Parameters:**\n");
+            for param in &tool.params {
+                let requirement = if param.required {
+                    "required"
+                } else {
+                    "optional"
+                };
+                let _ = writeln!(
+                    out,
+                    "- `{}` (`{}`) ({requirement}): {}",
+                    param.name, param.kind, param.description
+                );
+            }
+            out.push('\n');
+        }
+
+        out.push_str("**Call template:**\n\n```func_calls\n");
+        if let Ok(template) = registry
+            .render_tool_call_template(&manualaid_core::parser::ToolTemplate::from_mcp(&tool))
+        {
             out.push_str(&template);
         }
         out.push_str("\n```\n\n");

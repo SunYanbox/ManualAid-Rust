@@ -71,7 +71,9 @@ fn parameter_order_preserved() {
 
 #[test]
 fn template_contains_invoke_and_parameter_tags() {
-    let template = InvokeParser.tool_call_template(&ToolKind::Read);
+    let template = InvokeParser.tool_call_template(&crate::parser::ToolTemplate::from_kind(
+        crate::tools::ToolKind::Read,
+    ));
     assert!(template.contains("<invoke name=\"read\">"));
     assert!(template.contains("<parameter name=\"file_path\">"));
     assert!(template.contains("</invoke>"));

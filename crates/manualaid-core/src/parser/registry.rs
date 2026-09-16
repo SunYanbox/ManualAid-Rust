@@ -20,11 +20,11 @@ use indexmap::IndexMap;
 
 use super::invoke::InvokeParser;
 use super::json_codeblock::JsonCodeblockParser;
+use super::template::ToolTemplate;
 use super::tool_set::EnabledToolSet;
 use super::traits::{ParseError, ParseOutcome, ToolCallFormatParser};
 use super::xml::XmlParser;
 use crate::tools::ToolCallFormat;
-use crate::tools::ToolKind;
 
 /// Mode that controls how the registry applies parsers to incoming text.
 /// 控制注册表如何将解析器应用于传入文本的模式。
@@ -104,13 +104,16 @@ impl FormatRegistry {
         }
     }
 
-    /// Set the available tools. The lookup structures are rebuilt only when
-    /// the effective set (unknown names dropped, order normalized) differs
-    /// from the cached fingerprint; an unchanged set reuses the cache.
-    /// 设置可用工具。只有当实际集合（未知名称已丢弃、顺序已规范化）与
-    /// 缓存指纹不同时才重建查找结构；集合不变时直接复用缓存。
+    /// Set the available tools: the built-in names given here plus every
+    /// tool contributed by an enabled MCP server. The lookup structures are
+    /// rebuilt only when the effective set (unknown names dropped, order
+    /// normalized) differs from the cached fingerprint; an unchanged set
+    /// reuses the cache.
+    /// 设置可用工具：此处给定的内置名称，加上每个已启用 MCP 服务器贡献的
+    /// 工具。只有当实际集合（未知名称已丢弃、顺序已规范化）与缓存指纹不同
+    /// 时才重建查找结构；集合不变时直接复用缓存。
     pub fn set_enabled_tools(&self, tool_names: &[String]) -> Result<(), ParseError> {
-        let set = EnabledToolSet::from_names(tool_names);
+        let set = EnabledToolSet::from_names_and_mcp(tool_names, &crate::mcp::enabled_tools());
         let fingerprint = set.tool_names();
         let mut guard = self.enabled_tools.write().map_err(|_| lock_poisoned())?;
         let changed = guard
@@ -186,7 +189,11 @@ impl FormatRegistry {
     /// Render a tool call template using the parser associated with the
     /// current mode.
     /// 使用与当前模式关联的解析器渲染工具调用模板。
-    pub fn render_tool_call_template(&self, tool: &ToolKind) -> Result<String, ParseError> {
+    ///
+    /// The caller supplies the [`ToolTemplate`] view, so the same entry point
+    /// serves built-in and MCP tools.
+    /// 调用方提供 [`ToolTemplate`] 视图，因此同一入口同时服务内置与 MCP 工具。
+    pub fn render_tool_call_template(&self, tool: &ToolTemplate<'_>) -> Result<String, ParseError> {
         let guard = self
             .parsers
             .read()

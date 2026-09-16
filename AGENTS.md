@@ -120,8 +120,9 @@
   - 各 crate 集成测试置于对应的 `tests/` 目录：`manualaid-core/tests/`、`manualaid-cli/tests/`、`manualaid-ws/tests/`、`i18n/tests/`；需要按模块或命令聚合时，可用 `#[path]` 引入子目录。
 
 - **提交前本地检查**：当本次提交包含代码或 `i18n` crate 的译文（locales）更改时，暂存要提交的文件前运行 `cargo fmt`、`cargo clippy -- -D warnings`、`cargo check` 三项（见「开发流程」）；纯文档变更无需运行。跨平台全量检查由 PR 的 CI（`.github/workflows/ci.yml`）承担，本地每次提交**不必**运行全量 `./scripts/ci.*`。
+- **本地只跑目标测试**：本地**禁止**运行 `cargo test --workspace`，也不运行任何会构建并执行全部测试二进制的等价命令；全量测试由 PR 的 CI 承担。需要本地验证时，只运行与本次改动相关的目标测试，例如 `cargo test -p <crate>`，或按模块、测试名进一步过滤。改动跨多个 crate 且确实需要一并验证时，逐个 `-p` 指定受影响的 crate，而不是放开到整个工作区。
 - 对不会污染系统环境的测试，覆盖率是**硬性约束**：能覆盖、可达、易测试的代码必须有测试；仅当代码不可达、易影响真实环境且无 Mock 可用时才可放弃。单个文件覆盖率**不低于 85%**，核心模块**不低于 95%**；总体覆盖率（Function、Line、Region 三项）均**不低于 80%**。
-- 全量覆盖率测试（`cargo llvm-cov`，同时运行测试并统计覆盖）优先于仅运行全量测试。
+- 覆盖率统计由 CI 承担。本地需要查看覆盖率时读取缓存的 `coverage_with_lines.txt`；确需本地重新统计时使用 `cargo llvm-cov`（同时运行测试并统计覆盖），**不要**先用 `cargo test --workspace` 跑一遍再单独统计。
 - 覆盖率结果会被缓存到`coverage_with_lines.txt`；仅查看覆盖率信息（如 TOTAL 行）时优先读取缓存，代码未更改时**不要**重跑全量覆盖率测试。
 
 ### 外部有状态资源隔离

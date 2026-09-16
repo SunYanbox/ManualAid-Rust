@@ -93,7 +93,9 @@ fn empty_input_yields_no_calls() {
 
 #[test]
 fn template_strips_to_valid_json() {
-    let template = JsonCodeblockParser.tool_call_template(&ToolKind::Read);
+    let template = JsonCodeblockParser.tool_call_template(&crate::parser::ToolTemplate::from_kind(
+        crate::tools::ToolKind::Read,
+    ));
     // 模板是 JSONC：去掉 `//` 行注释后应能作为严格 JSON 解析（模板中的字符串值不含 `//`）。
     let stripped: String = template
         .lines()
@@ -108,7 +110,9 @@ fn template_strips_to_valid_json() {
 
 #[test]
 fn template_marks_optional_params() {
-    let template = JsonCodeblockParser.tool_call_template(&ToolKind::Read);
+    let template = JsonCodeblockParser.tool_call_template(&crate::parser::ToolTemplate::from_kind(
+        crate::tools::ToolKind::Read,
+    ));
     assert!(template.contains("\"tool_use\": \"read\""));
     assert!(template.contains("// optional"));
     assert!(template.contains("escape"));

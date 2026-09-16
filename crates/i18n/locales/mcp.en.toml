@@ -1,0 +1,13 @@
+# Errors and approvals reported by the MCP client layer.
+# MCP 客户端层报告的错误与审批。
+
+[mcp.error]
+unknown_tool = "No enabled MCP server provides the tool `%{name}`"
+not_connected = "MCP server `%{server}` is not connected"
+connect_failed = "MCP server `%{server}` failed to connect: %{reason}"
+connect_timeout = "MCP server `%{server}` did not finish the handshake within %{seconds}s"
+call_failed = "MCP tool `%{tool}` failed: %{reason}"
+call_timeout = "MCP tool `%{tool}` did not return within %{seconds}s"
+
+[mcp.approval]
+required = "`%{tool}` is provided by an MCP server. Its description comes from that server and cannot be trusted, so it must be approved before it runs."
