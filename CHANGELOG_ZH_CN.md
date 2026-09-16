@@ -13,7 +13,9 @@
 - 进程级测试守卫改为按固定顺序取得——先控制台捕获、再样式、最后 locale——使新增的加锁不会让测试二进制死锁（`crates/manualaid-cli/tests/commands.rs`）
 - 截断轮次对代理尚未完全看到的结果给出指回暂存副本 `.ManualAid/temp/<sha256>.md` 的可续读 `offset`/`limit`：offset 从首个未显示行往前回退 `CONTEXT_LINES_BEFORE_CUT` 行，limit 读到该结果的块尾部；完整显示的结果仍只给起始行（`manualaid-ws/src/prompt.rs`）
 - 暂存清单的表头由「起始行号」改为「位置」，表头与条目文案改由 `truncated_persisted_entry` / `truncated_persisted_entry_resume` 译文提供，不再在 Rust 中拼接（`manualaid-ws/src/prompt.rs`、`i18n/locales/common.{en,zh-CN}.toml`）
-- 轮次截断警告不再要求代理调整工具调用参数（`i18n/locales/common.{en,zh-CN}.toml`）
+- 一轮内容过长无法完整贴回时，轮次截断警告不再要求代理调整工具调用参数（`i18n/locales/common.{en,zh-CN}.toml`）
+- 未完成 TODO 上下文的引导语改为：当前任务与某项明显相关时即读取该列表，而不再仅限于用户明确要求继续该项时（`i18n/locales/prompts.{en,zh-CN}.toml`）
+- `todo_write` 工具描述要求在首次创建列表时传入 `linked_plan`（当这项工作已有计划时），参数描述同步说明该时机，使列表在之后会话中仍出现在 `<unfinished_todos>` 里（`i18n/locales/tools.{en,zh-CN}.toml`）
 
 ### 修复
 
