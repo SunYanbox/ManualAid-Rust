@@ -228,11 +228,11 @@ pub fn copy_compressed_session_prompt_with_provider<P: ClipboardProvider>(
 
 /// Copy the compressed-result fence template verbatim to the clipboard.
 /// The template is a hand-off opening the user pastes into an external
-/// chat; it is not wrapped so the `<compacted-summary>` fence stays the
+/// chat; it is not wrapped so the `<manualaid-checkpoint>` fence stays the
 /// outermost marker.
 /// 将压缩结果围栏模板原样复制到剪贴板。该模板是用户粘贴到外部聊天的
-/// 交接开场文本，故不额外包裹，使 `<compacted-summary>` 围栏保持最外层
-/// 标记。
+/// 交接开场文本，故不额外包裹，使 `<manualaid-checkpoint>` 围栏保持最
+/// 外层标记。
 pub fn copy_compressed_fence_with_provider<P: ClipboardProvider>(
     provider: &P,
 ) -> Result<(), String> {

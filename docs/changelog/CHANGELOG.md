@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The compression output follows the project's own checkpoint layout: it lists the files and code involved, the data needed to resume work, and every fact that only exists in the conversation, such as spoken numbers and raw error text.
+- The hand-off fence pasted at the start of a new chat uses the project's own wording and wrapping tag.
+- Compressed checkpoints stay shorter: abandoned attempts, code that can be read again and step-by-step narration are left out.
+- Compressed checkpoints no longer fill gaps with guesses: anything the earlier conversation did not confirm is marked as not confirmed.
+- In a compressed checkpoint, the things you asked the AI not to do are now marked `[Prohibited]` instead of `[Forbidden]`.
+- A compressed checkpoint labels its remaining work with `[Open]`, `[Active]`, `[Dropped]` and `[To Verify]` instead of the old `[Done]`, `[In Progress]`, `[Rejected]` and `[Pending]`; a file that is planned but not yet touched is marked `[Open]` too.
+- Read results keep their footer with the total line count and the resume `offset`; only the wording around it changes.
+
 ## [0.16.0] - 2026-09-16
 
 ### Changed
