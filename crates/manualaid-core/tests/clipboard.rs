@@ -130,11 +130,3 @@ fn write_kind_defaults_to_a_plain_write() {
     mock.write_kind(CopyKind::SystemPrompt, "prompt").unwrap();
     assert_eq!(mock.read().unwrap(), "prompt");
 }
-
-#[test]
-fn only_tool_templates_do_not_count_as_sends() {
-    assert!(CopyKind::SystemPrompt.counts_as_send());
-    assert!(CopyKind::Prompt.counts_as_send());
-    assert!(CopyKind::Result.counts_as_send());
-    assert!(!CopyKind::Template.counts_as_send());
-}

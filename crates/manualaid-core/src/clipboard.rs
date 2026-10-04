@@ -48,14 +48,6 @@ pub enum CopyKind {
     Template,
 }
 
-impl CopyKind {
-    /// Whether this write stands for one post to an external chat.
-    /// 该次写入是否代表向外部聊天发送了一次。
-    pub fn counts_as_send(self) -> bool {
-        !matches!(self, Self::Template)
-    }
-}
-
 /// Abstraction for clipboard read/write operations, enabling dependency
 /// injection for testability.
 /// 剪贴板读写操作的抽象，支持依赖注入以提升可测试性。

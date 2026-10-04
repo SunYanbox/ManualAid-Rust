@@ -56,6 +56,13 @@ fn tool_templates_are_not_counted_but_prompts_and_results_are() {
     let base = Instant::now();
     let mut ledger = CopyLedger::default();
     ledger.record(CopyKind::Template, base);
+    // A template leaves no trace at all: no counter, no gap and no window
+    // entry, so the next copy reports as if the template never happened.
+    // 模板不留下任何痕迹：不计数、不算间隔、不进窗口，因此下一次复制报告的
+    // 状态与模板从未发生过一样。
+    assert_eq!(ledger.writes.len(), 0);
+    assert_eq!(ledger.last_at, None);
+
     ledger.record(CopyKind::SystemPrompt, base);
     ledger.record(CopyKind::Prompt, base);
     ledger.record(CopyKind::Result, base);
@@ -65,6 +72,22 @@ fn tool_templates_are_not_counted_but_prompts_and_results_are() {
     assert_eq!(report.result, 1);
     assert_eq!(report.send_copies(), 3);
     assert_eq!(report.windows, [3, 3, 3, 3, 3]);
+}
+
+#[test]
+fn the_ledger_caps_the_writes_it_retains() {
+    let base = Instant::now();
+    let mut ledger = CopyLedger::default();
+    // Every write lands inside the widest window, so only the hard cap can
+    // bound the retained writes.
+    // 所有写入都落在最宽窗口内，因此只有硬上限能约束保留的写入数量。
+    for _ in 0..MAX_TRACKED_WRITES + 5 {
+        ledger.record(CopyKind::Result, base);
+    }
+    assert_eq!(ledger.writes.len(), MAX_TRACKED_WRITES);
+    // The lifetime counter still counts every write.
+    // 会话累计仍统计每一次写入。
+    assert_eq!(ledger.report(base).result as usize, MAX_TRACKED_WRITES + 5);
 }
 
 #[test]

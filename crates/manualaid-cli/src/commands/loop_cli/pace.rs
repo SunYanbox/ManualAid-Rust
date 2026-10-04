@@ -76,25 +76,35 @@ pub(super) struct CopyLedger {
 }
 
 impl CopyLedger {
-    /// Record one successful write. Tool-call templates are not recorded:
-    /// they are typed inside a message and never sent as a message of their
-    /// own.
-    /// 记录一次成功写入。工具调用模板不记录：它是写进消息内部的，从不作为
-    /// 一条消息单独发送。
+    /// Record one successful write. A write that does not become a message of
+    /// its own is not recorded at all: a tool-call template is typed inside a
+    /// message, so counting it would report two posts where the user made one.
+    /// 记录一次成功写入。不能独立成为一条消息的写入完全不记录：工具调用模板
+    /// 是写进消息内部的，计入它会把一次发送报成两次。
     pub(super) fn record(&mut self, kind: CopyKind, at: Instant) {
-        if !kind.counts_as_send() {
+        let Some(counter) = self.counter_for(kind) else {
             return;
-        }
+        };
+        *counter += 1;
         self.previous_at = self.last_at;
         self.last_at = Some(at);
-        match kind {
-            CopyKind::SystemPrompt => self.system_prompt += 1,
-            CopyKind::Prompt => self.snippet += 1,
-            CopyKind::Result => self.result += 1,
-            CopyKind::Template => return,
-        }
         self.writes.push_back(at);
         self.prune(at);
+    }
+
+    /// The lifetime counter of one write kind, or `None` when that kind is not
+    /// a message of its own. This exhaustive match is the only place that
+    /// decides which kinds count, so a new kind cannot be added without
+    /// deciding it here.
+    /// 某种写入的会话累计计数槽位；该种类不构成独立消息时返回 `None`。本穷尽
+    /// 匹配是唯一决定哪些种类计入的地方，因此新增种类无法绕过此处的判定。
+    fn counter_for(&mut self, kind: CopyKind) -> Option<&mut u64> {
+        match kind {
+            CopyKind::SystemPrompt => Some(&mut self.system_prompt),
+            CopyKind::Prompt => Some(&mut self.snippet),
+            CopyKind::Result => Some(&mut self.result),
+            CopyKind::Template => None,
+        }
     }
 
     /// Drop writes that fell out of the widest window, then enforce the hard
