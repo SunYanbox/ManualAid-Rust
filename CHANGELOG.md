@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The compressed-session prompt is rewritten into the project's own six-section checkpoint schema (task goal and current stage, files and code involved, data needed to resume work, actions already taken, constraints and prohibitions, open items and resume point), replacing the shared eight-section structure (`i18n/locales/prompts.{en,zh-CN}.toml`)
+- The compressed-fence hand-off block is rewritten in project-specific wording and wraps the checkpoint in `<manualaid-checkpoint>` instead of `<compacted-summary>` (`i18n/locales/prompts.{en,zh-CN}.toml`)
+- The checkpoint spec now bounds the checkpoint's size: overturned intermediate attempts, code bodies that can be read again and purely procedural narration are left out, and the shortest form that keeps the required facts is used (`i18n/locales/prompts.{en,zh-CN}.toml`)
+- The checkpoint spec no longer allows guessing: a fact the conversation did not confirm is written as not confirmed instead of being filled in, especially command readings, exit codes and file paths (`i18n/locales/prompts.{en,zh-CN}.toml`)
+- The checkpoint's constraint section marks each user prohibition with `[Prohibited]` on its own line, replacing the `[Forbidden]` prefix (`i18n/locales/prompts.{en,zh-CN}.toml`)
+- The checkpoint's open-items section uses the status marks `[Open]` / `[Active]` / `[Dropped]` / `[To Verify]` in place of `[Done]` / `[In Progress]` / `[Rejected]` / `[Pending]`, and a file that is planned but not yet touched is marked `[Open]` as well (`i18n/locales/prompts.{en,zh-CN}.toml`)
+- The read result's trailing marker keeps the range, total line count and resume offset but uses project-specific wording: `(whole file: N lines)`, `(lines a-b of t; next offset: n)`, with the line-ending summary joining the same parentheses after a semicolon as `EOL: LF` / `EOL: CRLF` / `EOL: mixed`; a single-line file reads `1 line`, and the `read` tool description names the same labels (`manualaid-core/src/tools/read.rs`, `i18n/locales/tools.{en,zh-CN}.toml`)
+
 ## [0.16.0] - 2026-09-16
 
 ### Changed
