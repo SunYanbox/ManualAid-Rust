@@ -90,7 +90,7 @@ async fn write_then_read_round_trip() {
     let result = ToolKind::Read.run(&read_params).await;
     assert!(result.success, "{}", result.output);
     assert!(result.output.starts_with("hello\nworld\n"));
-    assert!(result.output.contains("End of file - total 2 lines"));
+    assert!(result.output.contains("(whole file: 2 lines;"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -108,11 +108,20 @@ async fn read_supports_offset_and_limit() {
     let result = ToolKind::Read.run(&params).await;
     assert!(result.success, "{}", result.output);
     assert!(result.output.starts_with("b\nc\n"));
-    assert!(
-        result
-            .output
-            .contains("Showing lines 2-3 of 4 lines. Use offset=4 to continue.")
-    );
+    assert!(result.output.contains("lines 2-3 of 4; next offset: 4"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn read_footer_joins_the_line_ending_summary_inside_the_marker() {
+    let path = temp_file("footer-join");
+    std::fs::write(&path, "a\nb\n").unwrap();
+    let read_params = params_for(&[("file_path", path.to_str().unwrap())]);
+    let result = ToolKind::Read.run(&read_params).await;
+    assert!(result.success, "{}", result.output);
+    // The summary shares the marker's parentheses, so it belongs before the
+    // closing paren; a marker test that stops at ")" misses the join entirely.
+    assert!(result.output.ends_with("(whole file: 2 lines; EOL: LF)\n"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -130,7 +139,7 @@ async fn read_decorates_with_diagnostic_flags() {
     let result = ToolKind::Read.run(&params).await;
     assert!(result.success, "{}", result.output);
     assert!(result.output.starts_with("1| a$\n2| b\n"));
-    assert!(result.output.contains("End of file - total 2 lines"));
+    assert!(result.output.contains("(whole file: 2 lines;"));
     let _ = std::fs::remove_file(&path);
 }
 
