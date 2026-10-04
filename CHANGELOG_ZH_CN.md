@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-04
+
 ### 新增
 
 - 新增 `CopyKind` 与带默认实现的 `ClipboardProvider::write_kind`，provider 在写入时即可区分系统提示词、提示词片段、工具结果与工具调用模板，供统计「一次写入即一条消息」的调用方计量（`manualaid-core/src/clipboard.rs`）
