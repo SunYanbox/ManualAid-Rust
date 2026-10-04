@@ -41,6 +41,34 @@ async fn session_with_round(root: &Path) -> SessionLog {
 }
 
 async fn add_round(root: &Path, session: &mut SessionLog, stats: RoundStats) {
+    let (calls, results) = read_round(root).await;
+    session.push(calls, results, stats);
+}
+
+/// Add one round whose timestamp sits `offset_seconds` after a fixed
+/// baseline, so the interval statistics are deterministic.
+/// 添加一轮，其时间戳位于固定基准之后 `offset_seconds` 秒处，使间隔统计
+/// 确定。
+async fn add_round_at(
+    root: &Path,
+    session: &mut SessionLog,
+    stats: RoundStats,
+    offset_seconds: u64,
+) {
+    let (calls, results) = read_round(root).await;
+    let at = std::time::SystemTime::UNIX_EPOCH
+        + std::time::Duration::from_secs(1_700_000_000 + offset_seconds);
+    session.push_at(calls, results, stats, at);
+}
+
+/// Execute one `read` round and return its parsed calls plus their results.
+/// 执行一轮 `read` 调用并返回其解析调用与结果。
+async fn read_round(
+    root: &Path,
+) -> (
+    Vec<manualaid_core::parser::ParsedToolCall>,
+    Vec<manualaid_core::tools::ToolResult>,
+) {
     let registry = FormatRegistry::new();
     let calls = registry.parse(&read_call(root)).unwrap().calls;
     let exec = executor(root);
@@ -48,5 +76,5 @@ async fn add_round(root: &Path, session: &mut SessionLog, stats: RoundStats) {
     for call in &calls {
         results.push(exec.execute(call.clone()).await);
     }
-    session.push(calls, results, stats);
+    (calls, results)
 }

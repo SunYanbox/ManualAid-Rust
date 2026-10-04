@@ -6,8 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `CopyKind` and a defaulted `ClipboardProvider::write_kind` let a provider tell system prompts, prompt snippets, tool results and tool-call templates apart while writing, so a metering caller can count the writes that become one message each (`manualaid-core/src/clipboard.rs`)
+- `SessionLog` records each round's wall-clock time in `BatchRecord::at` and exposes `push_at`, `gap_before` and `intervals`; the last one yields the mean, three-round mean, shortest and longest interval between rounds and ignores pairs the clock moved backwards across (`manualaid-ws/src/session.rs`)
+- The interactive loop meters every clipboard write through `PacedClipboard` and reports the gap since the previous copy plus the copy count per 60 s / 5 min / 10 min / 30 min / 60 min window; `LoopOptions::pace_expanded` and a new configuration entry choose between the folded and the expanded line, and `PaceReport` is re-exported for tests (`manualaid-cli/src/commands/loop_cli/pace.rs`)
+- `manualaid_cli::format_span` renders a duration as a compact span of at most two units, such as `1m18s` or `4d07h`, for the cadence statistics (`manualaid-cli/src/lib.rs`)
+
 ### Changed
 
+- `print_session_summary` takes a `PaceReport` and prints the average tool calls per round, the counted prompt and tool-result copies and the interval statistics next to the existing totals; `format_round_detail` takes the gap to the previous round and prints each round's wall-clock line (`manualaid-cli/src/commands/loop_cli/handlers.rs`, `manualaid-cli/src/commands/loop_cli/utils.rs`)
+- Every copy path of the loop (prompt menus, inline commands, `@` reads, `!` commands and skill rounds) writes through the metered provider, which replaces the provider-less inline entry point (`manualaid-cli/src/commands/loop_cli/mod.rs`, `manualaid-cli/src/commands/loop_cli/inline.rs`)
 - The compressed-session prompt is rewritten into the project's own six-section checkpoint schema (task goal and current stage, files and code involved, data needed to resume work, actions already taken, constraints and prohibitions, open items and resume point), replacing the shared eight-section structure (`i18n/locales/prompts.{en,zh-CN}.toml`)
 - The compressed-fence hand-off block is rewritten in project-specific wording and wraps the checkpoint in `<manualaid-checkpoint>` instead of `<compacted-summary>` (`i18n/locales/prompts.{en,zh-CN}.toml`)
 - The checkpoint spec now bounds the checkpoint's size: overturned intermediate attempts, code bodies that can be read again and purely procedural narration are left out, and the shortest form that keeps the required facts is used (`i18n/locales/prompts.{en,zh-CN}.toml`)

@@ -8,8 +8,10 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 use manualaid_core::audit::{Auditor, SessionMode};
+use manualaid_core::clipboard::RealClipboard;
 use manualaid_core::executor::Executor;
 use manualaid_core::parser::FormatRegistry;
 use manualaid_core::skill::reload_skills_with_home;
@@ -27,6 +29,7 @@ mod diff;
 mod handlers;
 mod inline;
 mod menu;
+mod pace;
 mod path_action;
 mod preview;
 mod progress;
@@ -35,6 +38,7 @@ pub(crate) mod utils;
 
 pub use approval::execute_round_with_approval;
 pub use config::{render_config_menu, render_tool_menu};
+pub use pace::PaceReport;
 pub use preview::approval_preview;
 pub use utils::{
     cycle_format, cycle_lang, format_round_detail, format_round_header, format_round_summary,
@@ -61,8 +65,9 @@ use complete::candidates::{Candidate, filter as filter_candidates};
 use complete::editor::read_line_with_completion;
 use complete::paths::PathCandidates;
 use complete::state::{CompletionState, InputHistory, Trigger};
-use inline::handle_inline_command;
+use inline::handle_inline_command_with_provider;
 use menu::{MenuAction, build_main_menu};
+use pace::{CopyLedger, PaceSource, PacedClipboard};
 use utils::{clear_screen, mode_hint, sync_global_config};
 // Re-exported for the sibling `copy` subcommand, which reuses the same
 // initialization steps as the interactive loop.
@@ -95,6 +100,10 @@ pub struct LoopOptions {
     /// Whether the screen is cleared before each menu render.
     /// 每次渲染菜单前是否清屏。
     pub clear_screen: bool,
+    /// Whether the copy-pace line reports every tracked window or only the
+    /// short ones.
+    /// 复制节奏行报告全部统计窗口，还是只报告较短的窗口。
+    pub pace_expanded: bool,
     /// Whether Edit/Write inside the workspace auto-approve.
     /// 工作区内的 Edit/Write 是否自动放行。
     pub mode: SessionMode,
@@ -105,6 +114,7 @@ impl Default for LoopOptions {
         Self {
             auto_copy: true,
             clear_screen: false,
+            pace_expanded: false,
             mode: SessionMode::Manual,
         }
     }
@@ -222,12 +232,31 @@ async fn loop_main_at(
     let path_cache = Arc::new(std::sync::Mutex::new(PathCandidates::default()));
     path_cache.lock().unwrap().scan(current_dir);
     let input_history = Arc::new(InputHistory::new());
+    // Every clipboard write of the session goes through this one metered
+    // provider, so the pace line and the session summary count the same
+    // writes.
+    // 会话的每次剪贴板写入都经过这同一个带计量的 provider，使节奏行与
+    // 会话摘要统计的是同一批写入。
+    let ledger = Arc::new(std::sync::Mutex::new(CopyLedger::default()));
+    let provider = PacedClipboard::new(RealClipboard, Arc::clone(&ledger));
+    let mut reported_pace: Option<Instant> = None;
+    let mut pace_hint_shown = false;
     let mut should_exit = false;
     let mut show_help_hint = true;
     while !should_exit {
         if options.clear_screen {
             clear_screen();
         }
+        // The previous iteration may have copied something; report it before
+        // the menu, so the gap shown belongs to that copy.
+        // 上一次迭代可能复制过内容；在菜单之前报告它，使显示的时长属于那次
+        // 复制。
+        report_pace(
+            &provider,
+            options.pace_expanded,
+            &mut reported_pace,
+            &mut pace_hint_shown,
+        );
         let _ = crate::pager::print_paged(&render_menu());
         // Remind once, after the first menu render, that inline commands
         // are available behind `/help`.
@@ -280,7 +309,7 @@ async fn loop_main_at(
         if trimmed.starts_with('/') {
             let mode_before = options.mode;
             let skill_handled = skill_action::run_skill_action(
-                &manualaid_core::clipboard::RealClipboard,
+                &provider,
                 &executor,
                 current_dir,
                 &mut config,
@@ -295,7 +324,8 @@ async fn loop_main_at(
             if skill_handled {
                 continue;
             }
-            handle_inline_command(
+            handle_inline_command_with_provider(
+                &provider,
                 &mut config,
                 &registry,
                 current_dir,
@@ -312,7 +342,7 @@ async fn loop_main_at(
         if trimmed.contains('@') {
             let mode_before = options.mode;
             let path_round = path_action::run_path_actions(
-                &manualaid_core::clipboard::RealClipboard,
+                &provider,
                 &executor,
                 current_dir,
                 &mut config,
@@ -342,7 +372,7 @@ async fn loop_main_at(
         if trimmed.starts_with('!') {
             let mode_before = options.mode;
             bang::run_bang_command(
-                &manualaid_core::clipboard::RealClipboard,
+                &provider,
                 &executor,
                 current_dir,
                 &mut config,
@@ -374,7 +404,7 @@ async fn loop_main_at(
         if matches!(command, command::LoopCommand::ConfigMenu) {
             let mode_before = options.mode;
             config::config_menu(
-                &manualaid_core::clipboard::RealClipboard,
+                &provider,
                 &mut config,
                 &registry,
                 current_dir,
@@ -388,17 +418,10 @@ async fn loop_main_at(
             continue;
         }
         if matches!(command, command::LoopCommand::CopyPromptMenu) {
-            config::copy_prompt_menu(
-                &manualaid_core::clipboard::RealClipboard,
-                &config,
-                &registry,
-                current_dir,
-            )
-            .await;
+            config::copy_prompt_menu(&provider, &config, &registry, current_dir).await;
             continue;
         }
         let mode_before = options.mode;
-        let provider = manualaid_core::clipboard::RealClipboard;
         let mut ctx = command::CommandContext {
             provider: &provider,
             executor: &executor,
@@ -435,6 +458,47 @@ fn build_executor(root: &Path, config: &Config, mode: SessionMode) -> Executor {
             .with_mode(mode),
         Arc::new(None),
     )
+}
+
+/// Print the copy-pace block when the iteration that just finished copied
+/// something, once per copy. Because the block is rendered immediately after
+/// that copy, the gap it reports is the interval between the two most recent
+/// copies — the same interval an external chat sees between two posts.
+/// 上一轮迭代发生过复制时，每次复制打印一次复制节奏区块。因为该区块紧接那次
+/// 复制渲染，其中的时长是最近两次复制之间的间隔——也就是外部聊天看到的两次
+/// 发送间隔。
+fn report_pace<P: PaceSource>(
+    provider: &P,
+    expanded: bool,
+    reported: &mut Option<Instant>,
+    hint_shown: &mut bool,
+) {
+    if let Some(lines) = pace_update(provider, expanded, reported, hint_shown) {
+        utils::print_muted_block(&lines);
+    }
+}
+
+/// Decide what the pace block reports: `None` while the most recent copy has
+/// already been reported, otherwise the localized lines together with the
+/// updated bookkeeping. The fold hint is offered at most once per session
+/// and only while the long windows stay folded.
+/// 决定节奏区块报告什么：最近一次复制已报告过时返回 `None`，否则返回本地化
+/// 行以及更新后的记账。折叠提示每会话至多提示一次，且仅在长窗口保持折叠时
+/// 提示。
+fn pace_update<P: PaceSource>(
+    provider: &P,
+    expanded: bool,
+    reported: &mut Option<Instant>,
+    hint_shown: &mut bool,
+) -> Option<Vec<String>> {
+    let report = provider.pace();
+    if report.last_at.is_none() || report.last_at == *reported {
+        return None;
+    }
+    *reported = report.last_at;
+    let show_hint = !expanded && !*hint_shown;
+    *hint_shown |= show_hint;
+    Some(pace::pace_lines(&report, expanded, show_hint))
 }
 
 /// Build the completion candidates for the current active token. Command
@@ -499,9 +563,65 @@ mod tests {
 
     use indexmap::IndexMap;
     use manualaid_core::audit::{AuditDecision, AuditQueueItem};
+    use manualaid_core::clipboard::{ClipboardProvider, CopyKind, MockClipboard};
     use manualaid_core::tools::ToolResult;
     use manualaid_ws::config::Config;
     use serde_json::Value;
+
+    #[test]
+    fn pace_update_reports_each_copy_once_and_hints_once() {
+        // No console capture and no style lock: this decision returns the
+        // lines to print without touching either, which keeps the test away
+        // from the process-wide capture lock the other tests hold.
+        // 不取控制台捕获，也不取样式锁：该决策只返回要打印的行，因此本测试
+        // 不会碰到其他测试持有的进程级捕获锁。
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        i18n::set_locale("en");
+        let ledger = Arc::new(std::sync::Mutex::new(CopyLedger::default()));
+        let provider = PacedClipboard::new(MockClipboard::new(), Arc::clone(&ledger));
+        let mut reported = None;
+        let mut hint_shown = false;
+
+        // Nothing copied yet: the pace block stays silent.
+        // 尚未复制过：节奏区块保持静默。
+        assert!(pace_update(&provider, false, &mut reported, &mut hint_shown).is_none());
+
+        provider.write_kind(CopyKind::Result, "results").unwrap();
+        let first =
+            pace_update(&provider, false, &mut reported, &mut hint_shown).expect("first copy");
+        // The first copy has no predecessor, so it reports the windows and
+        // the fold hint only.
+        // 第一次复制没有前一跳，因此只报告窗口与折叠提示。
+        assert_eq!(first.len(), 2);
+        assert!(first[0].contains("Last 60s: 1"), "{first:?}");
+        assert!(first[1].contains("configuration menu"), "{first:?}");
+
+        // The copy that was already reported is not reported again.
+        // 已报告过的那次复制不会重复报告。
+        assert!(pace_update(&provider, false, &mut reported, &mut hint_shown).is_none());
+
+        // The next copy adds the gap line, and the fold hint stays away.
+        // 下一次复制补上间隔行，折叠提示不再出现。
+        provider
+            .write_kind(CopyKind::Result, "more results")
+            .unwrap();
+        let second =
+            pace_update(&provider, false, &mut reported, &mut hint_shown).expect("second copy");
+        assert_eq!(second.len(), 2);
+        assert!(second[0].contains("Since the last copy"), "{second:?}");
+        assert!(
+            !second
+                .iter()
+                .any(|line| line.contains("configuration menu"))
+        );
+
+        // Expanded mode shows every window.
+        // 展开模式显示全部窗口。
+        provider.write_kind(CopyKind::Result, "third").unwrap();
+        let expanded =
+            pace_update(&provider, true, &mut reported, &mut hint_shown).expect("third copy");
+        assert!(expanded[1].contains("Last 60min: 3"), "{expanded:?}");
+    }
 
     #[test]
     fn sync_global_config_writes_default_without_hints() {

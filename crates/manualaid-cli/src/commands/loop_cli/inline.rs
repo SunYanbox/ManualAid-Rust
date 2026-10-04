@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use manualaid_core::clipboard::{ClipboardProvider, RealClipboard};
+use manualaid_core::clipboard::ClipboardProvider;
 use manualaid_core::parser::{FormatRegistry, RegistryMode};
 use manualaid_core::tools::ToolKind;
 use manualaid_ws::config::Config;
@@ -18,6 +18,7 @@ use super::handlers::{
     copy_skills_list_with_provider, copy_switch_mode_rule_with_provider,
     copy_system_prompt_with_provider, copy_unfinished_todos_with_provider,
 };
+use super::pace::PaceSource;
 use super::utils::{parse_round_index, t_fmt};
 
 /// A built-in inline command with the i18n key of its usage description.
@@ -104,26 +105,7 @@ pub(crate) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
 
 /// Handle an inline `/command` typed at the menu prompt.
 /// 处理在菜单提示符输入的内置 `/命令`。
-pub(super) fn handle_inline_command(
-    config: &mut Config,
-    registry: &FormatRegistry,
-    root: &Path,
-    session: &mut SessionLog,
-    options: &mut LoopOptions,
-    line: &str,
-) {
-    handle_inline_command_with_provider(
-        &RealClipboard,
-        config,
-        registry,
-        root,
-        session,
-        options,
-        line,
-    );
-}
-
-pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
+pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider + PaceSource>(
     provider: &P,
     config: &mut Config,
     registry: &FormatRegistry,
@@ -150,7 +132,7 @@ pub(super) fn handle_inline_command_with_provider<P: ClipboardProvider>(
             return;
         }
         "/summary" | "/s" => {
-            super::handlers::print_session_summary(config, session);
+            super::handlers::print_session_summary(config, session, provider.pace());
             return;
         }
         "/clear" | "/cls" => {
@@ -482,7 +464,8 @@ mod tests {
     fn inline_lang_cycles_and_persists() {
         let _capture = crate::console::capture();
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -501,7 +484,8 @@ mod tests {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -510,7 +494,8 @@ mod tests {
             "/lang 2",
         );
         assert_eq!(config.lang, "zh-CN");
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -525,7 +510,8 @@ mod tests {
     fn inline_format_cycles_and_applies_index() {
         let _capture = crate::console::capture();
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -534,7 +520,8 @@ mod tests {
             "/format",
         );
         assert_eq!(config.tool_call_format, "json-codeblock");
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -551,7 +538,8 @@ mod tests {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -568,7 +556,8 @@ mod tests {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -576,7 +565,8 @@ mod tests {
             &mut options,
             "/c 9",
         );
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -584,7 +574,8 @@ mod tests {
             &mut options,
             "/c t bogus",
         );
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -603,7 +594,8 @@ mod tests {
         // An empty session returns before any clipboard access; a valid
         // index would write to the clipboard and is not exercised.
         // 空会话在触碰剪贴板前就返回；有效索引会写入剪贴板，不做测试。
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -617,7 +609,8 @@ mod tests {
     fn inline_unknown_command_prints_invalid() {
         let _capture = crate::console::capture();
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -632,7 +625,8 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -651,7 +645,8 @@ mod tests {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -670,7 +665,8 @@ mod tests {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session, mut options) = setup_with_rounds();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -689,7 +685,8 @@ mod tests {
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         i18n::set_locale("en");
         let (mut config, registry, root, mut session, mut options) = setup_with_rounds();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,
@@ -707,7 +704,8 @@ mod tests {
         let _capture = crate::console::capture();
         let _lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         let (mut config, registry, root, mut session, mut options) = setup();
-        handle_inline_command(
+        handle_inline_command_with_provider(
+            &MockClipboard::new(),
             &mut config,
             &registry,
             &root,

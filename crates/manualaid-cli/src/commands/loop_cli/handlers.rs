@@ -12,11 +12,12 @@ use manualaid_ws::session::SessionLog;
 use super::LoopOptions;
 use super::approval::{ask_approval, execute_round_with_approval};
 use super::context::select_context_files;
+use super::pace::PaceReport;
 use super::utils::{
     format_round_detail, format_round_header, format_round_header_muted, format_round_summary,
     parse_round_index, print_muted_block, read_line, t_fmt,
 };
-use manualaid_core::clipboard::{ClipboardProvider, RealClipboard};
+use manualaid_core::clipboard::{ClipboardProvider, CopyKind, RealClipboard};
 use manualaid_core::parser::ParsedToolCall;
 use manualaid_core::tools::ToolResult;
 use manualaid_ws::session::RoundStats;
@@ -78,7 +79,7 @@ pub fn copy_system_prompt_with_context_files_with_provider<P: ClipboardProvider>
             &[("tokens", &tokens.to_string())],
         ),
     ];
-    provider.write(&text)?;
+    provider.write_kind(CopyKind::SystemPrompt, &text)?;
     block.insert(0, i18n::t_str("cli.message.prompt_copied"));
     print_muted_block(&block);
     Ok(())
@@ -89,7 +90,7 @@ pub fn copy_system_prompt_with_context_files_with_provider<P: ClipboardProvider>
 /// 将意图规则文本复制到剪贴板，方便用户在外部 LLM 聊天中途重新强调该规则。
 pub fn copy_intent_rule_with_provider<P: ClipboardProvider>(provider: &P) -> Result<(), String> {
     let text = i18n::t_str("prompt.system.intent-output-rule");
-    provider.write(&text)?;
+    provider.write_kind(CopyKind::Prompt, &text)?;
     print_muted_block(&[i18n::t_str("cli.message.intent_rule_copied")]);
     Ok(())
 }
@@ -243,7 +244,7 @@ pub fn copy_compressed_fence_with_provider<P: ClipboardProvider>(
 /// Write prompt text to the clipboard and print the shared confirmation.
 /// 将提示词文本写入剪贴板并打印统一的确认信息。
 fn write_copied<P: ClipboardProvider>(provider: &P, text: &str) -> Result<(), String> {
-    provider.write(text)?;
+    provider.write_kind(CopyKind::Prompt, text)?;
     print_muted_block(&[i18n::t_str("cli.loop.copied")]);
     Ok(())
 }
@@ -415,11 +416,10 @@ pub(super) async fn finish_round_with_provider<P: ClipboardProvider>(
         ),
     ];
     if copy
-        && let Err(e) = provider.write(&manualaid_ws::prompt::format_results(
-            &results,
-            max_result_chars,
-            root,
-        ))
+        && let Err(e) = provider.write_kind(
+            CopyKind::Result,
+            &manualaid_ws::prompt::format_results(&results, max_result_chars, root),
+        )
     {
         eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)]));
     } else if copy {
@@ -506,9 +506,14 @@ pub(super) fn copy_round_index_with_provider<P: ClipboardProvider>(
 ) {
     let record = session.latest(index).expect("validated index");
     let content = manualaid_ws::prompt::format_results(&record.results, max_result_chars, root);
+    // `latest` counts from the newest round, so the record's position from
+    // the oldest is `len - index`; that position supplies its own gap.
+    // `latest` 从最新一轮计数，因此该记录自最旧算起的位置是 `len - index`，
+    // 由该位置得到它自己的间隔。
+    let gap = session.gap_before(session.len() - index);
     let preview = [
         format_round_header_muted(index, session.len()),
-        format_round_detail(record),
+        format_round_detail(record, gap),
         String::new(),
         t_fmt(
             "cli.message.copy_preview",
@@ -524,7 +529,7 @@ pub(super) fn copy_round_index_with_provider<P: ClipboardProvider>(
     let previewed = crate::style::gray(&truncate_preview_lines(&content, COPY_PREVIEW_MAX_LINES));
     let text = indent_each_line(&(preview.join("\n") + "\n" + &previewed));
     let _ = crate::pager::print_paged_three_lines(&text);
-    match provider.write(&content) {
+    match provider.write_kind(CopyKind::Result, &content) {
         Ok(()) => print_muted_block(&[t_fmt(
             "cli.message.result_copied",
             &[("index", &index.to_string())],
@@ -598,18 +603,34 @@ pub fn show_tool_history(session: &SessionLog) {
         totals
     ))];
     for (i, record) in session.rounds().iter().rev().enumerate() {
+        // Each record sits at this position counted from the oldest round,
+        // which is what links it to the round before it.
+        // 每条记录自最旧一轮算起的位置如下，它把该轮与上一轮关联起来。
+        let position = session.len() - 1 - i;
         lines.push(format_round_header(i + 1, session.len()));
-        lines.push(format_round_detail(record));
+        lines.push(format_round_detail(record, session.gap_before(position)));
         lines.push(String::new());
     }
     let _ = crate::pager::print_paged(&lines.join("\n"));
 }
 
-/// Print the session summary (round count, tool-call count, enabled tools).
-/// 打印会话摘要（批次数量、工具调用数量、已启用工具）。
-pub fn print_session_summary(config: &Config, session: &SessionLog) {
+/// Print the session summary: rounds, tool calls, the cadence between the
+/// rounds the user submitted, and how often prompts and tool results were
+/// copied to be posted to an external chat.
+/// 打印会话摘要：轮次、工具调用、用户各轮之间的节奏，以及提示词与工具结果
+/// 被复制以发送到外部聊天的次数。
+pub fn print_session_summary(config: &Config, session: &SessionLog, pace: PaceReport) {
     let tools = config.enabled_tool_names().join(", ");
-    let text = [
+    let average_calls = match session.len() {
+        0 => 0.0,
+        rounds => session.total_calls() as f64 / rounds as f64,
+    };
+    let intervals = session.intervals();
+    let interval = |value: Option<std::time::Duration>| match value {
+        Some(value) => crate::format_span(value),
+        None => i18n::t_str("cli.message.summary_no_sample"),
+    };
+    let lines = vec![
         crate::style::header(&i18n::t_str("cli.message.summary_title")),
         t_fmt(
             "cli.message.summary_rounds",
@@ -619,8 +640,39 @@ pub fn print_session_summary(config: &Config, session: &SessionLog) {
             "cli.message.summary_tool_calls",
             &[("count", &session.total_calls().to_string())],
         ),
+        t_fmt(
+            "cli.message.summary_avg_calls",
+            &[("avg", &format!("{average_calls:.1}"))],
+        ),
+        t_fmt(
+            "cli.message.summary_system_prompt_copies",
+            &[("count", &pace.system_prompt.to_string())],
+        ),
+        t_fmt(
+            "cli.message.summary_total_copies",
+            &[("count", &pace.send_copies().to_string())],
+        ),
+        t_fmt(
+            "cli.message.summary_avg_interval",
+            &[("value", &interval(intervals.map(|value| value.mean)))],
+        ),
+        t_fmt(
+            "cli.message.summary_three_round_interval",
+            &[(
+                "value",
+                &interval(intervals.and_then(|value| value.mean_three)),
+            )],
+        ),
+        t_fmt(
+            "cli.message.summary_min_interval",
+            &[("value", &interval(intervals.map(|value| value.min)))],
+        ),
+        t_fmt(
+            "cli.message.summary_max_interval",
+            &[("value", &interval(intervals.map(|value| value.max)))],
+        ),
         t_fmt("cli.message.summary_enabled_tools", &[("tools", &tools)]),
-    ]
-    .join("\n");
+    ];
+    let text = lines.join("\n");
     let _ = crate::pager::print_paged(&text);
 }

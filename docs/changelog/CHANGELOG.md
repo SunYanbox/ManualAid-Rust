@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- After each copy the loop reports how long ago the previous copy happened and how many copies fall inside the last 60 s, 5 min and 10 min; the 30-minute and 60-minute windows stay folded until you expand them from the configuration menu.
+
 ### Changed
 
 - The compression output follows the project's own checkpoint layout: it lists the files and code involved, the data needed to resume work, and every fact that only exists in the conversation, such as spoken numbers and raw error text.
@@ -13,6 +17,9 @@
 - Read results keep their footer with the total line count and the resume `offset`; only the wording around it changes.
 - The note that introduces your workspace instruction files is worded by this project itself.
 - Each of those files is now introduced by a `[workspace instructions <file>]` heading.
+- Tool history now names when each round happened and how long it ran after the previous one; rounds from `!` shell commands and `@` file reads are listed the same way.
+- The session summary adds the average number of tool calls per round, the number of system-prompt copies, and the total number of prompt and tool-result copies.
+- The session summary also adds the average interval between rounds, the average span covering three rounds, and the shortest and longest interval.
 
 ## [0.16.0] - 2026-09-16
 

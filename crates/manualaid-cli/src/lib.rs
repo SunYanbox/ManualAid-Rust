@@ -141,6 +141,27 @@ pub fn format_duration(duration: Duration) -> String {
     format!("{millis}.{fraction:06} ms")
 }
 
+/// Format a [`Duration`] as a compact span of at most two units: days and
+/// hours, hours and minutes, minutes and seconds, or plain seconds. Used for
+/// the time between rounds, where milliseconds are noise.
+/// 将 [`Duration`] 格式化为最多两个单位的紧凑跨度：日与小时、小时与分钟、
+/// 分钟与秒，或仅秒。用于轮次之间的时长——那里毫秒只是噪声。
+pub fn format_span(duration: Duration) -> String {
+    let seconds = duration.as_secs();
+    let days = seconds / 86_400;
+    let hours = (seconds / 3_600) % 24;
+    let minutes = (seconds / 60) % 60;
+    if days > 0 {
+        format!("{days}d{hours:02}h")
+    } else if hours > 0 {
+        format!("{hours}h{minutes:02}m")
+    } else if minutes > 0 {
+        format!("{minutes}m{:02}s", seconds % 60)
+    } else {
+        format!("{seconds}s")
+    }
+}
+
 /// Format a byte count with an automatically chosen 1024-based unit
 /// (KB/MB/GB) and exactly three decimal places.
 /// 将字节数按 1024 进制自动选择单位（KB/MB/GB）并固定保留 3 位小数。

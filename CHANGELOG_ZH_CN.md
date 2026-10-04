@@ -6,8 +6,17 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 新增 `CopyKind` 与带默认实现的 `ClipboardProvider::write_kind`，provider 在写入时即可区分系统提示词、提示词片段、工具结果与工具调用模板，供统计「一次写入即一条消息」的调用方计量（`manualaid-core/src/clipboard.rs`）
+- `SessionLog` 在 `BatchRecord::at` 记录每轮的墙钟时间，并新增 `push_at`、`gap_before` 与 `intervals`；后者给出轮次间隔的平均值、每三轮平均、最短与最长，并跳过时钟回拨跨过的一对（`manualaid-ws/src/session.rs`）
+- 交互式 loop 通过 `PacedClipboard` 计量每次剪贴板写入，报告距上次复制的时长以及近 60s / 5min / 10min / 30min / 60min 各窗口的复制次数；`LoopOptions::pace_expanded` 与新增配置项决定显示折叠行还是展开行，`PaceReport` 重导出供测试使用（`manualaid-cli/src/commands/loop_cli/pace.rs`）
+- `manualaid_cli::format_span` 把时长格式化为最多两个单位的紧凑文本（如 `1m18s`、`4d07h`），供节奏统计使用（`manualaid-cli/src/lib.rs`）
+
 ### 变更
 
+- `print_session_summary` 新增 `PaceReport` 参数，在原有总计之外打印平均每轮工具调用、提示词与工具结果复制次数以及间隔统计；`format_round_detail` 新增距上一轮的时长参数并打印每轮的墙钟行（`manualaid-cli/src/commands/loop_cli/handlers.rs`、`manualaid-cli/src/commands/loop_cli/utils.rs`）
+- loop 的全部复制路径（提示词菜单、内联命令、`@` 读取、`!` 命令与技能轮次）都改为经带计量的 provider 写入，原先不接收 provider 的内联入口被移除（`manualaid-cli/src/commands/loop_cli/mod.rs`、`manualaid-cli/src/commands/loop_cli/inline.rs`）
 - 压缩会话提示词改写为本项目自有的六节续作检查点结构（任务目标与当前阶段 / 涉及的文件与代码 / 继续干活所需的数据 / 已执行的处置 / 约束与禁令 / 未完事项与接续点），取代共用的八节结构（`i18n/locales/prompts.{en,zh-CN}.toml`）
 - 压缩检查点外包裹块改用项目自有措辞，外包裹标签改为 `<manualaid-checkpoint>`，不再沿用 `<compacted-summary>`（`i18n/locales/prompts.{en,zh-CN}.toml`）
 - 检查点规范新增取舍上限：被推翻的中间尝试、能重新读出的代码正文与纯过程性叙述不写入，在满足信息取舍标准的前提下取最短表达（`i18n/locales/prompts.{en,zh-CN}.toml`）

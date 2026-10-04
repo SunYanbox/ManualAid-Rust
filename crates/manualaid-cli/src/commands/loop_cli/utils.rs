@@ -352,43 +352,51 @@ fn format_round_header_styled(index: usize, total: usize, style: fn(&str) -> Str
     ))
 }
 
-/// Render one round's detail: a line per tool with its status, execution
-/// duration and token estimate, followed by a footer with the parse/audit/
-/// execution durations and the round token total. Shared by the history
-/// list and the copy preview.
-/// 渲染一轮的详情：每个工具一行（状态、执行耗时与 Token 估算），末尾
-/// 一行显示解析/审批/执行耗时与轮 Token 总量。历史列表与复制预览共用。
-pub fn format_round_detail(record: &BatchRecord) -> String {
-    let mut lines: Vec<String> = record
-        .results
-        .iter()
-        .map(|result| {
-            let status = if result.success {
-                crate::style::success(&i18n::t_str("cli.message.success"))
-            } else {
-                crate::style::error(&i18n::t_str("cli.message.failure"))
-            };
-            t_fmt(
-                "cli.history.tool_line",
-                &[
-                    (
-                        // The i18n template wraps `%{tool}` in brackets.
-                        // i18n 模板已为 `%{tool}` 加方括号。
-                        "tool",
-                        &crate::style::accent(&result.tool_name),
-                    ),
-                    ("status", &status),
-                    (
-                        "duration",
-                        &crate::format_duration(std::time::Duration::from_millis(
-                            result.execution_duration_ms,
-                        )),
-                    ),
-                    ("tokens", &result.estimated_tokens.to_string()),
-                ],
-            )
-        })
-        .collect();
+/// Render one round's detail: when it happened and how far it sits from the
+/// round before it, a line per tool with its status, execution duration and
+/// token estimate, then a footer with the parse/audit/execution durations
+/// and the round token total. Shared by the history list and the copy
+/// preview.
+/// 渲染一轮的详情：该轮的发生时刻与距上一轮的时长、每个工具一行（状态、
+/// 执行耗时与 Token 估算），末尾一行显示解析/审批/执行耗时与轮 Token 总量。
+/// 历史列表与复制预览共用。
+pub fn format_round_detail(record: &BatchRecord, gap: Option<std::time::Duration>) -> String {
+    let time = chrono::DateTime::<chrono::Local>::from(record.at)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+    let mut lines: Vec<String> = vec![match gap {
+        Some(gap) => t_fmt(
+            "cli.history.wall_clock",
+            &[("time", &time), ("gap", &crate::format_span(gap))],
+        ),
+        None => t_fmt("cli.history.wall_clock_first", &[("time", &time)]),
+    }];
+    lines.extend(record.results.iter().map(|result| {
+        let status = if result.success {
+            crate::style::success(&i18n::t_str("cli.message.success"))
+        } else {
+            crate::style::error(&i18n::t_str("cli.message.failure"))
+        };
+        t_fmt(
+            "cli.history.tool_line",
+            &[
+                (
+                    // The i18n template wraps `%{tool}` in brackets.
+                    // i18n 模板已为 `%{tool}` 加方括号。
+                    "tool",
+                    &crate::style::accent(&result.tool_name),
+                ),
+                ("status", &status),
+                (
+                    "duration",
+                    &crate::format_duration(std::time::Duration::from_millis(
+                        result.execution_duration_ms,
+                    )),
+                ),
+                ("tokens", &result.estimated_tokens.to_string()),
+            ],
+        )
+    }));
     let stats = &record.stats;
     lines.push(crate::style::muted(&t_fmt(
         "cli.history.timing_line",
@@ -462,6 +470,7 @@ mod tests {
                 total_execution_duration_ms: 56,
                 total_tokens: 789,
             },
+            at: std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000),
         }
     }
 
@@ -471,7 +480,10 @@ mod tests {
         let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
         crate::style::set_enabled(false);
         i18n::set_locale("en");
-        let detail = format_round_detail(&record_with_stats());
+        let detail = format_round_detail(
+            &record_with_stats(),
+            Some(std::time::Duration::from_secs(78)),
+        );
         assert!(detail.contains("[read]"));
         assert!(!detail.contains("[[read]]"));
         assert!(detail.contains("success"));
@@ -481,6 +493,23 @@ mod tests {
         assert!(detail.contains("audit"));
         assert!(detail.contains("exec"));
         assert!(detail.contains("789"));
+        // The round's own wall-clock line carries the gap to its
+        // predecessor, and every placeholder was substituted.
+        // 该轮自己的墙钟行带上与上一轮之间的时长，且所有占位符都已替换。
+        assert!(detail.contains("1m18s"), "gap line missing: {detail}");
+        assert!(!detail.contains("%{"), "unfilled placeholder: {detail}");
+        crate::style::set_enabled(false);
+    }
+
+    #[test]
+    fn format_round_detail_marks_the_first_round() {
+        let _style_lock = crate::test_support::STYLE_LOCK.lock().unwrap();
+        let _locale_lock = crate::test_support::LOCALE_LOCK.lock().unwrap();
+        crate::style::set_enabled(false);
+        i18n::set_locale("en");
+        let detail = format_round_detail(&record_with_stats(), None);
+        assert!(detail.contains("first round"), "detail: {detail}");
+        assert!(!detail.contains("%{"), "unfilled placeholder: {detail}");
         crate::style::set_enabled(false);
     }
 

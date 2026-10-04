@@ -3,6 +3,8 @@
 //! 内存会话批次记录：每一轮执行保存其解析调用与结果，使 CLI loop 可以
 //! 复制第 i 个最新批次。
 
+use std::time::{Duration, SystemTime};
+
 use manualaid_core::parser::ParsedToolCall;
 use manualaid_core::tools::ToolResult;
 
@@ -39,6 +41,39 @@ pub struct BatchRecord {
     /// Timing and token statistics of this round.
     /// 本轮耗时与 Token 统计。
     pub stats: RoundStats,
+    /// Wall-clock time at which the round was recorded, used to show when
+    /// each round happened and how far apart the user's rounds are.
+    /// 记录该轮时的墙钟时间，用于显示每轮发生时刻以及用户各轮之间的间隔。
+    pub at: SystemTime,
+}
+
+/// Interval statistics between the recorded rounds.
+/// 已记录轮次之间的间隔统计。
+///
+/// # Description
+/// Only intervals between two rounds whose timestamps move forward are
+/// counted; a pair the system clock moved backwards across is skipped, so a
+/// time adjustment never reports a negative interval.
+/// # 描述
+/// 只统计时间戳向前推进的两轮之间的间隔；系统时钟回拨跨过的一对被跳过，
+/// 因此时间调整不会产生负间隔。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoundIntervals {
+    /// Mean interval between two consecutive rounds.
+    /// 相邻两轮的平均间隔。
+    pub mean: Duration,
+    /// Mean span covering three rounds: the interval from one round to the
+    /// round three later, averaged over every such window. `None` until four
+    /// rounds are recorded.
+    /// 覆盖三轮的平均跨度：从某一轮到其后第三轮的间隔，对所有这样的窗口取
+    /// 平均。不足四轮时为 `None`。
+    pub mean_three: Option<Duration>,
+    /// Shortest interval between two consecutive rounds.
+    /// 相邻两轮的最短间隔。
+    pub min: Duration,
+    /// Longest interval between two consecutive rounds.
+    /// 相邻两轮的最长间隔。
+    pub max: Duration,
 }
 
 /// In-memory footprint of the persisted session structures, broken down by
@@ -91,10 +126,26 @@ impl SessionLog {
         results: Vec<ToolResult>,
         stats: RoundStats,
     ) {
+        self.push_at(calls, results, stats, SystemTime::now());
+    }
+
+    /// Append one executed round with an explicit wall-clock timestamp.
+    /// [`SessionLog::push`] stamps the current time; an explicit timestamp
+    /// keeps the interval statistics testable.
+    /// 用显式墙钟时间追加一轮已执行记录。[`SessionLog::push`] 记录当前时间；
+    /// 显式时间使间隔统计可测试。
+    pub fn push_at(
+        &mut self,
+        calls: Vec<ParsedToolCall>,
+        results: Vec<ToolResult>,
+        stats: RoundStats,
+        at: SystemTime,
+    ) {
         self.rounds.push(BatchRecord {
             calls,
             results,
             stats,
+            at,
         });
         if self.rounds.len() > Self::MAX_ROUNDS {
             let excess = self.rounds.len() - Self::MAX_ROUNDS;
@@ -134,6 +185,47 @@ impl SessionLog {
     /// 所有轮次的工具调用总数。
     pub fn total_calls(&self) -> usize {
         self.rounds.iter().map(|round| round.results.len()).sum()
+    }
+
+    /// Time between the round at `index` (0-based, oldest first) and the
+    /// round before it. `None` for the first round and when the clock moved
+    /// backwards across the pair.
+    /// 位置为 `index` 的轮次（从 0 开始，最旧在前）与它前一轮之间的时长。
+    /// 首轮以及时钟回拨跨过该对时为 `None`。
+    pub fn gap_before(&self, index: usize) -> Option<Duration> {
+        let previous = self.rounds.get(index.checked_sub(1)?)?;
+        let current = self.rounds.get(index)?;
+        current.at.duration_since(previous.at).ok()
+    }
+
+    /// Interval statistics over the recorded rounds; `None` until at least
+    /// two rounds with a forward-moving timestamp are recorded.
+    /// 已记录轮次的间隔统计；在至少两轮且时间戳向前推进之前为 `None`。
+    pub fn intervals(&self) -> Option<RoundIntervals> {
+        let consecutive: Vec<Duration> = (1..self.rounds.len())
+            .filter_map(|index| self.gap_before(index))
+            .collect();
+        if consecutive.is_empty() {
+            return None;
+        }
+        let three_round: Vec<Duration> = (3..self.rounds.len())
+            .filter_map(|index| {
+                let first = self.rounds.get(index - 3)?;
+                let last = self.rounds.get(index)?;
+                last.at.duration_since(first.at).ok()
+            })
+            .collect();
+        let mean_three = (!three_round.is_empty()).then(|| {
+            let total: Duration = three_round.iter().sum();
+            total / three_round.len() as u32
+        });
+        let total: Duration = consecutive.iter().sum();
+        Some(RoundIntervals {
+            mean: total / consecutive.len() as u32,
+            mean_three,
+            min: *consecutive.iter().min().expect("checked non-empty"),
+            max: *consecutive.iter().max().expect("checked non-empty"),
+        })
     }
 
     /// Estimated in-memory footprint of the retained records.
@@ -281,6 +373,77 @@ mod tests {
         assert_eq!(log.rounds().len(), 2);
         assert_eq!(log.rounds()[0].results[0].output, "1");
         assert_eq!(log.rounds()[1].results[0].output, "2");
+    }
+
+    /// Build a log whose rounds sit at the given second offsets.
+    /// 构建一个各轮位于给定秒偏移量上的日志。
+    fn log_at_offsets(offsets: &[u64]) -> SessionLog {
+        let base = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let mut log = SessionLog::new();
+        for offset in offsets {
+            log.push_at(
+                Vec::new(),
+                vec![ToolResult::success("read", "x", true)],
+                RoundStats::default(),
+                base + Duration::from_secs(*offset),
+            );
+        }
+        log
+    }
+
+    #[test]
+    fn push_stamps_the_current_wall_clock_time() {
+        let mut log = SessionLog::new();
+        log.push(Vec::new(), sample_results(), RoundStats::default());
+        assert!(log.rounds()[0].at <= SystemTime::now());
+    }
+
+    #[test]
+    fn gap_before_spans_each_round_and_its_predecessor() {
+        let log = log_at_offsets(&[0, 30, 90]);
+        assert_eq!(log.gap_before(0), None);
+        assert_eq!(log.gap_before(1), Some(Duration::from_secs(30)));
+        assert_eq!(log.gap_before(2), Some(Duration::from_secs(60)));
+        // Out-of-range positions have no gap.
+        // 越界位置没有间隔。
+        assert_eq!(log.gap_before(3), None);
+    }
+
+    #[test]
+    fn gap_before_skips_a_backwards_clock() {
+        let log = log_at_offsets(&[100, 40]);
+        assert_eq!(log.gap_before(1), None);
+        assert_eq!(log.intervals(), None);
+    }
+
+    #[test]
+    fn intervals_summarize_consecutive_and_three_round_spans() {
+        // Consecutive spans: 10s, 20s, 30s, 40s; spans covering three
+        // rounds: 60s and 90s.
+        // 相邻跨度：10s、20s、30s、40s；覆盖三轮的跨度：60s 与 90s。
+        let log = log_at_offsets(&[0, 10, 30, 60, 100]);
+        let intervals = log.intervals().expect("five rounds yield intervals");
+        assert_eq!(intervals.mean, Duration::from_secs(25));
+        assert_eq!(intervals.min, Duration::from_secs(10));
+        assert_eq!(intervals.max, Duration::from_secs(40));
+        assert_eq!(intervals.mean_three, Some(Duration::from_secs(75)));
+    }
+
+    #[test]
+    fn intervals_need_two_rounds_and_three_round_spans_need_four() {
+        assert_eq!(SessionLog::new().intervals(), None);
+        let single = log_at_offsets(&[0]);
+        assert_eq!(single.intervals(), None);
+
+        let two = log_at_offsets(&[0, 20]);
+        let intervals = two.intervals().expect("two rounds yield one span");
+        assert_eq!(intervals.mean, Duration::from_secs(20));
+        assert_eq!(intervals.min, Duration::from_secs(20));
+        assert_eq!(intervals.max, Duration::from_secs(20));
+        assert_eq!(intervals.mean_three, None);
+
+        let three = log_at_offsets(&[0, 20, 50]);
+        assert_eq!(three.intervals().unwrap().mean_three, None);
     }
 
     #[test]
