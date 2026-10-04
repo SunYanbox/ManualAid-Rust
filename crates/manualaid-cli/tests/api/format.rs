@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use manualaid_cli::{
     format_bytes, format_default_output, format_duration, format_error_output, format_mask_output,
-    format_restore_output, format_timings, pager, style, t_fmt,
+    format_restore_output, format_span, format_timings, pager, style, t_fmt,
 };
 
 #[test]
@@ -121,6 +121,19 @@ fn format_duration_is_milliseconds_with_nanosecond_precision() {
         "1.234567 ms"
     );
     assert_eq!(format_duration(Duration::from_secs(2)), "2000.000000 ms");
+}
+
+#[test]
+fn format_span_uses_at_most_two_units() {
+    assert_eq!(format_span(Duration::ZERO), "0s");
+    assert_eq!(format_span(Duration::from_secs(45)), "45s");
+    assert_eq!(format_span(Duration::from_secs(78)), "1m18s");
+    assert_eq!(format_span(Duration::from_secs(3_600)), "1h00m");
+    assert_eq!(format_span(Duration::from_secs(3_723)), "1h02m");
+    assert_eq!(
+        format_span(Duration::from_secs(86_400 + 7 * 3_600)),
+        "1d07h"
+    );
 }
 
 #[test]

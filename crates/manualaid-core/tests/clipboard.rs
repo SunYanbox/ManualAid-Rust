@@ -1,8 +1,8 @@
 use std::sync::{Mutex, MutexGuard};
 
 use manualaid_core::clipboard::{
-    ClipboardContent, ClipboardProvider, MockClipboard, inspect_clipboard, read_clipboard,
-    write_clipboard,
+    ClipboardContent, ClipboardProvider, CopyKind, MockClipboard, inspect_clipboard,
+    read_clipboard, write_clipboard,
 };
 
 // The clipboard is system-wide shared state. Any test that writes to it must
@@ -118,4 +118,15 @@ fn mock_write_error_is_consumed_on_first_call() {
     assert_eq!(mock.write("data"), Err("write failed".to_string()));
     mock.write("data").unwrap();
     assert_eq!(mock.read().unwrap(), "data");
+}
+
+#[test]
+fn write_kind_defaults_to_a_plain_write() {
+    // A provider that only implements `write` must still serve
+    // `write_kind`, otherwise every existing implementation would break.
+    // 只实现 `write` 的 provider 也必须能响应 `write_kind`，否则所有既有
+    // 实现都会失效。
+    let mock = MockClipboard::new();
+    mock.write_kind(CopyKind::SystemPrompt, "prompt").unwrap();
+    assert_eq!(mock.read().unwrap(), "prompt");
 }

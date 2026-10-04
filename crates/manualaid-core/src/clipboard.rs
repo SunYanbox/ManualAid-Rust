@@ -17,6 +17,37 @@
 use std::cell::RefCell;
 use std::sync::Mutex;
 
+/// What one clipboard write carries, for callers that report how often the
+/// user posts text to an external chat.
+/// 一次剪贴板写入承载的内容种类，供统计「用户向外部聊天发送频率」的调用方
+/// 区分。
+///
+/// # Description
+/// A prompt and a round of tool results are each pasted into the external
+/// chat as a message of their own, while a tool-call template is typed into
+/// a message that is already being written. Callers that meter posting
+/// frequency therefore treat the first three kinds as one post each and
+/// ignore [`CopyKind::Template`].
+/// # 描述
+/// 提示词与一轮工具结果都是作为独立消息粘贴到外部聊天的，而工具调用模板是
+/// 写进一条正在撰写的消息里的。因此统计发送频率的调用方把前三种各算一次
+/// 发送，并忽略 [`CopyKind::Template`]。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopyKind {
+    /// A generated workspace system prompt.
+    /// 生成的工作区系统提示词。
+    SystemPrompt,
+    /// A reusable prompt snippet, such as the intent rule or a mode rule.
+    /// 可复用的提示词片段，例如意图规则或某种模式的规则。
+    Prompt,
+    /// The tool results of one executed round.
+    /// 某一轮已执行的工具结果。
+    Result,
+    /// A tool-call template, written inside a message rather than sent as one.
+    /// 工具调用模板：写进一条消息内部，而非单独发送。
+    Template,
+}
+
 /// Abstraction for clipboard read/write operations, enabling dependency
 /// injection for testability.
 /// 剪贴板读写操作的抽象，支持依赖注入以提升可测试性。
@@ -28,6 +59,14 @@ pub trait ClipboardProvider {
     /// Write text content to the clipboard, replacing any previous content.
     /// 向剪贴板写入文本内容，覆盖原有内容。
     fn write(&self, text: &str) -> Result<(), String>;
+    /// Write text content whose kind the caller knows. Providers that do not
+    /// care about the kind keep this default implementation, so implementing
+    /// [`ClipboardProvider::write`] alone stays sufficient.
+    /// 写入种类已知的文本内容。不关心种类的 provider 沿用本默认实现，因此
+    /// 只实现 [`ClipboardProvider::write`] 依然够用。
+    fn write_kind(&self, _kind: CopyKind, text: &str) -> Result<(), String> {
+        self.write(text)
+    }
 }
 
 /// Real clipboard implementation backed by `arboard`.

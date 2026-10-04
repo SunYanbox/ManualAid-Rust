@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use manualaid_core::audit::SessionMode;
-use manualaid_core::clipboard::ClipboardProvider;
+use manualaid_core::clipboard::{ClipboardProvider, CopyKind};
 use manualaid_core::executor::Executor;
 use manualaid_core::parser::{FormatRegistry, RegistryMode};
 use manualaid_core::skill::{all_skills, set_enabled};
@@ -21,6 +21,7 @@ use super::handlers::{
     copy_task_planning_rule_with_provider, copy_tool_format_with_provider, input_and_submit,
     paste_and_submit_with_provider, print_session_summary, show_tool_history,
 };
+use super::pace::PaceSource;
 use super::utils::{
     apply_format_mode, cycle_format, cycle_lang, format_changelog_text, mode_label,
     print_muted_block, t_fmt,
@@ -54,7 +55,7 @@ pub(super) enum CommandOutcome {
 
 /// Shared mutable and immutable state for executing one command.
 /// 执行单个命令所需的共享可变与不可变状态。
-pub(super) struct CommandContext<'a, P: ClipboardProvider> {
+pub(super) struct CommandContext<'a, P: ClipboardProvider + PaceSource> {
     pub provider: &'a P,
     pub executor: &'a Executor,
     pub registry: &'a FormatRegistry,
@@ -99,6 +100,7 @@ pub(super) enum LoopCommand {
     ToggleTodoWrite,
     ToggleAutoCopy,
     ToggleClearScreen,
+    TogglePaceExpanded,
     ToolMenu,
     SkillMenu,
     ToggleContextAutoLoad,
@@ -120,7 +122,11 @@ pub(super) fn copy_tool_template<P: ClipboardProvider>(
     tool: &ToolKind,
 ) {
     match registry.render_tool_call_template(tool) {
-        Ok(template) => match provider.write(&template) {
+        // A template is written into a message rather than sent on its own,
+        // so it is the one kind the pace meter leaves out.
+        // 模板是写进消息内部的，而不是单独发送，因此它是节奏计量唯一不计入
+        // 的种类。
+        Ok(template) => match provider.write_kind(CopyKind::Template, &template) {
             Ok(()) => print_muted_block(&[i18n::t_str("cli.loop.copied")]),
             Err(e) => eprintln!("{}", t_fmt("cli.error.clipboard_write", &[("error", &e)])),
         },
@@ -130,7 +136,7 @@ pub(super) fn copy_tool_template<P: ClipboardProvider>(
 
 /// Run one loop command against the shared session state.
 /// 在共享会话状态上执行一个 loop 命令。
-pub(super) async fn run_command<P: ClipboardProvider>(
+pub(super) async fn run_command<P: ClipboardProvider + PaceSource>(
     cmd: &LoopCommand,
     ctx: &mut CommandContext<'_, P>,
 ) -> CommandOutcome {
@@ -185,7 +191,7 @@ pub(super) async fn run_command<P: ClipboardProvider>(
             CommandOutcome::Continue
         }
         LoopCommand::SessionSummary => {
-            print_session_summary(config, session);
+            print_session_summary(config, session, provider.pace());
             CommandOutcome::Continue
         }
         LoopCommand::ToolHistory => {
@@ -292,6 +298,10 @@ pub(super) async fn run_command<P: ClipboardProvider>(
         }
         LoopCommand::ToggleClearScreen => {
             options.clear_screen = !options.clear_screen;
+            CommandOutcome::Continue
+        }
+        LoopCommand::TogglePaceExpanded => {
+            options.pace_expanded = !options.pace_expanded;
             CommandOutcome::Continue
         }
         LoopCommand::ToolMenu => {

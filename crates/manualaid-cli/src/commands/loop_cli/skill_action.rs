@@ -1,9 +1,9 @@
 //! `/SKILL`-prefixed skill-loading commands typed in the main menu input
 //! box. Resolved skills run through the skill tool; disabled skills print a
-//! localized hint, and unknown names fall through to `handle_inline_command`.
+//! localized hint, and unknown names fall through to the inline command
+//! dispatch.
 //! 在主菜单输入框中输入的以 `/SKILL` 开头的技能加载命令。已解析的技能经
-//! skill 工具运行；已禁用的技能打印本地化提示；未知名回退到
-//! `handle_inline_command`。
+//! skill 工具运行；已禁用的技能打印本地化提示；未知名回退到内联命令分发。
 
 use indexmap::IndexMap;
 use serde_json::Value;

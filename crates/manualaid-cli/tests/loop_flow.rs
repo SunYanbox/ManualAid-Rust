@@ -220,6 +220,14 @@ fn loop_binary_copies_intent_rule_to_clipboard() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains(&i18n::t_str("cli.message.intent_rule_copied")));
+    // The copy is reported by the pace block before the menu is drawn again;
+    // the shortest window holds exactly that one copy.
+    // 复制完成后，节奏区块会在菜单再次绘制前报告它；最短窗口内正好是这一次
+    // 复制。
+    assert!(
+        stdout.contains("Last 60s: 1") || stdout.contains("近 60s 1 次"),
+        "pace block missing from stdout: {stdout}"
+    );
 }
 
 #[test]

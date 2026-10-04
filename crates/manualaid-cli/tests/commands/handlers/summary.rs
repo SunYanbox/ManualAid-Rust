@@ -4,8 +4,8 @@
 use crate::LOCALE_LOCK;
 use crate::common;
 use manualaid_cli::commands::loop_cli::{
-    copy_round_result_with_provider, print_session_summary, push_test_input, show_tool_history,
-    truncate_preview_lines,
+    PaceReport, copy_round_result_with_provider, print_session_summary, push_test_input,
+    show_tool_history, truncate_preview_lines,
 };
 use manualaid_core::clipboard::MockClipboard;
 use manualaid_ws::config::Config;
@@ -24,12 +24,50 @@ async fn print_session_summary_lists_stats() {
     i18n::set_locale("en");
     let root = common::TempDir::new("summary");
     let session = super::session_with_round(root.path()).await;
-    print_session_summary(&Config::default(), &session);
+    print_session_summary(&Config::default(), &session, PaceReport::default());
     let text = _capture.text();
     assert!(text.contains("Session summary"));
     assert!(text.contains("Rounds: 1"));
     assert!(text.contains("Tool calls: 1"));
+    assert!(text.contains("Average tool calls per round: 1.0"));
     assert!(text.contains("Enabled tools:"));
+    // One round yields no interval, and a plain provider reported no copy.
+    // 单轮没有间隔，且普通 provider 未报告任何复制。
+    assert!(text.contains("Mean interval between rounds: not enough samples"));
+    assert!(text.contains("System prompt copies: 0"));
+    assert!(text.contains("Prompt and tool-result copies: 0"));
+}
+
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
+async fn print_session_summary_reports_cadence_and_copy_counts() {
+    let _capture = manualaid_cli::console::capture();
+    let _lock = LOCALE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    i18n::set_locale("en");
+    let root = common::TempDir::new("summary-cadence");
+    let mut session = SessionLog::new();
+    let stats = RoundStats::default();
+    // Five rounds 20s, 40s, 60s and 80s apart: consecutive intervals
+    // average 50s, and the two spans covering three rounds (0→120s and
+    // 20→200s) average 2m30s.
+    // 五轮分别相隔 20s、40s、60s、80s：相邻间隔平均 50s；两个覆盖三轮的
+    // 跨度（0→120s 与 20→200s）平均 2m30s。
+    super::add_round_at(root.path(), &mut session, stats, 0).await;
+    super::add_round_at(root.path(), &mut session, stats, 20).await;
+    super::add_round_at(root.path(), &mut session, stats, 60).await;
+    super::add_round_at(root.path(), &mut session, stats, 120).await;
+    super::add_round_at(root.path(), &mut session, stats, 200).await;
+    print_session_summary(&Config::default(), &session, PaceReport::default());
+    let text = _capture.text();
+    assert!(text.contains("Mean interval between rounds: 50s"), "{text}");
+    assert!(
+        text.contains("Mean interval over three rounds: 2m30s"),
+        "{text}"
+    );
+    assert!(text.contains("Shortest interval: 20s"), "{text}");
+    assert!(text.contains("Longest interval: 1m20s"), "{text}");
 }
 
 #[test]

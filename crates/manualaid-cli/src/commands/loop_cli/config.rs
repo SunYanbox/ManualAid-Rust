@@ -11,6 +11,7 @@ use manualaid_ws::session::SessionLog;
 use super::LoopOptions;
 use super::command::LoopCommand;
 use super::menu::{Menu, MenuAction, MenuItem};
+use super::pace::PaceSource;
 use super::utils::{format_changelog_text, mode_label, t_fmt};
 
 /// Print the clipboard error produced by a copy handler in the TUI. The
@@ -213,7 +214,7 @@ fn build_copy_prompt_menu() -> Menu {
 
 /// The secondary configuration menu.
 /// 二级配置菜单。
-pub(super) async fn config_menu<P: ClipboardProvider>(
+pub(super) async fn config_menu<P: ClipboardProvider + PaceSource>(
     provider: &P,
     config: &mut Config,
     registry: &FormatRegistry,
@@ -434,6 +435,17 @@ fn build_config_menu(config: &Config, options: &LoopOptions) -> Menu {
         .expect("unique menu key")
         .add(
             MenuItem::auto(
+                t_fmt(
+                    "cli.config.pace_expanded",
+                    &[("state", &state(options.pace_expanded))],
+                ),
+                MenuAction::Command(LoopCommand::TogglePaceExpanded),
+            )
+            .unique("setting_menu_pace_expanded"),
+        )
+        .expect("unique menu key")
+        .add(
+            MenuItem::auto(
                 i18n::t_str("cli.config.skill_list"),
                 MenuAction::Command(LoopCommand::SkillMenu),
             )
@@ -489,7 +501,7 @@ fn build_config_menu(config: &Config, options: &LoopOptions) -> Menu {
 
 /// The tool enable/disable sub-menu: toggle each tool switch by index.
 /// 工具启用/禁用子菜单：按索引切换各工具开关。
-pub(super) async fn tool_menu<P: ClipboardProvider>(
+pub(super) async fn tool_menu<P: ClipboardProvider + PaceSource>(
     provider: &P,
     config: &mut Config,
     registry: &FormatRegistry,
@@ -614,7 +626,7 @@ fn build_tool_menu(config: &Config) -> Menu {
 
 /// The SKILL enable/disable sub-menu: toggle by index, all on, all off.
 /// SKILL 启用/禁用二级菜单：按索引切换、全部启用、全部禁用。
-pub(super) async fn skill_menu<P: ClipboardProvider>(
+pub(super) async fn skill_menu<P: ClipboardProvider + PaceSource>(
     provider: &P,
     config: &mut Config,
     registry: &FormatRegistry,
@@ -1150,7 +1162,7 @@ mod tests {
         let mut config = Config::default();
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
-        push_test_input(&["4", "5", "_", "0"]);
+        push_test_input(&["4", "5", "6", "_", "0"]);
         let mut session = SessionLog::new();
         config_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
@@ -1163,6 +1175,7 @@ mod tests {
         .await;
         assert!(!options.auto_copy);
         assert!(options.clear_screen);
+        assert!(options.pace_expanded);
     }
 
     #[allow(clippy::await_holding_lock)]
@@ -1175,7 +1188,12 @@ mod tests {
         let mut config = Config::default();
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
-        push_test_input(&["7", "0"]);
+        // Menu order: 1 lang, 2 format, 3 tools, 4 auto-copy, 5 clear
+        // screen, 6 pace windows, 7 skills, 8 approval mode, 9 context
+        // auto-load, 10 memory, 11 changelog.
+        // 菜单顺序：1 语言、2 格式、3 工具、4 自动复制、5 清屏、6 节奏窗口、
+        // 7 技能、8 审批模式、9 上下文自动加载、10 内存、11 更新日志。
+        push_test_input(&["8", "0"]);
         let mut session = SessionLog::new();
         config_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
@@ -1200,7 +1218,7 @@ mod tests {
         let mut config = Config::default();
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
-        push_test_input(&["8", "0"]);
+        push_test_input(&["9", "0"]);
         let mut session = SessionLog::new();
         config_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
@@ -1256,7 +1274,7 @@ mod tests {
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
         let mut session = SessionLog::new();
-        push_test_input(&["9", "0"]);
+        push_test_input(&["10", "0"]);
         config_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
             &mut config,
@@ -1633,7 +1651,7 @@ mod tests {
         let registry = FormatRegistry::new();
         let mut options = LoopOptions::default();
         let mut session = SessionLog::new();
-        push_test_input(&["10", "0", "0"]);
+        push_test_input(&["11", "0", "0"]);
         config_menu(
             &manualaid_core::clipboard::MockClipboard::new(),
             &mut config,
