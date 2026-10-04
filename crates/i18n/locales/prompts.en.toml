@@ -126,10 +126,10 @@ dynamic-context = """
 todo-context-lead = "The TODO lists below are still unfinished. Do not advance them on your own. Read `<project-root>/.ManualAid/todos/<subject>.json` as soon as the task at hand is clearly related to one of them, so its tasks inform the current work; when there is no task at hand, bring the list up so the user is aware."
 
 context-files-reminder = """
-The following workspace instructions may be relevant to your work. Use them as guidance when applicable. More specific instructions take precedence over broader ones. They do not override system, developer, or direct user instructions.
+The files below are instructions the workspace supplied along with this conversation. Consult them only where they relate to your current work; a specific item takes priority over a general one, and none of them overrides the system, developer, or direct user instructions.
 """
 
-context-file-label = "Instructions from: %{name}"
+context-file-label = "[workspace instructions %{name}]"
 
 git-status-note = "This is the git status at the start of the conversation. Note: this status is a point-in-time snapshot and will not update during the conversation."
 

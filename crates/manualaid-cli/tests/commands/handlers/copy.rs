@@ -73,7 +73,7 @@ fn copy_system_prompt_includes_selected_context_files() {
                 .unwrap_or_default()
         })
         .unwrap_or_default();
-    assert!(reminder.contains("Instructions from: AGENTS.md"));
+    assert!(reminder.contains("[workspace instructions AGENTS.md]"));
     assert!(reminder.contains("# project rules"));
 }
 

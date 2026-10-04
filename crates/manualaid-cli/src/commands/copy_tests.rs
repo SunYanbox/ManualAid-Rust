@@ -120,7 +120,7 @@ fn system_prompt_copy_respects_context_files_none_and_first() {
     .unwrap();
     let copied = mock.read().unwrap();
     assert!(copied.contains("<system_prompt>"));
-    assert!(!copied.contains("Instructions from: AGENTS.md"));
+    assert!(!copied.contains("[workspace instructions AGENTS.md]"));
     assert!(!copied.ends_with("</system-reminder>"));
 
     run_with_mock(
@@ -134,7 +134,7 @@ fn system_prompt_copy_respects_context_files_none_and_first() {
     let copied = mock.read().unwrap();
     assert!(copied.contains("<system_prompt>"));
     assert!(copied.contains("<system-reminder>"));
-    assert!(copied.contains("Instructions from: AGENTS.md"));
+    assert!(copied.contains("[workspace instructions AGENTS.md]"));
 }
 
 #[test]
@@ -159,7 +159,7 @@ fn context_copy_renders_reminder_block() {
     .unwrap();
     let copied = mock.read().unwrap();
     assert!(copied.starts_with("<system-reminder>\n"));
-    assert!(copied.contains("Instructions from: AGENTS.md"));
+    assert!(copied.contains("[workspace instructions AGENTS.md]"));
     assert!(copied.ends_with("</system-reminder>"));
 
     // `none` prints the no-files message and leaves the clipboard unchanged.

@@ -62,8 +62,8 @@ fn render_wraps_content_and_adds_trailing_newline() {
     std::fs::write(root.join("AGENTS.md"), "# rules\n").unwrap();
     std::fs::write(root.join("CLAUDE.md"), "no trailing newline").unwrap();
     let text = render_context_files(&[root.join("AGENTS.md"), root.join("CLAUDE.md")]);
-    assert!(text.contains("Instructions from: AGENTS.md\n# rules\n"));
-    assert!(text.contains("Instructions from: CLAUDE.md\nno trailing newline\n"));
+    assert!(text.contains("[workspace instructions AGENTS.md]\n# rules\n"));
+    assert!(text.contains("[workspace instructions CLAUDE.md]\nno trailing newline\n"));
     let _ = std::fs::remove_dir_all(&root);
 }
 

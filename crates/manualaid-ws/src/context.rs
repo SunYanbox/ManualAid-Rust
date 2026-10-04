@@ -45,13 +45,14 @@ fn read_context_file(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
 }
 
-/// Render one `Instructions from: <name>` section per given file. Files
-/// that cannot be read are skipped, and every rendered file's content ends
-/// with a newline. The label is localized so the same output works for both
-/// the system-reminder block and the copy-context menu.
-/// 为给定文件逐个渲染 `Instructions from: <name>` 小节。无法读取的文件被
-/// 跳过，每个已渲染文件的内容以换行结尾。标签经过本地化，使同一输出同时
-/// 适用于 system-reminder 块与复制上下文菜单。
+/// Render one `[workspace instructions <name>]` header and the file content
+/// after it, for each given file. Files that cannot be read are skipped, and
+/// every rendered file's content ends with a newline. The label is localized
+/// so the same output works for both the system-reminder block and the
+/// copy-context menu.
+/// 为给定文件逐个渲染 `[工作区说明 <name>]` 标题及其后的文件内容。无法读取
+/// 的文件被跳过，每个已渲染文件的内容以换行结尾。标签经过本地化，使同一输出
+/// 同时适用于 system-reminder 块与复制上下文菜单。
 pub fn render_context_files(paths: &[PathBuf]) -> String {
     let mut out = String::new();
     let label = i18n::t_str("prompt.system.context-file-label");
