@@ -474,7 +474,7 @@ mod tests {
             "/compress-fence",
         );
         let clipboard = mock.read().unwrap();
-        assert!(clipboard.contains("<compacted-summary>"));
+        assert!(clipboard.contains("<manualaid-checkpoint>"));
         assert!(!clipboard.contains("<system-reminder>"));
     }
 

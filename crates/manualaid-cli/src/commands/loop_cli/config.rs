@@ -934,7 +934,7 @@ mod tests {
         let copied = mock.read().unwrap();
         assert!(copied.starts_with("<system-reminder>\n"));
         assert!(copied.ends_with("\n</system-reminder>"));
-        assert!(copied.contains("context compressor"));
+        assert!(copied.contains("resume checkpoint"));
     }
 
     #[allow(clippy::await_holding_lock)]
@@ -953,7 +953,7 @@ mod tests {
         )
         .await;
         let copied = mock.read().unwrap();
-        assert!(copied.contains("<compacted-summary>"));
+        assert!(copied.contains("<manualaid-checkpoint>"));
         assert!(!copied.contains("<system-reminder>"));
     }
 

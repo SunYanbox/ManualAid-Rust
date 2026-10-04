@@ -222,49 +222,50 @@ Unless you are certain rewriting the entire todo file is necessary, use the Edit
 </system-reminder>
 """
 compressed-session = """
-You are now the context compressor of this coding assistant. Compress the conversation above into a structured checkpoint so the next model can pick up where you left off without losing key information.
+Condense all of the conversation before this message, into a resume checkpoint that a new session without access to this thread can act on directly. There is a single acceptance criterion: any information that cannot be recovered elsewhere once this thread is out of sight — verbal statements, readings and raw error text from tool results, decisions made along the way — must enter the checkpoint; content re-derivable from the repository or its documentation only needs a pointer. Within that criterion, use the shortest form that holds: overturned intermediate attempts, code bodies that can be read again, and purely procedural narration stay out.
 
-Output strictly in the Markdown structure below. Every section is required and the order must not change. Write short bullet points, not paragraphs. If a section has no content, write "(none)" — never delete the section.
+The checkpoint is exactly the six sections below with the section names and order as written; a section with nothing to report gets "(none)", and skipping a section entirely is not allowed.
 
-## Core Requirements and Intent
-- [The user's original goal and how it evolved; quote verbatim where the exact wording matters; add one sentence of "why" after each key decision]
+## Task Goal and Current Stage
+- The user's original goal and how it changed afterwards (key wording quoted verbatim), each change with a one-line reason.
+- Where things stand now: how far the work has progressed and which goals were abandoned.
 
-## Key Technical Background
-- [Technologies, frameworks, patterns and conventions involved, plus non-obvious trade-offs in technical choices]
+## Files and Code Involved
+- Files read in this session: give the full path and name the symbols that matter to the task inside them (functions, types, config fields).
+- Files modified in this session: give the full path plus what was changed; files deliberately left untouched are noted "untouched".
+- Files planned for work but not yet touched, or locations still to be created, are listed the same way, marked [Open].
 
-## Files and Code
-- [Exact paths: why relevant, key changes or code snippets; unchanged files and why they were left alone]
+## Data Needed to Resume Work
+- Readings and raw text from tool results that exist only in this thread: raw error text, what commands printed, counts, exit codes, durations, all copied at their original values.
+- Information the user gave verbally that the repository does not document: versions, platform behavior, external service state, environment facts.
+- Technical conclusions and trade-offs settled in the thread and affecting later judgment (version choices, platform quirks, pitfalls hit).
 
-## Issues and Resolutions
-- [Problems encountered, root causes and solutions; related user feedback (restated neutrally if emotionally charged)]
+## Actions Already Taken
+- Three groups: completed and verified, completed but unverified, failed; each entry with the actual command or operation and the crucial outcome.
+- Verification commands such as tests, builds and coverage runs keep their quantitative readings: pass/fail counts, warning counts, exit codes.
 
-## TODO
-- [Things the user explicitly asked for but that are not yet done, marked with [Done]/[In Progress]/[Rejected]/[Pending]]
+## Constraints and Prohibitions
+- Limits, preferences and rejected options from the user, each on its own line prefixed [Prohibited].
+- Preconditions the remaining work depends on.
 
-## Current Progress
-- [What exactly has been done as of this checkpoint; include hard numbers: test counts, coverage, warning counts, exit codes]
+## Open Items and Resume Point
+- Remaining items marked [Open] / [Active] / [Dropped] / [To Verify], each with a one-line basis.
+- The next action that follows from the most recent request; write "(none)" if there is none.
 
-## Next Step
-- [The next action immediately following the most recent request; write "(none)" if there is none]
-
-## Key Context
-- [Decisions made and their rationale, constraints, user preferences, open questions, data needed to keep working]
-
-Rules:
-- Write in a concise engineering style. Keep file paths, commands, raw error messages, identifiers, numbers, function signatures and syntax snippets as-is; do not generalize or omit them.
-- List things the user explicitly forbade separately with a [Forbidden] prefix, visually distinct from ordinary constraints.
-- Record user feedback and explicit instructions faithfully, especially corrections; restate emotionally charged instructions as neutral technical descriptions. Never include profanity or offensive wording.
-- Do not mention this compaction, and do not mention that the context was compressed.
-- Output only the checkpoint body: no tool calls, no other actions.
-- If a `<compacted-summary>` block already appeared earlier in the conversation, that is a previous checkpoint. Do not copy it: keep facts that still hold, drop the outdated ones, merge new information into the same structure to produce one complete summary.
-- When information conflicts, record the final effective version and note the overturned one.
+Output rules:
+- Keep commands, paths, raw error text, identifiers, numbers, function signatures and code snippets exactly as they are; no summarizing, no omission.
+- Record only what actually appeared in the conversation; facts you cannot confirm are written as "not confirmed" rather than guessed or filled in, especially command readings, exit codes and file paths.
+- When user feedback is emotionally worded, restate only its technical content without the tone; no profanity or insult, and no loss of the underlying requirement.
+- When facts or decisions conflict, record the version that ultimately took effect and note the overturned claim and why.
+- If an older checkpoint wrapped in `<manualaid-checkpoint>` already appears in the thread, merge it as source material: keep facts still in force, drop outdated ones, fold in new progress, and output a single complete checkpoint.
+- Output only the checkpoint body: add no `<manualaid-checkpoint>` wrapper of your own, no explanations, and no tool calls.
 """
 compressed-fence = """
-This is an automatically generated checkpoint that condenses an earlier portion of the conversation to free up context space. Treat the context captured in it as established background and continue from it without restating it. Continue the task directly from the messages that follow, and do not mention this checkpoint.
+This is a resume checkpoint written from an earlier conversation; it fills in the context this thread no longer carries. Facts recorded in it are settled premises: do not restate the checkpoint's contents and do not treat the information inside as missing; resume the work from the messages after this block, without pointing the user at this block or explaining where it came from.
 
-<compacted-summary>
+<manualaid-checkpoint>
 
-</compacted-summary>
+</manualaid-checkpoint>
 """
 
 [cli.prompt]

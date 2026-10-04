@@ -15,6 +15,20 @@ use manualaid_core::clipboard::{ClipboardProvider, MockClipboard};
 use manualaid_core::parser::FormatRegistry;
 use manualaid_ws::config::Config;
 
+/// Assert that the checkpoint sections appear in `text` in the given order, so
+/// a dropped or reordered section fails the test instead of passing unnoticed.
+/// 断言各检查点小节按给定顺序出现在 `text` 中，使缺失或错序的小节能被测试
+/// 发现，而不是静默通过。
+fn assert_sections_in_order(text: &str, sections: &[&str]) {
+    let mut rest = text;
+    for section in sections {
+        let at = rest
+            .find(section)
+            .unwrap_or_else(|| panic!("section missing or out of order: {section}"));
+        rest = &rest[at + section.len()..];
+    }
+}
+
 #[test]
 fn copy_system_prompt_writes_prompt_to_clipboard() {
     let _capture = manualaid_cli::console::capture();
@@ -254,10 +268,19 @@ fn copy_compressed_session_prompt_writes_verbatim_text() {
     let copied = mock.read().unwrap();
     assert!(copied.starts_with("<system-reminder>\n"));
     assert!(copied.ends_with("\n</system-reminder>"));
-    assert!(copied.contains("context compressor"));
-    assert!(copied.contains("## Core Requirements and Intent"));
-    assert!(copied.contains("## Next Step"));
-    assert!(copied.contains("## Key Context"));
+    assert!(copied.contains("resume checkpoint"));
+    assert!(copied.contains("`<manualaid-checkpoint>`"));
+    assert_sections_in_order(
+        &copied,
+        &[
+            "## Task Goal and Current Stage",
+            "## Files and Code Involved",
+            "## Data Needed to Resume Work",
+            "## Actions Already Taken",
+            "## Constraints and Prohibitions",
+            "## Open Items and Resume Point",
+        ],
+    );
 }
 
 #[test]
@@ -271,9 +294,9 @@ fn copy_compressed_fence_writes_verbatim_template() {
     let mock = MockClipboard::new();
     copy_compressed_fence_with_provider(&mock).unwrap();
     let copied = mock.read().unwrap();
-    assert!(copied.starts_with("This is an automatically generated checkpoint"));
-    assert!(copied.contains("<compacted-summary>"));
-    assert!(copied.contains("</compacted-summary>"));
+    assert!(copied.starts_with("This is a resume checkpoint"));
+    assert!(copied.contains("<manualaid-checkpoint>"));
+    assert!(copied.contains("</manualaid-checkpoint>"));
     assert!(!copied.contains("<system-reminder>"));
 }
 
@@ -288,8 +311,8 @@ fn copy_compressed_fence_writes_localized_chinese_text() {
     let mock = MockClipboard::new();
     copy_compressed_fence_with_provider(&mock).unwrap();
     let copied = mock.read().unwrap();
-    assert!(copied.contains("自动生成的检查点"));
-    assert!(copied.contains("<compacted-summary>"));
+    assert!(copied.contains("续作检查点"));
+    assert!(copied.contains("<manualaid-checkpoint>"));
     assert!(!copied.contains("<system-reminder>"));
 }
 
@@ -306,10 +329,19 @@ fn copy_compressed_session_prompt_writes_localized_chinese_text() {
     let copied = mock.read().unwrap();
     assert!(copied.starts_with("<system-reminder>\n"));
     assert!(copied.ends_with("\n</system-reminder>"));
-    assert!(copied.contains("上下文压缩器"));
-    assert!(copied.contains("## 核心诉求与意图"));
-    assert!(copied.contains("## 下一步"));
-    assert!(copied.contains("## 关键上下文"));
+    assert!(copied.contains("续作检查点"));
+    assert!(copied.contains("`<manualaid-checkpoint>`"));
+    assert_sections_in_order(
+        &copied,
+        &[
+            "## 任务目标与当前阶段",
+            "## 涉及的文件与代码",
+            "## 继续干活所需的数据",
+            "## 已执行的处置",
+            "## 约束与禁令",
+            "## 未完事项与接续点",
+        ],
+    );
 }
 
 #[tokio::test]

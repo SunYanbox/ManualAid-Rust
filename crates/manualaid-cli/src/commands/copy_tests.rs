@@ -186,7 +186,7 @@ fn static_copy_kinds_produce_expected_reminder_content() {
 
     let cases = [
         (CopyKind::CompressedSession, "<system-reminder>"),
-        (CopyKind::CompressedFence, "<compacted-summary>"),
+        (CopyKind::CompressedFence, "<manualaid-checkpoint>"),
         (CopyKind::IntentRule, ""),
         (CopyKind::ToolFormat, ""),
         (CopyKind::EnabledTools, ""),
