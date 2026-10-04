@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-04
+
 ### Added
 
 - After each copy the loop reports how long ago the previous copy happened and how many copies fall inside the last 60 s, 5 min and 10 min; the 30-minute and 60-minute windows stay folded until you expand them from the configuration menu.

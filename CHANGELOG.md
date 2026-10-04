@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-04
+
 ### Added
 
 - `CopyKind` and a defaulted `ClipboardProvider::write_kind` let a provider tell system prompts, prompt snippets, tool results and tool-call templates apart while writing, so a metering caller can count the writes that become one message each (`manualaid-core/src/clipboard.rs`)
