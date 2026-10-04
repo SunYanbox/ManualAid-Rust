@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The checkpoint's constraint section marks each user prohibition with `[Prohibited]` on its own line, replacing the `[Forbidden]` prefix (`i18n/locales/prompts.{en,zh-CN}.toml`)
 - The checkpoint's open-items section uses the status marks `[Open]` / `[Active]` / `[Dropped]` / `[To Verify]` in place of `[Done]` / `[In Progress]` / `[Rejected]` / `[Pending]`, and a file that is planned but not yet touched is marked `[Open]` as well (`i18n/locales/prompts.{en,zh-CN}.toml`)
 - The read result's trailing marker keeps the range, total line count and resume offset but uses project-specific wording: `(whole file: N lines)`, `(lines a-b of t; next offset: n)`, with the line-ending summary joining the same parentheses after a semicolon as `EOL: LF` / `EOL: CRLF` / `EOL: mixed`; a single-line file reads `1 line`, and the `read` tool description names the same labels (`manualaid-core/src/tools/read.rs`, `i18n/locales/tools.{en,zh-CN}.toml`)
+- The reminder that introduces the workspace context files is worded in project-specific terms rather than the shared reminder sentence (`i18n/locales/prompts.{en,zh-CN}.toml`)
+- A rendered context file is introduced by `[workspace instructions <name>]` instead of the `Instructions from: <name>` label (`manualaid-ws/src/context.rs`, `i18n/locales/prompts.{en,zh-CN}.toml`)
 
 ## [0.16.0] - 2026-09-16
 

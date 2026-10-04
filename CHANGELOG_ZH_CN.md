@@ -15,6 +15,8 @@
 - 检查点的约束与禁令节为每条用户禁令单列 `[Prohibited]` 前缀，取代原来的 `[Forbidden]`（`i18n/locales/prompts.{en,zh-CN}.toml`）
 - 检查点的未完事项节把剩余事项的标记由 `[Done]` / `[In Progress]` / `[Rejected]` / `[Pending]` 改为 `[Open]` / `[Active]` / `[Dropped]` / `[To Verify]`；已计划但尚未动过的文件同样标注 `[Open]`（`i18n/locales/prompts.{en,zh-CN}.toml`）
 - read 结果的页脚保留范围、总行数与续读 offset，但措辞改用项目自有表述：`(whole file: N lines)`、`(lines a-b of t; next offset: n)`，行尾摘要以分号并入同一括号，写作 `EOL: LF` / `EOL: CRLF` / `EOL: mixed`；单行文件读作 `1 line`，`read` 工具描述同步改用同一标签（`manualaid-core/src/tools/read.rs`、`i18n/locales/tools.{en,zh-CN}.toml`）
+- 引导工作区上下文文件的提醒语改用项目自有措辞，不再沿用共用的提醒句（`i18n/locales/prompts.{en,zh-CN}.toml`）
+- 渲染出的上下文文件改由 `[工作区说明 <name>]` 标题引出，取代 `Instructions from: <name>` 标签（`manualaid-ws/src/context.rs`、`i18n/locales/prompts.{en,zh-CN}.toml`）
 
 ## [0.16.0] - 2026-09-16
 

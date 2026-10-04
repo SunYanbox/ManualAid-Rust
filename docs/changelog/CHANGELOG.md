@@ -11,6 +11,8 @@
 - In a compressed checkpoint, the things you asked the AI not to do are now marked `[Prohibited]` instead of `[Forbidden]`.
 - A compressed checkpoint labels its remaining work with `[Open]`, `[Active]`, `[Dropped]` and `[To Verify]` instead of the old `[Done]`, `[In Progress]`, `[Rejected]` and `[Pending]`; a file that is planned but not yet touched is marked `[Open]` too.
 - Read results keep their footer with the total line count and the resume `offset`; only the wording around it changes.
+- The note that introduces your workspace instruction files is worded by this project itself.
+- Each of those files is now introduced by a `[workspace instructions <file>]` heading.
 
 ## [0.16.0] - 2026-09-16
 
