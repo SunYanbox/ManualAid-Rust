@@ -911,7 +911,7 @@ mod tests {
         copy_prompt_menu(&mock, &Config::default(), &FormatRegistry::new(), &root).await;
         let copied = mock.read().unwrap();
         assert!(copied.starts_with("<system-reminder>\n"));
-        assert!(copied.contains("Instructions from: AGENTS.md"));
+        assert!(copied.contains("[workspace instructions AGENTS.md]"));
         assert!(copied.contains("# project rules"));
         assert!(copied.ends_with("</system-reminder>"));
     }

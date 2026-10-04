@@ -126,10 +126,10 @@ dynamic-context = """
 todo-context-lead = "以下 TODO 列表尚未完成。不要主动推进它们。当前任务与其中某项明显相关时，请立即读取 `<project-root>/.ManualAid/todos/<subject>.json` 加载该 TODO，使其任务为当前工作提供依据；当前没有任何任务时，可将其提出让用户知晓。"
 
 context-files-reminder = """
-以下工作区说明可能与你当前的工作相关。适用时请将其作为指导，更具体的指令优先于更宽泛的指令，并且它们不会覆盖系统、开发者或用户的直接指令。
+以下文件是工作区随本次对话一并提供的说明。仅在与当前工作相关时参考；其中具体的条目优先于笼统的条目，且不能覆盖系统、开发者或用户的直接指令。
 """
 
-context-file-label = "来自 %{name} 文件的指令："
+context-file-label = "[工作区说明 %{name}]"
 
 git-status-note = "这是对话开始时的git状态。注意此状态是时间点快照，在对话期间不会更新。"
 
